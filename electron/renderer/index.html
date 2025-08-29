@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Telegram Utilities - Advanced Video Converter & Sticker Bot</title>
     <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="emoji-modal.css" />
     <link
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
       rel="stylesheet"
@@ -188,15 +189,13 @@
         <div class="tab-content" id="sticker-bot">
           <div class="section-header">
             <h2><i class="fas fa-smile"></i> Telegram Sticker Bot</h2>
-            <p>
-              Automatically create Telegram sticker packs from your media files
-            </p>
           </div>
 
-          <div class="sticker-grid">
-            <!-- Telegram Connection -->
-            <div class="card">
-              <div class="card-header">
+          <div class="sticker-container">
+            <div class="sticker-grid">
+              <!-- Telegram Connection -->
+              <div class="card">
+                <div class="card-header">
                 <h3><i class="fas fa-telegram"></i> Telegram Connection</h3>
                 <div class="connection-status" id="telegram-connection-status">
                   <i class="fas fa-circle text-danger"></i>
@@ -276,28 +275,54 @@
               </div>
             </div>
 
-            <!-- Media Management -->
-            <div class="card">
-              <div class="card-header">
-                <h3><i class="fas fa-images"></i> Media Management</h3>
-                <div class="media-counter">
-                  <span id="media-counter">0 files</span>
-                  <small>/120 max</small>
+              <!-- Media Management -->
+              <div class="card">
+                <div class="card-header">
+                  <h3><i class="fas fa-images"></i> Media Management</h3>
+                  <div class="header-actions">
+                    <button class="btn-icon" id="toggle-media-view" title="Toggle View">
+                      <i class="fas fa-grip-horizontal"></i>
+                    </button>
+                    <div class="media-counter">
+                      <span id="media-counter">0 files</span>
+                      <small>/120 max</small>
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div class="card-body">
-                <div class="media-controls">
-                  <button class="btn btn-primary" id="add-images">
-                    <i class="fas fa-image"></i> Add Images
-                  </button>
-                  <button class="btn btn-primary" id="add-sticker-videos">
-                    <i class="fas fa-video"></i> Add Videos
-                  </button>
-                  <button class="btn btn-secondary" id="clear-media">
-                    <i class="fas fa-trash"></i> Clear All
-                  </button>
-                </div>
-                <div class="media-list" id="sticker-media-list">
+                <div class="card-body">
+                  <div class="media-type-selector">
+                    <label class="media-type-label">Select media type:</label>
+                    <div class="media-type-buttons">
+                      <button class="media-type-btn" data-type="image" id="select-image-type">
+                        <i class="fas fa-image"></i> Images
+                      </button>
+                      <button class="media-type-btn" data-type="video" id="select-video-type">
+                        <i class="fas fa-video"></i> Videos
+                      </button>
+                    </div>
+                  </div>
+                  <div class="media-controls" style="display: none;" id="media-controls">
+                    <button class="btn btn-primary" id="add-media">
+                      <i class="fas fa-plus"></i> Add <span id="media-type-text">Media</span>
+                    </button>
+                    <button class="btn btn-secondary" id="sort-media">
+                      <i class="fas fa-sort"></i> Sort
+                    </button>
+                    <button class="btn btn-secondary" id="clear-media">
+                      <i class="fas fa-trash"></i> Clear All
+                    </button>
+                  </div>
+                  <div class="media-sort-options" id="media-sort-options" style="display: none;">
+                    <select class="sort-select" id="sort-select">
+                      <option value="name-asc">Name (A-Z)</option>
+                      <option value="name-desc">Name (Z-A)</option>
+                      <option value="date-new">Date (Newest First)</option>
+                      <option value="date-old">Date (Oldest First)</option>
+                      <option value="size-large">Size (Largest First)</option>
+                      <option value="size-small">Size (Smallest First)</option>
+                    </select>
+                  </div>
+                  <div class="media-list" id="sticker-media-list">
                   <div class="empty-state">
                     <i class="fas fa-file-image"></i>
                     <p>No media files selected</p>
@@ -364,6 +389,7 @@
                   </button>
                 </div>
               </div>
+            </div>
             </div>
           </div>
 
@@ -443,18 +469,13 @@
                   <label>Cache Size</label>
                   <span id="cache-size">0 MB</span>
                 </div>
-                <div class="info-item">
-                  <label>Temp Files</label>
-                  <span id="temp-files">0 files</span>
-                </div>
+
                 <div class="button-group" style="margin-top: 15px;">
-                  <button class="btn btn-secondary" onclick="app.clearCache()">
+                  <button class="btn btn-secondary" onclick="window.app?.clearCache()">
                     <i class="fas fa-broom"></i> Clear Cache
                   </button>
-                  <button class="btn btn-secondary" onclick="app.cleanTempFiles()">
-                    <i class="fas fa-trash"></i> Clean Temp
-                  </button>
-                  <button class="btn btn-secondary" onclick="app.restartBackend()">
+
+                  <button class="btn btn-secondary" onclick="window.app?.restartBackend()">
                     <i class="fas fa-redo"></i> Restart Backend
                   </button>
                 </div>
@@ -487,10 +508,10 @@
                   <span id="session-start">Just now</span>
                 </div>
                 <div class="button-group" style="margin-top: 15px;">
-                  <button class="btn btn-secondary" onclick="app.exportStats()">
+                  <button class="btn btn-secondary" onclick="window.app?.exportStats()">
                     <i class="fas fa-download"></i> Export Stats
                   </button>
-                  <button class="btn btn-secondary" onclick="app.resetStats()">
+                  <button class="btn btn-secondary" onclick="window.app?.resetStats()">
                     <i class="fas fa-sync"></i> Reset Stats
                   </button>
                 </div>
@@ -617,51 +638,376 @@
           </div>
         </div>
 
-        <!-- Emoji Selection Modal -->
-        <div class="modal" id="emoji-modal" style="display: none">
+        <!-- Enhanced Emoji Selection Modal -->
+        <div class="modal emoji-modal-enhanced" id="emoji-modal" style="display: none">
           <div class="modal-header">
-            <h3><i class="fas fa-smile"></i> Select Emoji</h3>
+            <h3><i class="fas fa-smile"></i> Emoji Selection</h3>
+            <button class="modal-close" onclick="window.app?.hideModal()">
+              <i class="fas fa-times"></i>
+            </button>
           </div>
           <div class="modal-body">
-            <p>Choose an emoji for this sticker:</p>
-            <input
-              type="text"
-              id="emoji-input"
-              class="form-control"
-              placeholder="😀"
-              maxlength="4"
-            />
-            <div class="emoji-picker">
-              <div class="emoji-category">
-                <h4>Popular</h4>
-                <div class="emoji-grid">
-                  <button class="emoji-btn" data-emoji="😀">😀</button>
-                  <button class="emoji-btn" data-emoji="😂">😂</button>
-                  <button class="emoji-btn" data-emoji="😍">😍</button>
-                  <button class="emoji-btn" data-emoji="🔥">🔥</button>
-                  <button class="emoji-btn" data-emoji="💯">💯</button>
-                  <button class="emoji-btn" data-emoji="❤️">❤️</button>
-                  <button class="emoji-btn" data-emoji="👍">👍</button>
-                  <button class="emoji-btn" data-emoji="😎">😎</button>
-                  <button class="emoji-btn" data-emoji="🎉">🎉</button>
-                  <button class="emoji-btn" data-emoji="✨">✨</button>
-                  <button class="emoji-btn" data-emoji="💪">💪</button>
-                  <button class="emoji-btn" data-emoji="🎯">🎯</button>
-                </div>
+            <div class="emoji-current-file">
+              <span class="label">Current file:</span>
+              <span id="emoji-filename" class="filename">filename.mp4</span>
+            </div>
+            
+            <div class="emoji-input-section">
+              <input
+                type="text"
+                id="emoji-input"
+                class="form-control emoji-display"
+                placeholder="❤️"
+                value="❤️"
+                maxlength="4"
+              />
+              <div class="emoji-preview">
+                <span id="emoji-preview-icon">❤️</span>
+                <small>Preview</small>
               </div>
-              <div class="emoji-actions">
-                <button
-                  class="btn btn-secondary btn-sm"
-                  onclick="app.setRandomEmojis()"
-                >
-                  <i class="fas fa-dice"></i> Random Emojis for All
-                </button>
+            </div>
+
+            <div class="emoji-quick-actions">
+              <button class="quick-action-btn" onclick="window.app?.applyEmojiToAll()">
+                <i class="fas fa-clone"></i>
+                <span>Apply to All</span>
+              </button>
+              <button class="quick-action-btn" onclick="window.app?.applyRandomEmojis()">
+                <i class="fas fa-dice"></i>
+                <span>Random for All</span>
+              </button>
+              <button class="quick-action-btn" onclick="window.app?.applySequentialEmojis()">
+                <i class="fas fa-sort-numeric-up"></i>
+                <span>Sequential</span>
+              </button>
+              <button class="quick-action-btn" onclick="window.app?.applyThemeEmojis()">
+                <i class="fas fa-palette"></i>
+                <span>By Theme</span>
+              </button>
+            </div>
+            
+            <div class="emoji-picker-enhanced">
+              <!-- Tab Navigation -->
+              <div class="emoji-tabs">
+                <button class="emoji-tab active" data-category="popular">Popular</button>
+                <button class="emoji-tab" data-category="smileys">😊 Smileys</button>
+                <button class="emoji-tab" data-category="hearts">❤️ Hearts</button>
+                <button class="emoji-tab" data-category="animals">🐶 Animals</button>
+                <button class="emoji-tab" data-category="food">🍕 Food</button>
+                <button class="emoji-tab" data-category="activities">⚽ Activities</button>
+                <button class="emoji-tab" data-category="objects">💡 Objects</button>
+                <button class="emoji-tab" data-category="symbols">✨ Symbols</button>
+              </div>
+              
+              <!-- Emoji Categories -->
+              <div class="emoji-categories">
+                <div class="emoji-category active" id="category-popular">
+                  <div class="emoji-grid">
+                    <button class="emoji-btn" data-emoji="😀">😀</button>
+                    <button class="emoji-btn" data-emoji="😂">😂</button>
+                    <button class="emoji-btn" data-emoji="😍">😍</button>
+                    <button class="emoji-btn" data-emoji="🥰">🥰</button>
+                    <button class="emoji-btn" data-emoji="😘">😘</button>
+                    <button class="emoji-btn" data-emoji="🤗">🤗</button>
+                    <button class="emoji-btn" data-emoji="😎">😎</button>
+                    <button class="emoji-btn" data-emoji="🤩">🤩</button>
+                    <button class="emoji-btn" data-emoji="🥳">🥳</button>
+                    <button class="emoji-btn" data-emoji="😏">😏</button>
+                    <button class="emoji-btn" data-emoji="😊">😊</button>
+                    <button class="emoji-btn" data-emoji="😉">😉</button>
+                    <button class="emoji-btn" data-emoji="🔥">🔥</button>
+                    <button class="emoji-btn" data-emoji="💯">💯</button>
+                    <button class="emoji-btn" data-emoji="❤️">❤️</button>
+                    <button class="emoji-btn" data-emoji="💕">💕</button>
+                    <button class="emoji-btn" data-emoji="👍">👍</button>
+                    <button class="emoji-btn" data-emoji="✨">✨</button>
+                    <button class="emoji-btn" data-emoji="🎉">🎉</button>
+                    <button class="emoji-btn" data-emoji="💪">💪</button>
+                    <button class="emoji-btn" data-emoji="🤔">🤔</button>
+                    <button class="emoji-btn" data-emoji="🙏">🙏</button>
+                    <button class="emoji-btn" data-emoji="💖">💖</button>
+                    <button class="emoji-btn" data-emoji="👏">👏</button>
+                    <button class="emoji-btn" data-emoji="😭">😭</button>
+                    <button class="emoji-btn" data-emoji="😔">😔</button>
+                    <button class="emoji-btn" data-emoji="🥺">🥺</button>
+                    <button class="emoji-btn" data-emoji="😡">😡</button>
+                    <button class="emoji-btn" data-emoji="🤯">🤯</button>
+                    <button class="emoji-btn" data-emoji="😱">😱</button>
+                    <button class="emoji-btn" data-emoji="🤭">🤭</button>
+                    <button class="emoji-btn" data-emoji="🙄">🙄</button>
+                    <button class="emoji-btn" data-emoji="😴">😴</button>
+                    <button class="emoji-btn" data-emoji="🤤">🤤</button>
+                    <button class="emoji-btn" data-emoji="😜">😜</button>
+                    <button class="emoji-btn" data-emoji="🤪">🤪</button>
+                    <button class="emoji-btn" data-emoji="🥵">🥵</button>
+                    <button class="emoji-btn" data-emoji="🥶">🥶</button>
+                    <button class="emoji-btn" data-emoji="😳">😳</button>
+                    <button class="emoji-btn" data-emoji="🤓">🤓</button>
+                  </div>
+                </div>
+                
+                <div class="emoji-category" id="category-smileys">
+                  <div class="emoji-grid">
+                    <button class="emoji-btn" data-emoji="😀">😀</button>
+                    <button class="emoji-btn" data-emoji="😃">😃</button>
+                    <button class="emoji-btn" data-emoji="😄">😄</button>
+                    <button class="emoji-btn" data-emoji="😁">😁</button>
+                    <button class="emoji-btn" data-emoji="😆">😆</button>
+                    <button class="emoji-btn" data-emoji="😅">😅</button>
+                    <button class="emoji-btn" data-emoji="😂">😂</button>
+                    <button class="emoji-btn" data-emoji="🤣">🤣</button>
+                    <button class="emoji-btn" data-emoji="😊">😊</button>
+                    <button class="emoji-btn" data-emoji="😇">😇</button>
+                    <button class="emoji-btn" data-emoji="🙂">🙂</button>
+                    <button class="emoji-btn" data-emoji="🙃">🙃</button>
+                    <button class="emoji-btn" data-emoji="😉">😉</button>
+                    <button class="emoji-btn" data-emoji="😌">😌</button>
+                    <button class="emoji-btn" data-emoji="😍">😍</button>
+                    <button class="emoji-btn" data-emoji="🥰">🥰</button>
+                    <button class="emoji-btn" data-emoji="😘">😘</button>
+                    <button class="emoji-btn" data-emoji="😗">😗</button>
+                    <button class="emoji-btn" data-emoji="😙">😙</button>
+                    <button class="emoji-btn" data-emoji="😚">😚</button>
+                    <button class="emoji-btn" data-emoji="😋">😋</button>
+                    <button class="emoji-btn" data-emoji="😛">😛</button>
+                    <button class="emoji-btn" data-emoji="😜">😜</button>
+                    <button class="emoji-btn" data-emoji="🤪">🤪</button>
+                    <button class="emoji-btn" data-emoji="😝">😝</button>
+                    <button class="emoji-btn" data-emoji="🤑">🤑</button>
+                    <button class="emoji-btn" data-emoji="🤗">🤗</button>
+                    <button class="emoji-btn" data-emoji="🤭">🤭</button>
+                    <button class="emoji-btn" data-emoji="🤫">🤫</button>
+                    <button class="emoji-btn" data-emoji="🤔">🤔</button>
+                    <button class="emoji-btn" data-emoji="🤐">🤐</button>
+                    <button class="emoji-btn" data-emoji="🤨">🤨</button>
+                    <button class="emoji-btn" data-emoji="😐">😐</button>
+                    <button class="emoji-btn" data-emoji="😑">😑</button>
+                    <button class="emoji-btn" data-emoji="😶">😶</button>
+                    <button class="emoji-btn" data-emoji="😏">😏</button>
+                    <button class="emoji-btn" data-emoji="😒">😒</button>
+                    <button class="emoji-btn" data-emoji="🙄">🙄</button>
+                    <button class="emoji-btn" data-emoji="😬">😬</button>
+                    <button class="emoji-btn" data-emoji="🤥">🤥</button>
+                    <button class="emoji-btn" data-emoji="😔">😔</button>
+                    <button class="emoji-btn" data-emoji="😪">😪</button>
+                    <button class="emoji-btn" data-emoji="🤤">🤤</button>
+                    <button class="emoji-btn" data-emoji="😴">😴</button>
+                    <button class="emoji-btn" data-emoji="😷">😷</button>
+                    <button class="emoji-btn" data-emoji="🤒">🤒</button>
+                    <button class="emoji-btn" data-emoji="🤕">🤕</button>
+                    <button class="emoji-btn" data-emoji="🤢">🤢</button>
+                    <button class="emoji-btn" data-emoji="🤮">🤮</button>
+                    <button class="emoji-btn" data-emoji="🤧">🤧</button>
+                    <button class="emoji-btn" data-emoji="🥵">🥵</button>
+                    <button class="emoji-btn" data-emoji="🥶">🥶</button>
+                    <button class="emoji-btn" data-emoji="🥴">🥴</button>
+                    <button class="emoji-btn" data-emoji="😵">😵</button>
+                    <button class="emoji-btn" data-emoji="🤯">🤯</button>
+                    <button class="emoji-btn" data-emoji="🤠">🤠</button>
+                    <button class="emoji-btn" data-emoji="🥳">🥳</button>
+                    <button class="emoji-btn" data-emoji="😎">😎</button>
+                    <button class="emoji-btn" data-emoji="🤓">🤓</button>
+                    <button class="emoji-btn" data-emoji="🧐">🧐</button>
+                    <button class="emoji-btn" data-emoji="😕">😕</button>
+                    <button class="emoji-btn" data-emoji="😟">😟</button>
+                    <button class="emoji-btn" data-emoji="🙁">🙁</button>
+                    <button class="emoji-btn" data-emoji="☹️">☹️</button>
+                    <button class="emoji-btn" data-emoji="😮">😮</button>
+                    <button class="emoji-btn" data-emoji="😯">😯</button>
+                    <button class="emoji-btn" data-emoji="😲">😲</button>
+                    <button class="emoji-btn" data-emoji="😳">😳</button>
+                    <button class="emoji-btn" data-emoji="🥺">🥺</button>
+                    <button class="emoji-btn" data-emoji="😦">😦</button>
+                    <button class="emoji-btn" data-emoji="😧">😧</button>
+                    <button class="emoji-btn" data-emoji="😨">😨</button>
+                    <button class="emoji-btn" data-emoji="😰">😰</button>
+                    <button class="emoji-btn" data-emoji="😥">😥</button>
+                    <button class="emoji-btn" data-emoji="😢">😢</button>
+                    <button class="emoji-btn" data-emoji="😭">😭</button>
+                    <button class="emoji-btn" data-emoji="😱">😱</button>
+                    <button class="emoji-btn" data-emoji="😖">😖</button>
+                    <button class="emoji-btn" data-emoji="😣">😣</button>
+                    <button class="emoji-btn" data-emoji="😞">😞</button>
+                    <button class="emoji-btn" data-emoji="😓">😓</button>
+                    <button class="emoji-btn" data-emoji="😩">😩</button>
+                    <button class="emoji-btn" data-emoji="😫">😫</button>
+                    <button class="emoji-btn" data-emoji="🥱">🥱</button>
+                    <button class="emoji-btn" data-emoji="😤">😤</button>
+                    <button class="emoji-btn" data-emoji="😡">😡</button>
+                    <button class="emoji-btn" data-emoji="😠">😠</button>
+                    <button class="emoji-btn" data-emoji="🤬">🤬</button>
+                    <button class="emoji-btn" data-emoji="😈">😈</button>
+                    <button class="emoji-btn" data-emoji="👿">👿</button>
+                    <button class="emoji-btn" data-emoji="💀">💀</button>
+                    <button class="emoji-btn" data-emoji="☠️">☠️</button>
+                    <button class="emoji-btn" data-emoji="💩">💩</button>
+                    <button class="emoji-btn" data-emoji="🤡">🤡</button>
+                    <button class="emoji-btn" data-emoji="👹">👹</button>
+                    <button class="emoji-btn" data-emoji="👺">👺</button>
+                    <button class="emoji-btn" data-emoji="👻">👻</button>
+                    <button class="emoji-btn" data-emoji="👽">👽</button>
+                    <button class="emoji-btn" data-emoji="👾">👾</button>
+                    <button class="emoji-btn" data-emoji="🤖">🤖</button>
+                  </div>
+                </div>
+                
+                <div class="emoji-category" id="category-hearts">
+                  <div class="emoji-grid">
+                    <button class="emoji-btn" data-emoji="❤️">❤️</button>
+                    <button class="emoji-btn" data-emoji="🧡">🧡</button>
+                    <button class="emoji-btn" data-emoji="💛">💛</button>
+                    <button class="emoji-btn" data-emoji="💚">💚</button>
+                    <button class="emoji-btn" data-emoji="💙">💙</button>
+                    <button class="emoji-btn" data-emoji="💜">💜</button>
+                    <button class="emoji-btn" data-emoji="🖤">🖤</button>
+                    <button class="emoji-btn" data-emoji="🤍">🤍</button>
+                    <button class="emoji-btn" data-emoji="🤎">🤎</button>
+                    <button class="emoji-btn" data-emoji="💔">💔</button>
+                    <button class="emoji-btn" data-emoji="❣️">❣️</button>
+                    <button class="emoji-btn" data-emoji="💕">💕</button>
+                    <button class="emoji-btn" data-emoji="💞">💞</button>
+                    <button class="emoji-btn" data-emoji="💓">💓</button>
+                    <button class="emoji-btn" data-emoji="💗">💗</button>
+                    <button class="emoji-btn" data-emoji="💖">💖</button>
+                    <button class="emoji-btn" data-emoji="💘">💘</button>
+                    <button class="emoji-btn" data-emoji="💝">💝</button>
+                    <button class="emoji-btn" data-emoji="💟">💟</button>
+                    <button class="emoji-btn" data-emoji="♥️">♥️</button>
+                  </div>
+                </div>
+                
+                <div class="emoji-category" id="category-animals">
+                  <div class="emoji-grid">
+                    <button class="emoji-btn" data-emoji="🐶">🐶</button>
+                    <button class="emoji-btn" data-emoji="🐱">🐱</button>
+                    <button class="emoji-btn" data-emoji="🐭">🐭</button>
+                    <button class="emoji-btn" data-emoji="🐹">🐹</button>
+                    <button class="emoji-btn" data-emoji="🐰">🐰</button>
+                    <button class="emoji-btn" data-emoji="🦊">🦊</button>
+                    <button class="emoji-btn" data-emoji="🐻">🐻</button>
+                    <button class="emoji-btn" data-emoji="🐼">🐼</button>
+                    <button class="emoji-btn" data-emoji="🐨">🐨</button>
+                    <button class="emoji-btn" data-emoji="🐯">🐯</button>
+                    <button class="emoji-btn" data-emoji="🦁">🦁</button>
+                    <button class="emoji-btn" data-emoji="🐮">🐮</button>
+                    <button class="emoji-btn" data-emoji="🐷">🐷</button>
+                    <button class="emoji-btn" data-emoji="🐸">🐸</button>
+                    <button class="emoji-btn" data-emoji="🐵">🐵</button>
+                    <button class="emoji-btn" data-emoji="🙈">🙈</button>
+                    <button class="emoji-btn" data-emoji="🙉">🙉</button>
+                    <button class="emoji-btn" data-emoji="🙊">🙊</button>
+                    <button class="emoji-btn" data-emoji="🐒">🐒</button>
+                    <button class="emoji-btn" data-emoji="🦄">🦄</button>
+                  </div>
+                </div>
+                
+                <div class="emoji-category" id="category-food">
+                  <div class="emoji-grid">
+                    <button class="emoji-btn" data-emoji="🍕">🍕</button>
+                    <button class="emoji-btn" data-emoji="🍔">🍔</button>
+                    <button class="emoji-btn" data-emoji="🍟">🍟</button>
+                    <button class="emoji-btn" data-emoji="🌭">🌭</button>
+                    <button class="emoji-btn" data-emoji="🍿">🍿</button>
+                    <button class="emoji-btn" data-emoji="🧂">🧂</button>
+                    <button class="emoji-btn" data-emoji="🥓">🥓</button>
+                    <button class="emoji-btn" data-emoji="🥚">🥚</button>
+                    <button class="emoji-btn" data-emoji="🍳">🍳</button>
+                    <button class="emoji-btn" data-emoji="🧇">🧇</button>
+                    <button class="emoji-btn" data-emoji="🥞">🥞</button>
+                    <button class="emoji-btn" data-emoji="🧈">🧈</button>
+                    <button class="emoji-btn" data-emoji="🍞">🍞</button>
+                    <button class="emoji-btn" data-emoji="🥐">🥐</button>
+                    <button class="emoji-btn" data-emoji="🥨">🥨</button>
+                    <button class="emoji-btn" data-emoji="🥯">🥯</button>
+                    <button class="emoji-btn" data-emoji="🥖">🥖</button>
+                    <button class="emoji-btn" data-emoji="🧀">🧀</button>
+                    <button class="emoji-btn" data-emoji="🥗">🥗</button>
+                    <button class="emoji-btn" data-emoji="🥙">🥙</button>
+                  </div>
+                </div>
+                
+                <div class="emoji-category" id="category-activities">
+                  <div class="emoji-grid">
+                    <button class="emoji-btn" data-emoji="⚽">⚽</button>
+                    <button class="emoji-btn" data-emoji="🏀">🏀</button>
+                    <button class="emoji-btn" data-emoji="🏈">🏈</button>
+                    <button class="emoji-btn" data-emoji="⚾">⚾</button>
+                    <button class="emoji-btn" data-emoji="🥎">🥎</button>
+                    <button class="emoji-btn" data-emoji="🎾">🎾</button>
+                    <button class="emoji-btn" data-emoji="🏐">🏐</button>
+                    <button class="emoji-btn" data-emoji="🏉">🏉</button>
+                    <button class="emoji-btn" data-emoji="🥏">🥏</button>
+                    <button class="emoji-btn" data-emoji="🎱">🎱</button>
+                    <button class="emoji-btn" data-emoji="🪀">🪀</button>
+                    <button class="emoji-btn" data-emoji="🏓">🏓</button>
+                    <button class="emoji-btn" data-emoji="🏸">🏸</button>
+                    <button class="emoji-btn" data-emoji="🏒">🏒</button>
+                    <button class="emoji-btn" data-emoji="🏑">🏑</button>
+                    <button class="emoji-btn" data-emoji="🥍">🥍</button>
+                    <button class="emoji-btn" data-emoji="🏏">🏏</button>
+                    <button class="emoji-btn" data-emoji="🪃">🪃</button>
+                    <button class="emoji-btn" data-emoji="🥅">🥅</button>
+                    <button class="emoji-btn" data-emoji="⛳">⛳</button>
+                  </div>
+                </div>
+                
+                <div class="emoji-category" id="category-objects">
+                  <div class="emoji-grid">
+                    <button class="emoji-btn" data-emoji="💡">💡</button>
+                    <button class="emoji-btn" data-emoji="🔦">🔦</button>
+                    <button class="emoji-btn" data-emoji="🕯️">🕯️</button>
+                    <button class="emoji-btn" data-emoji="💎">💎</button>
+                    <button class="emoji-btn" data-emoji="🎈">🎈</button>
+                    <button class="emoji-btn" data-emoji="🎁">🎁</button>
+                    <button class="emoji-btn" data-emoji="🎀">🎀</button>
+                    <button class="emoji-btn" data-emoji="🎊">🎊</button>
+                    <button class="emoji-btn" data-emoji="🎉">🎉</button>
+                    <button class="emoji-btn" data-emoji="🎯">🎯</button>
+                    <button class="emoji-btn" data-emoji="🎮">🎮</button>
+                    <button class="emoji-btn" data-emoji="🕹️">🕹️</button>
+                    <button class="emoji-btn" data-emoji="🎲">🎲</button>
+                    <button class="emoji-btn" data-emoji="🧩">🧩</button>
+                    <button class="emoji-btn" data-emoji="♟️">♟️</button>
+                    <button class="emoji-btn" data-emoji="🎨">🎨</button>
+                    <button class="emoji-btn" data-emoji="🖌️">🖌️</button>
+                    <button class="emoji-btn" data-emoji="🖍️">🖍️</button>
+                    <button class="emoji-btn" data-emoji="📷">📷</button>
+                    <button class="emoji-btn" data-emoji="📸">📸</button>
+                  </div>
+                </div>
+                
+                <div class="emoji-category" id="category-symbols">
+                  <div class="emoji-grid">
+                    <button class="emoji-btn" data-emoji="✨">✨</button>
+                    <button class="emoji-btn" data-emoji="⭐">⭐</button>
+                    <button class="emoji-btn" data-emoji="🌟">🌟</button>
+                    <button class="emoji-btn" data-emoji="💫">💫</button>
+                    <button class="emoji-btn" data-emoji="⚡">⚡</button>
+                    <button class="emoji-btn" data-emoji="🔥">🔥</button>
+                    <button class="emoji-btn" data-emoji="💥">💥</button>
+                    <button class="emoji-btn" data-emoji="☀️">☀️</button>
+                    <button class="emoji-btn" data-emoji="🌈">🌈</button>
+                    <button class="emoji-btn" data-emoji="❄️">❄️</button>
+                    <button class="emoji-btn" data-emoji="💧">💧</button>
+                    <button class="emoji-btn" data-emoji="💯">💯</button>
+                    <button class="emoji-btn" data-emoji="✅">✅</button>
+                    <button class="emoji-btn" data-emoji="❌">❌</button>
+                    <button class="emoji-btn" data-emoji="❓">❓</button>
+                    <button class="emoji-btn" data-emoji="❗">❗</button>
+                    <button class="emoji-btn" data-emoji="‼️">‼️</button>
+                    <button class="emoji-btn" data-emoji="⚠️">⚠️</button>
+                    <button class="emoji-btn" data-emoji="✳️">✳️</button>
+                    <button class="emoji-btn" data-emoji="♻️">♻️</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
           <div class="modal-footer">
             <button class="btn btn-secondary" id="cancel-emoji">Cancel</button>
-            <button class="btn btn-primary" id="save-emoji">Save Emoji</button>
+            <button class="btn btn-primary" id="save-emoji">
+              <i class="fas fa-check"></i> Apply Emoji
+            </button>
           </div>
         </div>
       </div>
