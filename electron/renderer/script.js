@@ -24,6 +24,8 @@ class TelegramUtilities {
     this.isPaused = false;
     this.startTime = new Date();
     this.systemInfoInterval = null;
+    this.selectedMediaType = null; // 'image' or 'video'
+    this.defaultEmoji = "❤️"; // Heart as default emoji
     this.sessionStats = {
       totalConversions: 0,
       successfulConversions: 0,
@@ -590,8 +592,11 @@ class TelegramUtilities {
     if (addVideosBtn) {
       addVideosBtn.addEventListener("click", () => this.addVideoFiles());
     } else {
-      console.error("❌ add-videos button not found!");
+      console.warn("⚠️ add-videos button not found - will retry if needed");
     }
+    
+    // Setup emoji modal enhancements
+    this.setupEmojiModal();
     
     if (clearVideosBtn) {
       clearVideosBtn.addEventListener("click", () => this.clearVideoFiles());
@@ -649,10 +654,106 @@ class TelegramUtilities {
     
     // Sticker Bot Events
     document.getElementById("connect-telegram").addEventListener("click", () => this.connectTelegram());
-    document.getElementById("add-images").addEventListener("click", () => this.addImages());
-    document.getElementById("add-sticker-videos").addEventListener("click", () => this.addStickerVideos());
     document.getElementById("clear-media").addEventListener("click", () => this.clearMedia());
     document.getElementById("create-sticker-pack").addEventListener("click", () => this.createStickerPack());
+    
+    // Media type selection
+    const selectImageBtn = document.getElementById("select-image-type");
+    const selectVideoBtn = document.getElementById("select-video-type");
+    const mediaControls = document.getElementById("media-controls");
+    const addMediaBtn = document.getElementById("add-media");
+    const mediaTypeText = document.getElementById("media-type-text");
+    
+    if (selectImageBtn) {
+      selectImageBtn.addEventListener("click", () => {
+        this.selectedMediaType = "image";
+        selectImageBtn.classList.add("active");
+        selectVideoBtn.classList.remove("active");
+        mediaControls.style.display = "flex";
+        mediaTypeText.textContent = "Images";
+        // Clear any existing media of different type
+        if (this.mediaFiles.some(f => f.type === "video")) {
+          if (confirm("Switching to images will clear existing videos. Continue?")) {
+            this.clearMedia();
+          } else {
+            return;
+          }
+        }
+      });
+    }
+    
+    if (selectVideoBtn) {
+      selectVideoBtn.addEventListener("click", () => {
+        this.selectedMediaType = "video";
+        selectVideoBtn.classList.add("active");
+        selectImageBtn.classList.remove("active");
+        mediaControls.style.display = "flex";
+        mediaTypeText.textContent = "Videos";
+        // Clear any existing media of different type
+        if (this.mediaFiles.some(f => f.type === "image")) {
+          if (confirm("Switching to videos will clear existing images. Continue?")) {
+            this.clearMedia();
+          } else {
+            return;
+          }
+        }
+      });
+    }
+    
+    if (addMediaBtn) {
+      addMediaBtn.addEventListener("click", () => {
+        if (this.selectedMediaType === "image") {
+          this.addImages();
+        } else if (this.selectedMediaType === "video") {
+          this.addStickerVideos();
+        } else {
+          this.showToast("warning", "Select Type", "Please select media type first");
+        }
+      });
+    }
+    
+    // Toggle media view (horizontal/vertical)
+    const toggleBtn = document.getElementById("toggle-media-view");
+    if (toggleBtn) {
+      toggleBtn.addEventListener("click", () => {
+        const mediaList = document.getElementById("sticker-media-list");
+        const icon = toggleBtn.querySelector("i");
+        
+        if (mediaList) {
+          mediaList.classList.toggle("vertical-scroll");
+          
+          if (mediaList.classList.contains("vertical-scroll")) {
+            icon.className = "fas fa-grip-lines";
+            toggleBtn.classList.add("active");
+          } else {
+            icon.className = "fas fa-grip-horizontal";
+            toggleBtn.classList.remove("active");
+          }
+        }
+      });
+    }
+    
+    // Sort functionality
+    const sortBtn = document.getElementById("sort-media");
+    const sortOptions = document.getElementById("media-sort-options");
+    const sortSelect = document.getElementById("sort-select");
+    
+    if (sortBtn) {
+      sortBtn.addEventListener("click", () => {
+        if (sortOptions.style.display === "none") {
+          sortOptions.style.display = "block";
+        } else {
+          sortOptions.style.display = "none";
+        }
+      });
+    }
+    
+    if (sortSelect) {
+      sortSelect.addEventListener("change", (e) => {
+        this.sortMedia(e.target.value);
+        sortOptions.style.display = "none";
+      });
+    }
     
     // Visibility Toggle Events for Credential Fields
     document.querySelectorAll('.btn-toggle-visibility').forEach(button => {
@@ -856,7 +957,7 @@ class TelegramUtilities {
         validExtensions: ["mp4", "avi", "mov", "mkv", "flv", "webm"]
       },
       { 
-        element: document.getElementById("media-file-list"),
+        element: document.getElementById("sticker-media-list"),
         handler: this.handleDroppedMediaFiles.bind(this),
         validExtensions: ["png", "jpg", "jpeg", "webp", "webm"]
       }
@@ -969,7 +1070,8 @@ class TelegramUtilities {
             file_path: filePath,
             name: file.name,
             type: type,
-            emoji: "😀",
+            emoji: this.defaultEmoji,
+            dateAdded: Date.now(),
           });
           addedCount++;
         }
@@ -1249,6 +1351,7 @@ class TelegramUtilities {
   // =============================================
   async addVideoFiles() {
     console.log("=== ADD VIDEO FILES DEBUG ===");
+    console.log("Current video files before adding:", this.videoFiles.length);
     
     try {
       // Check if electronAPI is available
@@ -1259,6 +1362,7 @@ class TelegramUtilities {
       }
       
       console.log("✅ Electron API is available");
+      console.log("Container exists:", !!document.getElementById("video-file-list"));
       
       const files = await window.electronAPI.selectFiles({
         filters: [
@@ -1309,8 +1413,20 @@ class TelegramUtilities {
       
       console.log(`📊 Total files added: ${addedCount}`);
       console.log(`📊 Total files in list: ${this.videoFiles.length}`);
+      console.log("📊 Files array:", this.videoFiles);
       
+      // Force immediate update
       this.updateVideoFileList();
+      
+      // Verify DOM update
+      setTimeout(() => {
+        const container = document.getElementById("video-file-list");
+        if (container) {
+          console.log("✅ Container children after update:", container.children.length);
+          console.log("✅ Container HTML preview:", container.innerHTML.substring(0, 200));
+        }
+      }, 200);
+      
       if (addedCount > 0) {
         this.showToast("success", "Files Added", `Added ${addedCount} video files`);
       } else {
@@ -1375,7 +1491,14 @@ class TelegramUtilities {
   updateVideoFileList() {
     const container = document.getElementById("video-file-list");
     if (!container) {
-      this.debugWarn('🚨 UI DEBUG - Container Not Found', 'video-file-list container not found');
+      console.warn('🚨 UI DEBUG - Container Not Found', 'video-file-list container not found');
+      // Try again after a short delay in case DOM is still loading
+      setTimeout(() => {
+        const retryContainer = document.getElementById("video-file-list");
+        if (retryContainer && this.videoFiles.length > 0) {
+          this.updateVideoFileList();
+        }
+      }, 100);
       return;
     }
     
@@ -3059,7 +3182,8 @@ class TelegramUtilities {
             file_path: file,
             name: file.split(/[\\/]/).pop(),
             type: "image",
-            emoji: "😀",
+            emoji: this.defaultEmoji,
+            dateAdded: Date.now(),
             status: "pending",
           });
           addedCount++;
@@ -3122,7 +3246,8 @@ class TelegramUtilities {
             file_path: file,
             name: file.split(/[\\/]/).pop(),
             type: "video",
-            emoji: "😀",
+            emoji: this.defaultEmoji,
+            dateAdded: Date.now(),
             status: "pending",
           });
           addedCount++;
@@ -3171,15 +3296,25 @@ class TelegramUtilities {
   }
 
   updateMediaFileList() {
-    const container = document.getElementById("media-file-list");
-    if (!container) return;
+    const container = document.getElementById("sticker-media-list");
+    if (!container) {
+      console.warn('⚠️ sticker-media-list container not found');
+      // Try again after a short delay in case DOM is still loading
+      setTimeout(() => {
+        const retryContainer = document.getElementById("sticker-media-list");
+        if (retryContainer && this.mediaFiles.length > 0) {
+          this.updateMediaFileList();
+        }
+      }, 100);
+      return;
+    }
     
     if (this.mediaFiles.length === 0) {
       container.innerHTML = `
         <div class="empty-state">
-          <i class="fas fa-images"></i>
+          <i class="fas fa-file-image"></i>
           <p>No media files selected</p>
-          <small>Add images or videos for your sticker pack or drag & drop files here</small>
+          <small>Add images or videos for your sticker pack (max 120 files)</small>
         </div>
       `;
       return;
@@ -3192,31 +3327,33 @@ class TelegramUtilities {
         const statusIcon = this.getMediaStatusIcon(file.status);
         
         return `
-          <div class="media-item ${statusClass}" data-index="${index}">
+          <div class="media-item ${statusClass} new-item" data-index="${index}">
             <div class="media-info">
               <div class="media-icon">
                 <i class="${icon}"></i>
               </div>
               <div class="media-details">
                 <div class="media-name" title="${file.file_path}">${file.name}</div>
-                <div class="media-type">${file.type.toUpperCase()}</div>
-                ${file.status && file.status !== "pending"
-                  ? `<div class="media-status"><i class="${statusIcon}"></i> ${this.getStatusText(file.status)}</div>`
-                  : ""
-                }
+                <div class="media-meta">
+                  <span><i class="fas fa-file"></i> ${file.type.toUpperCase()}</span>
+                  ${file.status && file.status !== "pending"
+                    ? `<span class="media-status"><i class="${statusIcon}"></i> ${this.getStatusText(file.status)}</span>`
+                    : ""
+                  }
+                </div>
               </div>
             </div>
             <div class="media-actions">
-              <button class="btn btn-sm btn-secondary emoji-btn" onclick="app.editEmoji(${index})" 
+              <button class="media-emoji-btn" onclick="window.app?.editEmoji(${index})" 
                       title="Change Emoji">
                 ${file.emoji}
               </button>
-              <button class="btn btn-sm btn-info" onclick="app.showMediaInfo(${index})" title="File Info">
-                <i class="fas fa-info"></i>
+              <button class="btn btn-sm btn-info" onclick="window.app?.showMediaInfo(${index})" title="File Info">
+                <i class="fas fa-info-circle"></i>
               </button>
-              <button class="btn btn-sm btn-danger" onclick="app.removeMediaFile(${index})" 
+              <button class="btn btn-sm btn-danger" onclick="window.app?.removeMediaFile(${index})" 
                       title="Remove File">
-                <i class="fas fa-trash"></i>
+                <i class="fas fa-times"></i>
               </button>
             </div>
           </div>
@@ -3256,19 +3393,93 @@ class TelegramUtilities {
     return textMap[status] || status;
   }
 
-  showMediaInfo(index) {
+  async showMediaInfo(index) {
     const file = this.mediaFiles[index];
     if (!file) return;
     
+    // Get file metadata
+    let fileSize = 'Unknown';
+    let dimensions = 'Unknown';
+    let duration = 'N/A';
+    let dateModified = 'Unknown';
+    
+    try {
+      const result = await this.apiRequest('POST', '/api/get-file-info', { 
+        path: file.file_path 
+      });
+      
+      if (result && result.success && result.data) {
+        fileSize = this.formatFileSize(result.data.size || 0);
+        if (result.data.width && result.data.height) {
+          dimensions = `${result.data.width} × ${result.data.height}`;
+        }
+        if (result.data.duration) {
+          duration = this.formatDuration(result.data.duration);
+        }
+        if (result.data.modified) {
+          dateModified = new Date(result.data.modified).toLocaleDateString();
+        }
+      }
+    } catch (error) {
+      console.error('Failed to get file info:', error);
+    }
+    
     const info = `
-      <strong>File:</strong> ${file.name}<br>
-      <strong>Path:</strong> ${file.file_path}<br>
-      <strong>Type:</strong> ${file.type}<br>
-      <strong>Emoji:</strong> ${file.emoji}<br>
-      <strong>Status:</strong> ${file.status || "Pending"}<br>
+      <div style="font-size: 0.9rem; line-height: 1.8;">
+        <div style="margin-bottom: 0.5rem;">
+          <strong style="color: #667eea;">File Name:</strong> 
+          <span style="color: #ccc;">${file.name}</span>
+        </div>
+        <div style="margin-bottom: 0.5rem;">
+          <strong style="color: #667eea;">Type:</strong> 
+          <span style="color: #ccc;">${file.type.toUpperCase()}</span>
+        </div>
+        <div style="margin-bottom: 0.5rem;">
+          <strong style="color: #667eea;">Size:</strong> 
+          <span style="color: #ccc;">${fileSize}</span>
+        </div>
+        <div style="margin-bottom: 0.5rem;">
+          <strong style="color: #667eea;">Dimensions:</strong> 
+          <span style="color: #ccc;">${dimensions}</span>
+        </div>
+        ${file.type === 'video' ? `
+        <div style="margin-bottom: 0.5rem;">
+          <strong style="color: #667eea;">Duration:</strong> 
+          <span style="color: #ccc;">${duration}</span>
+        </div>` : ''}
+        <div style="margin-bottom: 0.5rem;">
+          <strong style="color: #667eea;">Date Modified:</strong> 
+          <span style="color: #ccc;">${dateModified}</span>
+        </div>
+        <div style="margin-bottom: 0.5rem;">
+          <strong style="color: #667eea;">Emoji:</strong> 
+          <span style="font-size: 1.5rem;">${file.emoji}</span>
+        </div>
+        <div style="margin-bottom: 0.5rem;">
+          <strong style="color: #667eea;">Status:</strong> 
+          <span style="color: ${file.status === 'completed' ? '#4ade80' : '#ccc'};">${file.status || "Ready"}</span>
+        </div>
+        <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.1);">
+          <small style="color: #888;">File ${index + 1} of ${this.mediaFiles.length}</small>
+        </div>
+      </div>
     `;
     
-    this.showInfoModal("Media File Information", info);
+    this.showInfoModal("Media File Metadata", info);
+  }
+  
+  formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  }
+  
+  formatDuration(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   }
 
   removeMediaFile(index) {
@@ -4421,21 +4632,7 @@ This action cannot be undone. Are you sure?
     }
   }
   
-  async cleanTempFiles() {
-    try {
-      const response = await this.apiRequest('POST', '/api/clean-temp');
-      if (response && response.success) {
-        document.getElementById('temp-files').textContent = '0 files';
-        this.showToast('Temp files cleaned successfully', 'success');
-      } else {
-        this.showToast('Failed to clean temp files', 'error');
-      }
-    } catch (error) {
-      console.error('Failed to clean temp files:', error);
-      this.showToast('Failed to clean temp files', 'error');
-    }
-  }
-  
+
   async restartBackend() {
     try {
       this.showToast('Restarting backend...', 'info');
@@ -4498,57 +4695,226 @@ This action cannot be undone. Are you sure?
     // Update cache size (approximate)
     const cacheSize = Math.round(JSON.stringify(localStorage).length / 1024);
     document.getElementById('cache-size').textContent = `${cacheSize} KB`;
-    
-    // Update temp files count
-    this.updateTempFileCount();
   }
   
-  async updateTempFileCount() {
-    try {
-      const response = await this.apiRequest('GET', '/api/temp-stats');
-      if (response && response.success && response.data) {
-        document.getElementById('temp-files').textContent = `${response.data.count || 0} files`;
-      }
-    } catch (error) {
-      // Silently fail, not critical
+  // Enhanced emoji modal functions
+  setupEmojiModal() {
+    // Emoji tab switching with delegation for better performance
+    const tabContainer = document.querySelector('.emoji-tabs');
+    const categories = document.querySelectorAll('.emoji-category');
+    
+    if (tabContainer) {
+      tabContainer.addEventListener('click', (e) => {
+        const tab = e.target.closest('.emoji-tab');
+        if (!tab) return;
+        
+        const category = tab.getAttribute('data-category');
+        
+        // Update active tab
+        document.querySelectorAll('.emoji-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        
+        // Update active category
+        categories.forEach(cat => cat.classList.remove('active'));
+        const targetCategory = document.getElementById(`category-${category}`);
+        if (targetCategory) {
+          targetCategory.classList.add('active');
+        }
+      });
     }
+    
+    // Single delegated event for all emoji buttons - much better performance
+    const emojiContainer = document.querySelector('.emoji-picker-enhanced');
+    if (emojiContainer) {
+      emojiContainer.addEventListener('click', (e) => {
+        const btn = e.target.closest('.emoji-btn');
+        if (!btn) return;
+        
+        const emoji = btn.getAttribute('data-emoji');
+        const input = document.getElementById('emoji-input');
+        const preview = document.getElementById('emoji-preview-icon');
+        
+        if (input) input.value = emoji;
+        if (preview) preview.textContent = emoji;
+      });
+    }
+    
+    // Live emoji preview with debouncing
+    const emojiInput = document.getElementById('emoji-input');
+    if (emojiInput) {
+      let debounceTimer;
+      emojiInput.addEventListener('input', (e) => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          const preview = document.getElementById('emoji-preview-icon');
+          if (preview && e.target.value) {
+            preview.textContent = e.target.value;
+          }
+        }, 50);
+      });
+    }
+  }
+
+  applyEmojiToAll() {
+    const currentEmoji = document.getElementById('emoji-input')?.value || '😀';
+    
+    this.mediaFiles.forEach(file => {
+      file.emoji = currentEmoji;
+    });
+    
+    this.updateMediaFileList();
+    this.showToast("success", "Emoji Applied", `Applied ${currentEmoji} to all files`);
+  }
+
+  applyRandomEmojis() {
+    const allEmojis = [
+      // Smileys
+      "😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "😇",
+      "🙂", "🙃", "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚",
+      "😋", "😛", "😜", "🤪", "😝", "🤑", "🤗", "🤭", "🤫", "🤔",
+      // Hearts & Love
+      "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔",
+      "❣️", "💕", "💞", "💓", "💗", "💖", "💘", "💝", "💟", "♥️",
+      // Animals
+      "🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯",
+      "🦁", "🐮", "🐷", "🐸", "🐵", "🙈", "🙉", "🙊", "🐒", "🦄",
+      // Objects & Symbols
+      "✨", "⭐", "🌟", "💫", "⚡", "🔥", "💥", "☀️", "🌈", "❄️",
+      "💧", "💯", "✅", "🎯", "🎉", "🎊", "🎈", "🎁", "🎀", "💎"
+    ];
+    
+    this.mediaFiles.forEach(file => {
+      file.emoji = allEmojis[Math.floor(Math.random() * allEmojis.length)];
+    });
+    
+    this.updateMediaFileList();
+    this.showToast("success", "Random Emojis", "Applied random emojis to all files");
+  }
+
+  applySequentialEmojis() {
+    const numberEmojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
+    const alternativeEmojis = ["🅰️", "🅱️", "🆎", "🅾️", "🆑", "🆒", "🆓", "🆔", "🆕", "🆖"];
+    
+    this.mediaFiles.forEach((file, index) => {
+      if (index < numberEmojis.length) {
+        file.emoji = numberEmojis[index];
+      } else if (index < numberEmojis.length + alternativeEmojis.length) {
+        file.emoji = alternativeEmojis[index - numberEmojis.length];
+      } else {
+        // For files beyond our sequential emojis, use a pattern
+        file.emoji = "➡️";
+      }
+    });
+    
+    this.updateMediaFileList();
+    this.showToast("success", "Sequential Emojis", "Applied sequential emojis to all files");
+  }
+
+  applyThemeEmojis() {
+    const themes = {
+      happy: ["😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "😇"],
+      love: ["❤️", "🧡", "💛", "💚", "💙", "💜", "💕", "💞", "💓", "💗"],
+      cool: ["😎", "🤩", "😏", "😈", "👿", "🤠", "🦾", "🔥", "⚡", "💯"],
+      nature: ["🌸", "🌺", "🌻", "🌷", "🌹", "🌲", "🌳", "🌴", "🌵", "🍀"],
+      food: ["🍕", "🍔", "🍟", "🌭", "🍿", "🥓", "🍳", "🧇", "🥞", "🧈"],
+      sports: ["⚽", "🏀", "🏈", "⚾", "🎾", "🏐", "🏉", "🎱", "🏓", "🏸"]
+    };
+    
+    // Randomly select a theme
+    const themeNames = Object.keys(themes);
+    const selectedTheme = themeNames[Math.floor(Math.random() * themeNames.length)];
+    const themeEmojis = themes[selectedTheme];
+    
+    this.mediaFiles.forEach((file, index) => {
+      file.emoji = themeEmojis[index % themeEmojis.length];
+    });
+    
+    this.updateMediaFileList();
+    this.showToast("success", "Theme Emojis", `Applied ${selectedTheme} theme emojis to all files`);
+  }
+  
+  sortMedia(sortType) {
+    if (!this.mediaFiles || this.mediaFiles.length === 0) return;
+    
+    switch(sortType) {
+      case 'name-asc':
+        this.mediaFiles.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+      case 'name-desc':
+        this.mediaFiles.sort((a, b) => b.name.localeCompare(a.name));
+        break;
+      case 'date-new':
+        this.mediaFiles.sort((a, b) => (b.dateAdded || 0) - (a.dateAdded || 0));
+        break;
+      case 'date-old':
+        this.mediaFiles.sort((a, b) => (a.dateAdded || 0) - (b.dateAdded || 0));
+        break;
+      case 'size-large':
+        this.mediaFiles.sort((a, b) => (b.size || 0) - (a.size || 0));
+        break;
+      case 'size-small':
+        this.mediaFiles.sort((a, b) => (a.size || 0) - (b.size || 0));
+        break;
+    }
+    
+    this.updateMediaFileList();
+    this.showToast("success", "Sorted", `Files sorted by ${sortType.replace('-', ' ')}`);
   }
   
   // Removed profile card functionality - will add new content later
 }
 
-// Initialize the application
-const app = new TelegramUtilities();
+// Initialize the application when DOM is ready
+let app;
 
-// Make app globally available for onclick handlers
-window.app = app;
+// Wait for DOM to be fully loaded before initializing
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    app = new TelegramUtilities();
+    window.app = app;
+    console.log("✅ App initialized after DOM ready");
+  });
+} else {
+  // DOM is already loaded (shouldn't happen in normal flow but just in case)
+  app = new TelegramUtilities();
+  window.app = app;
+  console.log("✅ App initialized (DOM was already ready)");
+}
 
-// Additional global functions for inline event handlers
-window.removeVideoFile = (index) => app.removeVideoFile(index);
-window.removeMediaFile = (index) => app.removeMediaFile(index);
-window.editEmoji = (index) => app.editEmoji(index);
-window.showFileInfo = (index) => app.showFileInfo(index);
-window.showMediaInfo = (index) => app.showMediaInfo(index);
+// Additional global functions for inline event handlers (use arrow functions to get app at call time)
+window.removeVideoFile = (index) => window.app?.removeVideoFile(index);
+window.removeMediaFile = (index) => window.app?.removeMediaFile(index);
+window.editEmoji = (index) => window.app?.editEmoji(index);
+window.showFileInfo = (index) => window.app?.showFileInfo(index);
+window.showMediaInfo = (index) => window.app?.showMediaInfo(index);
+
+// Enhanced emoji modal functions
+window.applyEmojiToAll = () => window.app?.applyEmojiToAll();
+window.applyRandomEmojis = () => window.app?.applyRandomEmojis();
+window.applySequentialEmojis = () => window.app?.applySequentialEmojis();
+window.applyThemeEmojis = () => window.app?.applyThemeEmojis();
 
 // Handle page visibility changes
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") {
+  if (document.visibilityState === "visible" && window.app) {
     // Refresh status when page becomes visible
-    app.checkBackendStatus();
-    app.updateSystemInfo();
+    window.app.checkBackendStatus();
+    window.app.updateSystemInfo();
   }
 });
 
 // Handle window resize
 window.addEventListener("resize", () => {
   // Adjust layout if needed
-  app.updateVideoFileList();
-  app.updateMediaFileList();
+  if (window.app) {
+    window.app.updateVideoFileList();
+    window.app.updateMediaFileList();
+  }
 });
 
 // Handle before unload
 window.addEventListener("beforeunload", (event) => {
-  if (app.currentProcessId || app.stickerProgressInterval) {
+  if (window.app && (window.app.currentProcessId || window.app.stickerProgressInterval)) {
     event.preventDefault();
     event.returnValue =
       "Processing is in progress. Are you sure you want to leave?";
@@ -4566,4 +4932,5 @@ document.addEventListener("click", (event) => {
   });
 });
 
+console.log("Telegram Utilities application loaded successfully!");
 console.log("Telegram Utilities application loaded successfully!");
