@@ -1,0 +1,623 @@
+/* Enhanced Emoji Modal Styles */
+.emoji-modal-enhanced {
+  width: 650px !important;
+  max-width: 85vw;
+  max-height: 80vh;
+  overflow: hidden;
+}
+
+.emoji-modal-enhanced .modal-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-radius: 12px 12px 0 0;
+}
+
+.modal-close {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.modal-close:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: rotate(90deg);
+}
+
+.emoji-current-file {
+  background: rgba(100, 126, 234, 0.1);
+  padding: 0.75rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.emoji-current-file .label {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.emoji-current-file .filename {
+  font-weight: 600;
+  color: #333;
+}
+
+.emoji-input-section {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  align-items: center;
+}
+
+.emoji-display {
+  font-size: 2.5rem !important;
+  text-align: center;
+  padding: 0.5rem !important;
+  width: 120px;
+  height: 80px;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  background: white;
+}
+
+.emoji-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1rem;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  border-radius: 12px;
+  min-width: 100px;
+}
+
+.emoji-preview span {
+  font-size: 3rem;
+  margin-bottom: 0.25rem;
+}
+
+.emoji-preview small {
+  color: #666;
+  font-size: 0.8rem;
+}
+
+/* Quick Actions */
+.emoji-quick-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.quick-action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 0.85rem;
+  color: #ccc;
+}
+
+.quick-action-btn:hover {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-color: transparent;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.quick-action-btn i {
+  font-size: 1.2rem;
+}
+
+.quick-action-btn span {
+  font-size: 0.75rem;
+}
+
+/* Enhanced Emoji Picker */
+.emoji-picker-enhanced {
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.emoji-tabs {
+  display: flex;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.5rem;
+  gap: 0.25rem;
+  overflow-x: auto;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.emoji-tab {
+  padding: 0.5rem 1rem;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.emoji-tab:hover {
+  background: rgba(102, 126, 234, 0.1);
+  color: #667eea;
+}
+
+.emoji-tab.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.emoji-categories {
+  max-height: 260px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0.75rem;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 8px;
+  margin-top: 0.5rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(102, 126, 234, 0.3) transparent;
+}
+
+.emoji-category {
+  display: none;
+}
+
+.emoji-category.active {
+  display: block;
+}
+
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+  gap: 0.5rem;
+}
+
+.emoji-btn {
+  width: 45px;
+  height: 45px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  font-size: 1.4rem;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  will-change: transform;
+}
+
+.emoji-btn:hover {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  transform: scale(1.15);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.emoji-btn:active {
+  transform: scale(0.95);
+}
+
+/* Enhanced Media List Styles */
+.media-list {
+  background: #1a1a1a;
+  border-radius: 8px;
+  padding: 0.5rem;
+  max-height: 280px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  display: flex;
+  flex-direction: row;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+
+.media-list.vertical-scroll {
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  max-height: 350px;
+  white-space: normal;
+}
+
+.media-item {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  min-width: 280px;
+  max-width: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.media-list.vertical-scroll .media-item {
+  min-width: unset;
+  max-width: 100%;
+  width: 100%;
+}
+
+.media-item:hover {
+  background: rgba(102, 126, 234, 0.15);
+  border-color: #667eea;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  transform: translateY(-2px);
+}
+
+.media-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.media-icon {
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.media-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.media-name {
+  font-weight: 600;
+  color: #f0f0f0;
+  margin-bottom: 0.15rem;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
+
+.media-meta {
+  color: #999;
+  font-size: 0.75rem;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.media-actions {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.media-emoji-btn {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  border: none;
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 45px;
+  text-align: center;
+}
+
+.media-emoji-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(240, 147, 251, 0.4);
+}
+
+.media-actions .btn-sm {
+  padding: 0.25rem 0.4rem;
+  font-size: 0.8rem;
+  min-width: 28px;
+  height: 28px;
+  border-radius: 6px;
+}
+
+.media-actions .btn-info {
+  background: rgba(102, 126, 234, 0.2);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  color: #8ba5ff;
+}
+
+.media-actions .btn-info:hover {
+  background: rgba(102, 126, 234, 0.3);
+  border-color: #667eea;
+}
+
+.media-actions .btn-danger {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ff8888;
+}
+
+.media-actions .btn-danger:hover {
+  background: rgba(239, 68, 68, 0.3);
+  border-color: #ef4444;
+}
+
+/* Scrollbar Styling */
+.emoji-categories::-webkit-scrollbar,
+.media-list::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.emoji-categories::-webkit-scrollbar-track,
+.media-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+
+.emoji-categories::-webkit-scrollbar-thumb,
+.media-list::-webkit-scrollbar-thumb {
+  background: rgba(102, 126, 234, 0.5);
+  border-radius: 10px;
+}
+
+.emoji-categories::-webkit-scrollbar-thumb:hover,
+.media-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(102, 126, 234, 0.7);
+}
+
+/* Empty state styling */
+.empty-state {
+  text-align: center;
+  padding: 2rem 1.5rem;
+  color: #999;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  min-width: 100%;
+}
+
+.empty-state i {
+  font-size: 3rem;
+  margin-bottom: 0.75rem;
+  opacity: 0.3;
+  color: #667eea;
+}
+
+.empty-state p {
+  font-size: 1rem;
+  margin-bottom: 0.25rem;
+  color: #ccc;
+}
+
+.empty-state small {
+  color: #888;
+  font-size: 0.85rem;
+}
+
+/* Animation for new items */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.media-item.new-item {
+  animation: slideIn 0.3s ease;
+}
+
+/* File counter styling */
+.media-counter {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 0.2rem 0.6rem;
+  border-radius: 15px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.media-counter small {
+  opacity: 0.8;
+  margin-left: 0.2rem;
+  font-size: 0.75rem;
+}
+
+/* Media controls buttons */
+.media-controls {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.media-controls .btn {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+}
+
+/* Header actions */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-icon {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #999;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 0.9rem;
+}
+
+.btn-icon:hover {
+  background: rgba(102, 126, 234, 0.2);
+  border-color: #667eea;
+  color: #667eea;
+}
+
+.btn-icon.active {
+  background: rgba(102, 126, 234, 0.3);
+  color: #8ba5ff;
+  border-color: #667eea;
+}
+
+/* Sticker container with horizontal scroll */
+.sticker-container {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 0.5rem;
+  margin: 0 -1rem;
+  padding: 0 1rem 1rem 1rem;
+}
+
+.sticker-grid {
+  display: flex;
+  gap: 0.75rem;
+  min-width: max-content;
+  padding: 0.5rem 0;
+}
+
+.sticker-grid .card {
+  min-width: 340px;
+  max-width: 400px;
+  flex-shrink: 0;
+}
+
+/* Sticker container scrollbar */
+.sticker-container::-webkit-scrollbar {
+  height: 8px;
+}
+
+.sticker-container::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+
+.sticker-container::-webkit-scrollbar-thumb {
+  background: rgba(102, 126, 234, 0.5);
+  border-radius: 10px;
+}
+
+.sticker-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(102, 126, 234, 0.7);
+}
+
+/* Media type selector */
+.media-type-selector {
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: rgba(102, 126, 234, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+.media-type-label {
+  display: block;
+  color: #ccc;
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+.media-type-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.media-type-btn {
+  flex: 1;
+  padding: 0.5rem 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  color: #999;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.media-type-btn:hover {
+  background: rgba(102, 126, 234, 0.15);
+  border-color: rgba(102, 126, 234, 0.5);
+  color: #8ba5ff;
+}
+
+.media-type-btn.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: transparent;
+  color: white;
+}
+
+/* Sort options */
+.media-sort-options {
+  margin-bottom: 0.75rem;
+}
+
+.sort-select {
+  width: 100%;
+  padding: 0.4rem 0.8rem;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #ccc;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.sort-select:focus {
+  outline: none;
+  border-color: #667eea;
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.sort-select option {
+  background: #1a1a1a;
+  color: #ccc;
+}
