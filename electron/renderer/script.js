@@ -1,0 +1,4323 @@
+// Debug controls for renderer logs/tests
+const RENDERER_DEBUG = /[?&]debug=1\b/.test(location.search) || localStorage.getItem('debug') === '1';
+if (!RENDERER_DEBUG) {
+  // Silence noisy renderer logs by default; keep errors and warnings
+  console.log = () => {};
+  console.info = () => {};
+  console.debug = () => {};
+}
+
+class TelegramUtilities {
+  constructor() {
+    this.activeProcesses = new Map();
+    this.videoFiles = [];
+    this.mediaFiles = [];
+    this.currentVideoOutput = "";
+    this.telegramConnected = false;
+    this.pendingCode = false;
+    this.pendingPassword = false;
+    this.currentProcessId = null;
+    this.currentEmojiIndex = null;
+    this.progressInterval = null;
+    this.stickerProgressInterval = null;
+    this.currentOperation = null; // 'converting', 'hexediting', null
+    this.isPaused = false;
+    this.init();
+  }
+  
+  async init() {
+    this.setupEventListeners();
+    this.setupTabSwitching();
+    await this.checkBackendStatus();
+    this.loadSettings();
+    await this.detectAccelerationMode();
+    this.startSystemStatsMonitoring();
+    // Wire GPU utility buttons
+    const checkBtn = document.getElementById('check-gpu');
+    if (checkBtn) {
+      checkBtn.addEventListener('click', async () => {
+        checkBtn.disabled = true;
+        checkBtn.innerHTML = '<i class="fas fa-sync fa-spin"></i> Checking...';
+        try {
+          await this.detectAccelerationMode();
+          this.showToast('success', 'GPU Check', 'Detection complete');
+          const resp = await this.apiRequest('GET', '/api/gpu-detect');
+          const installBtn = document.getElementById('install-gpu-support');
+          if (installBtn) {
+            const best = resp?.gpus && resp.gpus[0];
+            const needs = resp?.needs_cuda_install && best?.type === 'nvidia';
+            installBtn.style.display = needs ? 'inline-flex' : 'none';
+          }
+        } catch (e) {
+          this.showToast('error', 'GPU Check', 'Failed to detect GPU');
+        } finally {
+          checkBtn.disabled = false;
+          checkBtn.innerHTML = '<i class="fas fa-sync"></i> Check GPU';
+        }
+      });
+    }
+
+    const installBtn = document.getElementById('install-gpu-support');
+    if (installBtn) {
+      installBtn.addEventListener('click', async () => {
+        installBtn.disabled = true;
+        installBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Installing...';
+        try {
+          const res = await this.apiRequest('POST', '/api/install-cuda');
+          if (res.success) {
+            this.showToast('success', 'CUDA Install', 'Installer launched. Restart app after installation.', 8000);
+          } else {
+            const url = 'https://developer.nvidia.com/cuda-downloads';
+            this.showToast('error', 'CUDA Install', (res.error || 'Failed to start installer') + ` <a href="${url}" target="_blank">Download manually</a>`, 12000);
+          }
+        } catch (e) {
+          this.showToast('error', 'CUDA Install', 'Failed to start installer');
+        } finally {
+          installBtn.disabled = false;
+          installBtn.innerHTML = '<i class="fas fa-download"></i> Install GPU Support';
+        }
+      });
+    }
+    
+    // Optional backend tests only in debug mode
+    if (RENDERER_DEBUG) {
+      // Wait a bit for backend to fully start
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const retryBackendTests = async (maxRetries = 2) => {
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+          try {
+            const health = await this.apiRequest("GET", "/api/health");
+            if (health.success) {
+              await this.apiRequest("GET", "/api/test");
+              await this.apiRequest("GET", "/api/debug/simple");
+              await this.apiRequest("POST", "/api/test-conversion");
+              await this.apiRequest("GET", "/api/debug/video-converter");
+              return true;
+            }
+          } catch (error) {
+            // ignore in non-critical debug tests
+          }
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        return false;
+      };
+      await retryBackendTests();
+    }
+    
+    // Initialize button states
+    this.updateButtonStates();
+  }
+
+  startSystemStatsMonitoring() {
+    // Initial stats fetch
+    this.updateSystemStats();
+    
+    // Update stats every 2 seconds
+    setInterval(() => {
+      this.updateSystemStats();
+    }, 2000);
+  }
+  
+  async detectAccelerationMode() {
+    try {
+      const modeBadge = document.getElementById("mode-badge");
+      const modeDetails = document.getElementById("mode-details");
+      
+      // Show detecting status
+      if (modeBadge) {
+        modeBadge.textContent = "Detecting...";
+        modeBadge.className = "mode-badge detecting";
+      }
+      
+      // Detect available GPUs
+      const response = await this.apiRequest("GET", "/api/gpu-detect");
+      
+      if (response.success && response.gpus && response.gpus.length > 0) {
+        // GPU available - check for CUDA
+        const bestGPU = response.gpus[0];
+        const cudaInfo = response.cuda_info || {};
+        
+        // Check if NVIDIA GPU needs CUDA
+        if (response.needs_cuda_install && bestGPU.type === 'nvidia') {
+          // Show CUDA installation prompt
+          this.showCudaInstallPrompt(bestGPU);
+        }
+        
+        if (modeBadge) {
+          if (cudaInfo.cuda_available && bestGPU.type === 'nvidia') {
+            modeBadge.textContent = `CUDA Acceleration`;
+            modeBadge.className = "mode-badge cuda-active";
+          } else {
+            modeBadge.textContent = `GPU Acceleration`;
+            modeBadge.className = "mode-badge gpu-active";
+          }
+        }
+        
+        if (modeDetails) {
+          let details = `${bestGPU.name}`;
+          if (cudaInfo.cuda_available && bestGPU.type === 'nvidia') {
+            details += ` | CUDA ${cudaInfo.cuda_version}`;
+          }
+          if (bestGPU.memory_total > 0) {
+            details += ` | ${bestGPU.memory_total}MB VRAM`;
+          }
+          modeDetails.textContent = details;
+        }
+        
+        // Store the detected mode
+        this.accelerationMode = cudaInfo.cuda_available ? "cuda" : "gpu";
+        this.selectedGPU = bestGPU;
+        this.cudaAvailable = cudaInfo.cuda_available;
+        
+      } else {
+        // No GPU - fallback to CPU
+        if (modeBadge) {
+          modeBadge.textContent = "CPU Mode";
+          modeBadge.className = "mode-badge cpu-active";
+        }
+        
+        if (modeDetails) {
+          const cpuInfo = await this.apiRequest("GET", "/api/system-info");
+          const processor = cpuInfo?.data?.processor || "Multi-core processor";
+          modeDetails.textContent = processor;
+        }
+        
+        // Store the detected mode
+        this.accelerationMode = "cpu";
+        this.selectedGPU = null;
+        this.cudaAvailable = false;
+      }
+      
+    } catch (error) {
+      console.debug("Failed to detect acceleration mode:", error);
+      
+      // Default to CPU on error
+      const modeBadge = document.getElementById("mode-badge");
+      const modeDetails = document.getElementById("mode-details");
+      
+      if (modeBadge) {
+        modeBadge.textContent = "CPU Mode";
+        modeBadge.className = "mode-badge cpu-active";
+      }
+      
+      if (modeDetails) {
+        modeDetails.textContent = "Default mode";
+      }
+      
+      this.accelerationMode = "cpu";
+      this.selectedGPU = null;
+      this.cudaAvailable = false;
+    }
+  }
+  
+  async showCudaInstallPrompt(gpu) {
+    // Get CUDA installation info
+    const installInfo = await this.apiRequest("GET", "/api/cuda-install-info");
+    if (!installInfo.success) return;
+    
+    const info = installInfo.install_info;
+    
+    // Create a notification or modal
+    const message = `
+      <div style="text-align: left;">
+        <h3>🚀 CUDA Not Detected</h3>
+        <p>Your system has an NVIDIA GPU (${gpu.name}) but CUDA is not installed.</p>
+        <p>Installing CUDA will enable <strong>5-10x faster</strong> video processing!</p>
+        <br>
+        <p><strong>To install CUDA:</strong></p>
+        <p style="font-family: monospace; background: #1a1a1a; padding: 8px; border-radius: 4px;">
+          ${info.command || 'Visit: ' + info.url}
+        </p>
+        <br>
+        <p style="font-size: 0.9em; color: #888;">
+          ${info.description}
+        </p>
+      </div>
+    `;
+    
+    // Toast with action buttons
+    this.showToast("info", "CUDA Installation Recommended", message +
+      '<div style="margin-top:8px;display:flex;gap:8px;">\
+        <button id="install-cuda-btn" class="btn btn-sm btn-success">Install CUDA</button>\
+        <button id="dismiss-cuda-btn" class="btn btn-sm">Not now</button>\
+      </div>', 20000);
+    
+    // Also add a permanent indicator in the UI
+    const gpuInfo = document.getElementById("gpu-info");
+    if (gpuInfo) {
+      gpuInfo.innerHTML = `
+        <a href="${info.url}" target="_blank" style="color: #ffa500; text-decoration: none;">
+          ⚠️ Install CUDA for 5-10x faster processing →
+        </a>
+      `;
+      gpuInfo.style.display = "block";
+    }
+
+    // Wire up action buttons
+    setTimeout(() => {
+      const installBtn = document.getElementById('install-cuda-btn');
+      const dismissBtn = document.getElementById('dismiss-cuda-btn');
+      if (installBtn) {
+        installBtn.onclick = async () => {
+          try {
+            const res = await this.apiRequest('POST', '/api/install-cuda');
+            if (res.success) {
+              this.showToast('success', 'CUDA Install', 'Installer launched. Follow prompts, then restart the app.', 8000);
+            } else {
+              const hint = res.hint ? `<br><small>${res.hint}</small>` : '';
+              this.showToast('error', 'CUDA Install', (res.error || 'Failed to launch installer') + hint, 10000);
+            }
+          } catch (e) {
+            this.showToast('error', 'CUDA Install', 'Failed to start installer. Open the link and install manually.', 8000);
+          }
+        };
+      }
+      if (dismissBtn) {
+        dismissBtn.onclick = () => {
+          // Do nothing; user opted out
+        };
+      }
+    }, 0);
+  }
+
+  async updateSystemStats() {
+    try {
+      const response = await this.apiRequest("GET", "/api/system-stats");
+      // Normalize payload shape from main process { success, data: {...} }
+      const payload = response?.data || response || {};
+      const stats = payload.stats;
+      if (response?.success && stats) {
+        
+        // Update CPU stats with color coding
+        const cpuUsage = document.getElementById("cpu-usage");
+        if (cpuUsage && stats.cpu) {
+          const percent = stats.cpu.percent;
+          cpuUsage.textContent = `${percent.toFixed(1)}%`;
+          
+          // Color code based on usage
+          if (percent > 80) {
+            cpuUsage.style.color = '#ff4444';
+          } else if (percent > 50) {
+            cpuUsage.style.color = '#ffaa00';
+          } else {
+            cpuUsage.style.color = '#44ff44';
+          }
+        }
+        
+        // Update RAM stats with better formatting
+        const ramUsage = document.getElementById("ram-usage");
+        if (ramUsage && stats.memory) {
+          const used = (stats.memory.used / 1024).toFixed(1);
+          const total = (stats.memory.total / 1024).toFixed(1);
+          const percent = stats.memory.percent;
+          ramUsage.textContent = `${used}GB / ${total}GB`;
+          
+          // Color code based on usage
+          if (percent > 90) {
+            ramUsage.style.color = '#ff4444';
+          } else if (percent > 70) {
+            ramUsage.style.color = '#ffaa00';
+          } else {
+            ramUsage.style.color = '#44ff44';
+          }
+        }
+        
+        // Check if we're in CPU mode or GPU mode
+        const gpuStatsRow = document.getElementById("gpu-stats-row");
+        const gpuLabel = document.getElementById("gpu-label");
+        const vramLabel = document.getElementById("vram-label");
+        const gpuName = document.getElementById("gpu-name");
+        const gpuMemory = document.getElementById("gpu-memory");
+        const gpuDetails = document.getElementById("gpu-details");
+        
+        // Update GPU/CPU stats based on acceleration mode
+        if (this.accelerationMode === "cpu") {
+          // Show CPU stats in the GPU row when in CPU mode
+          if (gpuStatsRow) gpuStatsRow.style.display = "flex";
+          
+          // Update labels for CPU mode
+          if (gpuLabel) gpuLabel.textContent = "Cores:";
+          if (vramLabel) vramLabel.textContent = "Threads:";
+          
+          // Show CPU core information
+          if (gpuName && stats.cpu) {
+            gpuName.textContent = `${stats.cpu.count || 0} cores`;
+            gpuName.style.color = '#44aaff';
+          }
+          
+          if (gpuMemory && stats.cpu) {
+            gpuMemory.textContent = `${stats.cpu.threads || 0} threads`;
+            gpuMemory.style.color = '#44aaff';
+          }
+          
+          // Show CPU frequency and details
+          if (gpuDetails && stats.cpu) {
+            const parts = [];
+            
+            // Add CPU frequency
+            if (stats.cpu.frequency > 0) {
+              const freqGHz = (stats.cpu.frequency / 1000).toFixed(2);
+              parts.push(`${freqGHz} GHz`);
+            }
+            
+            // Add CPU usage with color
+            const percent = stats.cpu.percent;
+            let usageStr = `${percent.toFixed(1)}% Usage`;
+            if (percent > 80) {
+              usageStr = `<span style="color: #ff4444">${usageStr}</span>`;
+            } else if (percent > 50) {
+              usageStr = `<span style="color: #ffaa00">${usageStr}</span>`;
+            } else {
+              usageStr = `<span style="color: #44ff44">${usageStr}</span>`;
+            }
+            parts.push(usageStr);
+            
+            // Add CPU mode indicator
+            parts.push('<span style="color: #2196F3">CPU Processing</span>');
+            
+            gpuDetails.innerHTML = parts.join(' | ');
+          }
+          
+        } else if (stats.gpus && stats.gpus.length > 0) {
+          // GPU mode - show GPU stats
+          const gpu = stats.gpus[0]; // Use first GPU for display
+          
+          if (gpuStatsRow) gpuStatsRow.style.display = "flex";
+          
+          // Reset labels for GPU mode
+          if (gpuLabel) gpuLabel.textContent = "GPU:";
+          if (vramLabel) vramLabel.textContent = "VRAM:";
+          
+          if (gpuName) {
+            // Show GPU utilization as primary metric
+            if (gpu.utilization !== undefined) {
+              gpuName.textContent = `${gpu.utilization.toFixed(0)}%`;
+              
+              // Color code GPU usage
+              if (gpu.utilization > 80) {
+                gpuName.style.color = '#ff4444';
+              } else if (gpu.utilization > 50) {
+                gpuName.style.color = '#ffaa00';
+              } else {
+                gpuName.style.color = '#44ff44';
+              }
+            } else {
+              gpuName.textContent = "0%";
+              gpuName.style.color = '#44ff44';
+            }
+          }
+          
+          if (gpuMemory && gpu.memory_total > 0) {
+            const usedGB = (gpu.memory_used / 1024).toFixed(1);
+            const totalGB = (gpu.memory_total / 1024).toFixed(1);
+            const memPercent = (gpu.memory_used / gpu.memory_total * 100);
+            gpuMemory.textContent = `${usedGB}GB / ${totalGB}GB`;
+            
+            // Color code VRAM usage
+            if (memPercent > 90) {
+              gpuMemory.style.color = '#ff4444';
+            } else if (memPercent > 70) {
+              gpuMemory.style.color = '#ffaa00';
+            } else {
+              gpuMemory.style.color = '#44ff44';
+            }
+          }
+          
+          if (gpuDetails) {
+            const parts = [];
+            
+            // Add temperature with color coding
+            if (gpu.temperature > 0) {
+              const temp = gpu.temperature;
+              let tempStr = `${temp}°C`;
+              if (temp > 80) {
+                tempStr = `<span style="color: #ff4444">${tempStr}</span>`;
+              } else if (temp > 70) {
+                tempStr = `<span style="color: #ffaa00">${tempStr}</span>`;
+              } else {
+                tempStr = `<span style="color: #44ff44">${tempStr}</span>`;
+              }
+              parts.push(tempStr);
+            }
+            
+            // Add power draw if available
+            if (gpu.power_draw > 0) {
+              parts.push(`${gpu.power_draw.toFixed(0)}W`);
+            }
+            
+            // Add clocks if available
+            if (gpu.core_clock > 0) {
+              parts.push(`${gpu.core_clock}MHz`);
+            }
+            
+            gpuDetails.innerHTML = parts.join(' | ');
+          }
+        } else {
+          // No GPU detected - show CPU stats instead
+          if (gpuStatsRow) gpuStatsRow.style.display = "flex";
+          
+          // Update labels for CPU mode
+          if (gpuLabel) gpuLabel.textContent = "Cores:";
+          if (vramLabel) vramLabel.textContent = "Threads:";
+          
+          // Show CPU core information
+          if (gpuName && stats.cpu) {
+            gpuName.textContent = `${stats.cpu.count || 0} cores`;
+            gpuName.style.color = '#44aaff';
+          }
+          
+          if (gpuMemory && stats.cpu) {
+            gpuMemory.textContent = `${stats.cpu.threads || 0} threads`;
+            gpuMemory.style.color = '#44aaff';
+          }
+          
+          // Show CPU details
+          if (gpuDetails && stats.cpu) {
+            const parts = [];
+            
+            // Add CPU frequency
+            if (stats.cpu.frequency > 0) {
+              const freqGHz = (stats.cpu.frequency / 1000).toFixed(2);
+              parts.push(`${freqGHz} GHz`);
+            }
+            
+            // Add CPU mode indicator
+            parts.push('<span style="color: #2196F3">CPU Processing Mode</span>');
+            
+            gpuDetails.innerHTML = parts.join(' | ');
+          }
+        }
+      }
+    } catch (error) {
+      console.debug("Failed to fetch system stats:", error);
+    }
+  }
+
+
+  getSelectedGpuModeForBackend() {
+    // Always return auto mode - let backend decide
+    return "auto";
+  }
+
+  debugWarn(...args) {
+    // Debug logging completely disabled
+    return;
+  }
+
+  // Unified API request wrapper with better error handling
+  async apiRequest(method, endpoint, data = null) {
+    try {
+      const response = await window.electronAPI.apiRequest({
+        method,
+        endpoint,
+        data
+      });
+      
+      if (!response.success) {
+        throw new Error(response.error || "Request failed");
+      }
+      
+      return response;
+    } catch (error) {
+      console.error(`API request failed: ${method} ${endpoint}`, error);
+      throw error;
+    }
+  }
+
+  setupEventListeners() {
+    // quiet
+    
+    // Video Converter Events
+    const addVideosBtn = document.getElementById("add-videos");
+    const clearVideosBtn = document.getElementById("clear-videos");
+    const browseOutputBtn = document.getElementById("browse-video-output");
+    const startConversionBtn = document.getElementById("start-conversion");
+    
+    console.log("📋 Found buttons:", {
+      addVideos: !!addVideosBtn,
+      clearVideos: !!clearVideosBtn,
+      browseOutput: !!browseOutputBtn,
+      startConversion: !!startConversionBtn
+    });
+    
+    if (addVideosBtn) {
+      addVideosBtn.addEventListener("click", () => this.addVideoFiles());
+    } else {
+      console.error("❌ add-videos button not found!");
+    }
+    
+    if (clearVideosBtn) {
+      clearVideosBtn.addEventListener("click", () => this.clearVideoFiles());
+    } else {
+      console.error("❌ clear-videos button not found!");
+    }
+    
+    if (browseOutputBtn) {
+      browseOutputBtn.addEventListener("click", () => this.browseVideoOutput());
+    } else {
+      console.error("❌ browse-video-output button not found!");
+    }
+    
+    if (startConversionBtn) {
+      startConversionBtn.addEventListener("click", () => this.startVideoConversion());
+    }
+    
+    document.getElementById("start-hex-edit").addEventListener("click", () => this.startHexEdit());
+      
+    // Add pause/resume event listeners
+    const pauseBtn = document.getElementById("pause-conversion");
+    const resumeBtn = document.getElementById("resume-conversion");
+    
+    if (pauseBtn) {
+      pauseBtn.addEventListener("click", () => {
+        console.log("⏸️ PAUSE BUTTON CLICKED!");
+        this.pauseOperation();
+      });
+    }
+    
+    if (resumeBtn) {
+      resumeBtn.addEventListener("click", () => {
+        console.log("▶️ RESUME BUTTON CLICKED!");
+        this.resumeOperation();
+      });
+    }
+    
+    // Add hex edit pause/resume event listeners
+    const pauseHexBtn = document.getElementById("pause-hex-edit");
+    const resumeHexBtn = document.getElementById("resume-hex-edit");
+    
+    if (pauseHexBtn) {
+      pauseHexBtn.addEventListener("click", () => {
+        console.log("⏸️ HEX PAUSE BUTTON CLICKED!");
+        this.pauseOperation();
+      });
+    }
+    
+    if (resumeHexBtn) {
+      resumeHexBtn.addEventListener("click", () => {
+        console.log("▶️ HEX RESUME BUTTON CLICKED!");
+        this.resumeOperation();
+      });
+    }
+    
+    // Sticker Bot Events
+    document.getElementById("connect-telegram").addEventListener("click", () => this.connectTelegram());
+    document.getElementById("add-images").addEventListener("click", () => this.addImages());
+    document.getElementById("add-sticker-videos").addEventListener("click", () => this.addStickerVideos());
+    document.getElementById("clear-media").addEventListener("click", () => this.clearMedia());
+    document.getElementById("create-sticker-pack").addEventListener("click", () => this.createStickerPack());
+    
+    // Visibility Toggle Events for Credential Fields
+    document.querySelectorAll('.btn-toggle-visibility').forEach(button => {
+      button.addEventListener('click', (e) => {
+        e.preventDefault();
+        const targetId = button.getAttribute('data-target');
+        const targetInput = document.getElementById(targetId);
+        const icon = button.querySelector('i');
+        
+        if (targetInput.type === 'password') {
+          targetInput.type = 'text';
+          icon.classList.remove('fa-eye-slash');
+          icon.classList.add('fa-eye');
+          button.title = 'Hide';
+        } else {
+          targetInput.type = 'password';
+          icon.classList.remove('fa-eye');
+          icon.classList.add('fa-eye-slash');
+          button.title = 'Show';
+        }
+      });
+    });
+    
+    // Paste from Clipboard Events
+    document.querySelectorAll('.btn-paste').forEach(button => {
+      button.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const targetId = button.getAttribute('data-target');
+        const targetInput = document.getElementById(targetId);
+        
+        try {
+          const text = await navigator.clipboard.readText();
+          if (text) {
+            targetInput.value = text.trim();
+            targetInput.focus();
+            
+            // Show temporary success feedback with smooth animation
+            const icon = button.querySelector('i');
+            
+            // Add success animation class
+            button.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+            button.style.transform = 'scale(1.1)';
+            
+            icon.classList.remove('fa-paste');
+            icon.classList.add('fa-check');
+            button.style.color = '#28a745';
+            button.style.backgroundColor = 'rgba(40, 167, 69, 0.2)';
+            button.style.borderColor = 'rgba(40, 167, 69, 0.5)';
+            
+            // Reset after animation
+            setTimeout(() => {
+              button.style.transform = 'scale(1)';
+            }, 200);
+            
+            setTimeout(() => {
+              icon.classList.remove('fa-check');
+              icon.classList.add('fa-paste');
+              button.style.color = '';
+              button.style.backgroundColor = '';
+              button.style.borderColor = '';
+            }, 1500);
+            
+            // Save settings after paste
+            this.saveSettings();
+          }
+        } catch (err) {
+          console.error('Failed to read clipboard:', err);
+          this.showToast('error', 'Clipboard Error', 'Failed to read from clipboard');
+        }
+      });
+    });
+    
+    // Modal Events
+    document.getElementById("submit-code").addEventListener("click", () => this.submitVerificationCode());
+    document.getElementById("cancel-code").addEventListener("click", () => this.hideModal());
+    document.getElementById("submit-password").addEventListener("click", () => this.submitPassword());
+    document.getElementById("cancel-password").addEventListener("click", () => this.hideModal());
+    document.getElementById("save-emoji").addEventListener("click", () => this.saveEmoji());
+    document.getElementById("cancel-emoji").addEventListener("click", () => this.hideModal());
+    
+    // Settings Events
+    document.getElementById("clear-data").addEventListener("click", () => this.clearApplicationData());
+    document.getElementById("export-settings").addEventListener("click", () => this.exportSettings());
+    document.getElementById("import-settings").addEventListener("click", () => this.importSettings());
+    
+    // Theme selector
+    const themeSelector = document.getElementById("theme-selector");
+    if (themeSelector) {
+      themeSelector.addEventListener("change", (e) => {
+        this.applyTheme(e.target.value);
+        localStorage.setItem("app_theme", e.target.value);
+      });
+      
+      // Set initial theme
+      const savedTheme = localStorage.getItem("app_theme") || "dark";
+      themeSelector.value = savedTheme;
+      this.applyTheme(savedTheme);
+    }
+    
+    // Modal overlay click to close
+    document.getElementById("modal-overlay").addEventListener("click", (e) => {
+      if (e.target === e.currentTarget) {
+        this.hideModal();
+      }
+    });
+    
+    // Enter key handlers for modals
+    document.getElementById("verification-code").addEventListener("keypress", (e) => {
+      if (e.key === "Enter") this.submitVerificationCode();
+    });
+    document.getElementById("two-factor-password").addEventListener("keypress", (e) => {
+      if (e.key === "Enter") this.submitPassword();
+    });
+    document.getElementById("emoji-input").addEventListener("keypress", (e) => {
+      if (e.key === "Enter") this.saveEmoji();
+    });
+    
+    // Theme switching
+    const themeToggle = document.getElementById("theme-toggle");
+    if (themeToggle) {
+      themeToggle.addEventListener("click", () => this.toggleTheme());
+    }
+    
+    // Drag and drop for video files
+    this.setupDragAndDrop();
+    
+    // Advanced settings
+    this.setupAdvancedSettings();
+    
+    // Keyboard shortcuts
+    this.setupKeyboardShortcuts();
+  }
+
+  setupTabSwitching() {
+    const navItems = document.querySelectorAll(".nav-item");
+    const tabContents = document.querySelectorAll(".tab-content");
+    
+    navItems.forEach((item) => {
+      item.addEventListener("click", () => {
+        const tabId = item.getAttribute("data-tab");
+        // Update navigation
+        navItems.forEach((nav) => nav.classList.remove("active"));
+        item.classList.add("active");
+        // Update content
+        tabContents.forEach((content) => content.classList.remove("active"));
+        const targetTab = document.getElementById(tabId);
+        if (targetTab) {
+          targetTab.classList.add("active");
+        }
+        // Auto-focus on specific elements when switching tabs
+        this.handleTabSwitch(tabId);
+      });
+    });
+  }
+
+  handleTabSwitch(tabId) {
+    switch (tabId) {
+      case "video-converter":
+        if (this.videoFiles.length === 0) {
+          setTimeout(() => {
+            document.getElementById("add-videos").focus();
+          }, 100);
+        }
+        break;
+      case "sticker-bot":
+        if (!this.telegramConnected) {
+          setTimeout(() => {
+            const apiIdInput = document.getElementById("api-id");
+            if (apiIdInput && !apiIdInput.value) {
+              apiIdInput.focus();
+            }
+          }, 100);
+        }
+        break;
+      case "settings":
+        this.updateSystemInfo();
+        break;
+    }
+  }
+
+  setupDragAndDrop() {
+    const dropZones = [
+      { 
+        element: document.getElementById("video-file-list"),
+        handler: this.handleDroppedVideoFiles.bind(this),
+        validExtensions: ["mp4", "avi", "mov", "mkv", "flv", "webm"]
+      },
+      { 
+        element: document.getElementById("media-file-list"),
+        handler: this.handleDroppedMediaFiles.bind(this),
+        validExtensions: ["png", "jpg", "jpeg", "webp", "webm"]
+      }
+    ];
+    
+    dropZones.forEach(zone => {
+      if (!zone.element) return;
+      
+      // Prevent default drag behaviors
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        zone.element.addEventListener(eventName, this.preventDefaults, false);
+      });
+      
+      zone.element.addEventListener('dragover', () => zone.element.classList.add('drag-over'));
+      zone.element.addEventListener('dragleave', () => zone.element.classList.remove('drag-over'));
+      
+      zone.element.addEventListener('drop', (e) => {
+        zone.element.classList.remove('drag-over');
+        const files = Array.from(e.dataTransfer.files)
+          .filter(file => {
+            const extension = file.name.split('.').pop().toLowerCase();
+            return zone.validExtensions.includes(extension);
+          });
+        
+        zone.handler(files);
+      });
+    });
+  }
+
+  handleDroppedVideoFiles(files) {
+    console.log("=== DRAG & DROP DEBUG ===");
+    console.log("Raw dropped files:", files);
+    
+    const videoExtensions = ["mp4", "avi", "mov", "mkv", "flv", "webm"];
+    let addedCount = 0;
+    
+    files.forEach((file, index) => {
+      console.log(`🗂️ Processing dropped file ${index + 1}:`, {
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        path: file.path || "NO PATH",
+        webkitRelativePath: file.webkitRelativePath
+      });
+      
+      const extension = file.name.split(".").pop().toLowerCase();
+      console.log(`📝 File extension: ${extension}`);
+      
+      if (videoExtensions.includes(extension)) {
+        // Use file.path if available (Electron), otherwise use name
+        const filePath = file.path || file.name;
+        
+        if (!this.videoFiles.some((f) => f.path === filePath)) {
+          this.videoFiles.push({
+            path: filePath,
+            name: file.name,
+            status: "pending",
+            progress: 0,
+            stage: "Ready to convert",
+            size: file.size ? `${(file.size / 1048576).toFixed(1)}MB` : "Unknown",
+            fileObject: file // Store the actual file object for later use
+          });
+          addedCount++;
+          console.log(`✅ Added dropped file: ${file.name}`);
+          
+          // IMMEDIATE UI UPDATE - Update file count instantly
+          const counter = document.getElementById("video-file-count");
+          if (counter) {
+            counter.textContent = this.videoFiles.length;
+          }
+        } else {
+          console.log(`⚠️ Dropped file already exists: ${file.name}`);
+        }
+      } else {
+        console.log(`❌ Invalid extension for: ${file.name}`);
+      }
+    });
+    
+    console.log(`📊 Dropped files added: ${addedCount}`);
+    
+    if (addedCount > 0) {
+      this.updateVideoFileList();
+      this.showToast("success", "Files Added", `Added ${addedCount} video files via drag & drop`);
+    } else {
+      this.showToast("warning", "No Valid Files", "Please drop video files only");
+    }
+    
+    console.log("=== DRAG & DROP DEBUG END ===");
+  }
+
+  handleDroppedMediaFiles(files) {
+    const imageExtensions = ["png", "jpg", "jpeg", "webp"];
+    const videoExtensions = ["webm"];
+    let addedCount = 0;
+    
+    files.forEach((file) => {
+      const extension = file.name.split(".").pop().toLowerCase();
+      let type = null;
+      if (imageExtensions.includes(extension)) {
+        type = "image";
+      } else if (videoExtensions.includes(extension)) {
+        type = "video";
+      }
+      if (type && this.mediaFiles.length < 120) {
+        // For drag & drop, we need to get the actual file path
+        const filePath = file.path || file.webkitRelativePath || file.name;
+        
+        if (!this.mediaFiles.some((f) => f.file_path === filePath)) {
+          this.mediaFiles.push({
+            file_path: filePath,
+            name: file.name,
+            type: type,
+            emoji: "😀",
+          });
+          addedCount++;
+        }
+      }
+    });
+    
+    if (addedCount > 0) {
+      this.updateMediaFileList();
+      this.showToast(
+        "success",
+        "Files Added",
+        `Added ${addedCount} media files via drag & drop`
+      );
+    } else {
+      this.showToast(
+        "warning",
+        "No Valid Files",
+        "Please drop image (PNG, JPG, WEBP) or video (WEBM) files only"
+      );
+    }
+  }
+
+  setupAdvancedSettings() {
+    
+    // Quality settings
+    const qualityRange = document.getElementById("quality-range");
+    const qualityValue = document.getElementById("quality-value");
+    if (qualityRange && qualityValue) {
+      qualityRange.addEventListener("input", (e) => {
+        qualityValue.textContent = e.target.value + "%";
+        localStorage.setItem("quality_setting", e.target.value);
+      });
+    }
+    
+    // Auto-conversion toggle
+    const autoConvert = document.getElementById("auto-convert");
+    if (autoConvert) {
+      autoConvert.addEventListener("change", (e) => {
+        localStorage.setItem("auto_convert", e.target.checked);
+      });
+    }
+    
+    // Load saved advanced settings
+    this.loadAdvancedSettings();
+  }
+
+  loadAdvancedSettings() {
+    const savedQuality = localStorage.getItem("quality_setting");
+    const savedAutoConvert = localStorage.getItem("auto_convert");
+    if (savedQuality) {
+      const qualityRange = document.getElementById("quality-range");
+      const qualityValue = document.getElementById("quality-value");
+      if (qualityRange) qualityRange.value = savedQuality;
+      if (qualityValue) qualityValue.textContent = savedQuality + "%";
+    }
+    if (savedAutoConvert !== null) {
+      const autoConvert = document.getElementById("auto-convert");
+      if (autoConvert) autoConvert.checked = savedAutoConvert === "true";
+    }
+  }
+
+  setupKeyboardShortcuts() {
+    document.addEventListener("keydown", (e) => {
+      // Ctrl/Cmd + N: Add new files
+      if ((e.ctrlKey || e.metaKey) && e.key === "n") {
+        e.preventDefault();
+        if (document.querySelector(".tab-content.active").id === "video-converter") {
+          this.addVideoFiles();
+        } else if (document.querySelector(".tab-content.active").id === "sticker-bot") {
+          this.addImages();
+        }
+      }
+      
+      // Ctrl/Cmd + Enter: Start conversion/creation
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        e.preventDefault();
+        if (document.querySelector(".tab-content.active").id === "video-converter") {
+          this.startVideoConversion();
+        } else if (document.querySelector(".tab-content.active").id === "sticker-bot") {
+          this.createStickerPack();
+        }
+      }
+      
+      // Escape: Close modals
+      if (e.key === "Escape") {
+        this.hideModal();
+      }
+      
+      // F5: Refresh/update status
+      if (e.key === "F5") {
+        e.preventDefault();
+        this.checkBackendStatus();
+      }
+    });
+  }
+
+  setupProgressMonitoring() {
+    // Set up periodic status checks
+    setInterval(() => {
+      this.updateSystemInfo();
+    }, 30000); // Update every 30 seconds
+    
+    // Monitor memory usage
+    this.monitorPerformance();
+  }
+
+  monitorPerformance() {
+    const performanceMetrics = this.getPerformanceMetrics();
+    this.updatePerformanceDisplay(performanceMetrics);
+  }
+
+  getPerformanceMetrics() {
+    const metrics = {
+      memory: null,
+      timestamp: new Date().toISOString()
+    };
+    
+    if ("performance" in window && "memory" in performance) {
+      const memoryInfo = performance.memory;
+      metrics.memory = {
+        used: Math.round(memoryInfo.usedJSHeapSize / 1048576),
+        total: Math.round(memoryInfo.totalJSHeapSize / 1048576),
+        percentage: Math.round((memoryInfo.usedJSHeapSize / memoryInfo.totalJSHeapSize) * 100)
+      };
+    }
+    
+    return metrics;
+  }
+
+  updatePerformanceDisplay(metrics) {
+    const memoryElement = document.getElementById("memory-usage");
+    if (memoryElement && metrics.memory) {
+      memoryElement.textContent = `${metrics.memory.used}MB / ${metrics.memory.total}MB (${metrics.memory.percentage}%)`;
+    }
+  }
+
+  async checkBackendStatus() {
+    try {
+      const response = await this.apiRequest("GET", "/api/health");
+      
+      if (!response.success) {
+        console.error("Backend health check failed:", {
+          status: response.status,
+          error: response.error,
+          details: response.details || 'No additional details'
+        });
+        this.updateBackendStatus(false);
+        document.getElementById("backend-status-text").textContent = "Disconnected";
+        document.getElementById("ffmpeg-status").textContent = "Not Available";
+        return;
+      }
+      
+      this.updateBackendStatus(true);
+      document.getElementById("backend-status-text").textContent = "Connected";
+      document.getElementById("ffmpeg-status").textContent = "Available";
+    } catch (error) {
+      console.error("Backend status check failed:", {
+        message: error.message,
+        stack: error.stack,
+        timestamp: new Date().toISOString()
+      });
+      this.updateBackendStatus(false);
+      document.getElementById("backend-status-text").textContent = "Error";
+      document.getElementById("ffmpeg-status").textContent = "Unknown";
+    }
+  }
+
+  updateBackendStatus(connected) {
+    const statusElement = document.getElementById("backend-status");
+    if (statusElement) {
+      if (connected) {
+        statusElement.classList.remove("disconnected");
+        statusElement.classList.add("connected");
+      } else {
+        statusElement.classList.remove("connected");
+        statusElement.classList.add("disconnected");
+      }
+    }
+  }
+
+  updateTelegramStatus(status) {
+    const statusElement = document.getElementById("telegram-status");
+    const connectionStatus = document.getElementById("telegram-connection-status");
+    
+    if (statusElement) {
+      statusElement.classList.remove("connected", "disconnected", "connecting");
+      
+      switch (status) {
+        case "connected":
+          statusElement.classList.add("connected");
+          if (connectionStatus) {
+            connectionStatus.innerHTML = '<i class="fas fa-check-circle"></i> Connected';
+          }
+          const createBtn = document.getElementById("create-sticker-pack");
+          if (createBtn) createBtn.disabled = false;
+          this.telegramConnected = true;
+          break;
+        case "connecting":
+          statusElement.classList.add("connecting");
+          if (connectionStatus) {
+            connectionStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
+          }
+          break;
+        default:
+          statusElement.classList.add("disconnected");
+          if (connectionStatus) {
+            connectionStatus.innerHTML = '<i class="fas fa-times-circle"></i> Disconnected';
+          }
+          const createBtnDisco = document.getElementById("create-sticker-pack");
+          if (createBtnDisco) createBtnDisco.disabled = true;
+          this.telegramConnected = false;
+      }
+    }
+  }
+
+  loadSettings() {
+    // Load saved settings from localStorage
+    const savedApiId = localStorage.getItem("telegram_api_id");
+    const savedApiHash = localStorage.getItem("telegram_api_hash");
+    const savedPhone = localStorage.getItem("telegram_phone");
+    const savedOutputDir = localStorage.getItem("video_output_dir");
+    const savedTheme = localStorage.getItem("app_theme");
+    
+    if (savedApiId) {
+      const apiIdInput = document.getElementById("api-id");
+      if (apiIdInput) apiIdInput.value = savedApiId;
+    }
+    if (savedApiHash) {
+      const apiHashInput = document.getElementById("api-hash");
+      if (apiHashInput) apiHashInput.value = savedApiHash;
+    }
+    if (savedPhone) {
+      const phoneInput = document.getElementById("phone-number");
+      if (phoneInput) phoneInput.value = savedPhone;
+    }
+    if (savedOutputDir) {
+      const outputDirInput = document.getElementById("video-output-dir");
+      if (outputDirInput) outputDirInput.value = savedOutputDir;
+      this.currentVideoOutput = savedOutputDir;
+    }
+    if (savedTheme) {
+      this.applyTheme(savedTheme);
+    }
+  }
+
+  saveSettings() {
+    // Save settings to localStorage
+    const apiIdInput = document.getElementById("api-id");
+    const apiHashInput = document.getElementById("api-hash");
+    const phoneInput = document.getElementById("phone-number");
+    
+    if (apiIdInput) localStorage.setItem("telegram_api_id", apiIdInput.value);
+    if (apiHashInput) localStorage.setItem("telegram_api_hash", apiHashInput.value);
+    if (phoneInput) localStorage.setItem("telegram_phone", phoneInput.value);
+    if (this.currentVideoOutput) {
+      localStorage.setItem("video_output_dir", this.currentVideoOutput);
+    }
+  }
+
+  // =============================================
+  // VIDEO CONVERTER METHODS WITH PROPER PROGRESS TRACKING
+  // =============================================
+  async addVideoFiles() {
+    console.log("=== ADD VIDEO FILES DEBUG ===");
+    
+    try {
+      // Check if electronAPI is available
+      if (!window.electronAPI) {
+        console.error("❌ window.electronAPI is not available");
+        this.showToast("error", "System Error", "Electron API not available");
+        return;
+      }
+      
+      console.log("✅ Electron API is available");
+      
+      const files = await window.electronAPI.selectFiles({
+        filters: [
+          {
+            name: "Video Files",
+            extensions: ["mp4", "avi", "mov", "mkv", "flv", "webm"],
+          },
+          { name: "All Files", extensions: ["*"] },
+        ],
+      });
+      
+      console.log("📁 Selected files:", files);
+      
+      if (!files || files.length === 0) {
+        console.log("ℹ️ No files selected");
+        return;
+      }
+      
+      let addedCount = 0;
+      files.forEach((file, index) => {
+        console.log(`📄 Processing file ${index + 1}:`, {
+          path: file,
+          exists: file ? "checking..." : "NO PATH"
+        });
+        
+        if (!this.videoFiles.some((f) => f.path === file)) {
+          this.videoFiles.push({
+            path: file,
+            name: file.split(/[\\/]/).pop(),
+            status: "pending",
+            progress: 0,
+            stage: "Ready to convert",
+            size: "Unknown",
+            duration: "Unknown",
+          });
+          addedCount++;
+          console.log(`✅ Added file: ${file.split(/[\\/]/).pop()}`);
+          
+          // IMMEDIATE UI UPDATE - Update file count instantly
+          const counter = document.getElementById("video-file-count");
+          if (counter) {
+            counter.textContent = this.videoFiles.length;
+          }
+        } else {
+          console.log(`⚠️ File already exists: ${file.split(/[\\/]/).pop()}`);
+        }
+      });
+      
+      console.log(`📊 Total files added: ${addedCount}`);
+      console.log(`📊 Total files in list: ${this.videoFiles.length}`);
+      
+      this.updateVideoFileList();
+      if (addedCount > 0) {
+        this.showToast("success", "Files Added", `Added ${addedCount} video files`);
+      } else {
+        this.showToast("info", "No New Files", "All selected files were already in the list");
+      }
+      
+      console.log("=== ADD VIDEO FILES DEBUG END ===");
+      
+    } catch (error) {
+      console.error("❌ Error adding video files:", error);
+      console.error("Stack trace:", error.stack);
+      this.showToast("error", "Error", "Failed to add video files: " + error.message);
+    }
+  }
+
+  async analyzeVideoFiles() {
+    // This would analyze video files for duration, size, etc.
+    // Implementation would depend on backend capabilities
+    this.showToast("info", "Analyzing", "Analyzing video files...");
+  }
+
+  clearVideoFiles() {
+    if (this.videoFiles.length === 0) {
+      this.showToast("info", "Already Empty", "No video files to clear");
+      return;
+    }
+    
+    const count = this.videoFiles.length;
+    
+    // Stop all pollers
+    this.videoFiles.forEach(file => {
+      if (file.poller) {
+        clearInterval(file.poller);
+      }
+    });
+    
+    this.videoFiles = [];
+    
+    // IMMEDIATE UI UPDATE - Update file count instantly
+    const counter = document.getElementById("video-file-count");
+    if (counter) {
+      counter.textContent = this.videoFiles.length;
+    }
+    
+    // Reset GUI to original state
+    const convertBtn = document.getElementById("start-conversion");
+    if (convertBtn) {
+      convertBtn.disabled = false;
+      convertBtn.innerHTML = '<i class="fas fa-play"></i> Start Conversion';
+    }
+    
+    // Clear any status messages
+    const statusElement = document.querySelector('.status');
+    if (statusElement) {
+      statusElement.textContent = 'Ready';
+    }
+    
+    this.updateVideoFileList();
+    this.showToast("info", "Cleared", `Removed ${count} video files`);
+  }
+
+  updateVideoFileList() {
+    const container = document.getElementById("video-file-list");
+    if (!container) {
+      this.debugWarn('🚨 UI DEBUG - Container Not Found', 'video-file-list container not found');
+      return;
+    }
+    
+    this.debugWarn('🔥 UI DEBUG - updateVideoFileList Called', {
+      fileCount: this.videoFiles.length,
+      currentOperation: this.currentOperation,
+      files: this.videoFiles.map((file, index) => ({
+        index: index,
+        name: file.name,
+        status: file.status,
+        progress: file.progress,
+        stage: file.stage,
+        path: file.path
+      }))
+    });
+    
+    console.log("Updating video file list with", this.videoFiles.length, "files");
+    this.videoFiles.forEach((file, index) => {
+      console.log(`File ${index}: ${file.name} - status=${file.status}, progress=${file.progress}, stage=${file.stage}`);
+    });
+    
+    // IMMEDIATE FILE COUNT UPDATE - Do this first for instant feedback
+    const counter = document.getElementById("video-file-count");
+    if (counter) {
+      counter.textContent = this.videoFiles.length;
+    }
+    
+    if (this.videoFiles.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <i class="fas fa-video"></i>
+          <p>No videos selected</p>
+          <small>Click "Add Videos" to get started or drag & drop files here</small>
+        </div>
+      `;
+      return;
+    }
+    
+    // Use DocumentFragment for better performance
+    const fragment = document.createDocumentFragment();
+    
+    this.videoFiles.forEach((file, index) => {
+      const statusClass = file.status || "pending";
+      const progressWidth = file.progress || 0;
+      const statusIcon = this.getStatusIcon(file.status);
+      
+      this.debugWarn('🔥 UI DEBUG - Creating File Element', {
+        index: index,
+        filename: file.name,
+        status: file.status,
+        statusClass: statusClass,
+        progress: file.progress,
+        progressWidth: progressWidth,
+        stage: file.stage,
+        statusIcon: statusIcon
+      });
+      
+      const fileElement = document.createElement('div');
+      fileElement.className = `file-item ${statusClass}`;
+      fileElement.setAttribute('data-index', index);
+      
+      const progressText = progressWidth === 100 ? '✔' : `${progressWidth}%`;
+      const statusText = file.stage || "Ready to convert";
+      
+      this.debugWarn('🔥 UI DEBUG - Element Content Details', {
+        index: index,
+        progressText: progressText,
+        statusText: statusText,
+        progressBarWidth: `${progressWidth}%`
+      });
+      
+      fileElement.innerHTML = `
+        <div class="file-info">
+          <div class="file-icon">
+            <i class="${statusIcon}"></i>
+          </div>
+          <div class="file-details">
+            <div class="file-name" title="${file.path}">${file.name}</div>
+            <div class="file-status">${statusText}</div>
+            <div class="file-progress-container">
+              <div class="file-progress-bar">
+                <div class="file-progress-fill" style="width: ${progressWidth}%"></div>
+              </div>
+              <div class="file-progress-text">${progressText}</div>
+            </div>
+            ${file.size ? `<div class="file-meta">Size: ${file.size} | Duration: ${file.duration}</div>` : ""}
+          </div>
+        </div>
+        <div class="file-actions">
+          <button class="btn btn-sm btn-secondary" onclick="app.showFileInfo(${index})" title="File Info">
+            <i class="fas fa-info"></i>
+          </button>
+          <button class="btn btn-sm btn-danger" onclick="app.removeVideoFile(${index})" 
+                  ${file.status === "converting" ? "disabled" : ""} title="Remove File">
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>
+      `;
+      
+      this.debugWarn('🔥 UI DEBUG - Element Created', {
+        index: index,
+        dataIndex: fileElement.getAttribute('data-index'),
+        className: fileElement.className,
+        hasProgressFill: fileElement.querySelector('.file-progress-fill') !== null,
+        progressFillWidth: fileElement.querySelector('.file-progress-fill')?.style.width,
+        hasProgressText: fileElement.querySelector('.file-progress-text') !== null,
+        progressTextContent: fileElement.querySelector('.file-progress-text')?.textContent
+      });
+      
+      fragment.appendChild(fileElement);
+    });
+    
+    // Clear and append in one operation for better performance
+    container.innerHTML = '';
+    container.appendChild(fragment);
+    
+    this.debugWarn('🔥 UI DEBUG - DOM Updated', {
+      containerChildCount: container.children.length,
+      elementsWithDataIndex: Array.from(container.querySelectorAll('[data-index]')).map(el => ({
+        dataIndex: el.getAttribute('data-index'),
+        className: el.className,
+        progressFillWidth: el.querySelector('.file-progress-fill')?.style.width,
+        progressText: el.querySelector('.file-progress-text')?.textContent,
+        statusText: el.querySelector('.file-status')?.textContent
+      }))
+    });
+  }
+
+  getStatusIcon(status) {
+    const iconMap = {
+      pending: "fas fa-clock",
+      starting: "fas fa-play-circle",
+      analyzing: "fas fa-search",
+      preparing: "fas fa-cog",
+      converting: "fas fa-sync fa-spin",
+      checking: "fas fa-check-circle",
+      completed: "fas fa-check text-success",
+      error: "fas fa-exclamation-triangle text-danger",
+    };
+    return iconMap[status] || "fas fa-video";
+  }
+
+  showFileInfo(index) {
+    const file = this.videoFiles[index];
+    if (!file) return;
+    
+    const info = `
+      <strong>File:</strong> ${file.name}<br>
+      <strong>Path:</strong> ${file.path}<br>
+      <strong>Status:</strong> ${file.status}<br>
+      <strong>Progress:</strong> ${file.progress}%<br>
+      <strong>Stage:</strong> ${file.stage}<br>
+      ${file.size ? `<strong>Size:</strong> ${file.size}<br>` : ""}
+      ${file.duration ? `<strong>Duration:</strong> ${file.duration}<br>` : ""}
+    `;
+    
+    this.showInfoModal("File Information", info);
+  }
+
+  async removeVideoFile(index) {
+    const removed = this.videoFiles.splice(index, 1)[0];
+    
+    // Stop any ongoing polling for this file
+    if (removed.poller) {
+      clearInterval(removed.poller);
+    }
+    
+    // IMMEDIATE UI UPDATE - Update file count instantly
+    const counter = document.getElementById("video-file-count");
+    if (counter) {
+      counter.textContent = this.videoFiles.length;
+    }
+    
+    // Reset GUI to original state if no files left
+    if (this.videoFiles.length === 0) {
+      // Reset conversion button
+      const convertBtn = document.getElementById("start-conversion");
+      if (convertBtn) {
+        convertBtn.disabled = false;
+        convertBtn.innerHTML = '<i class="fas fa-play"></i> Start Conversion';
+      }
+      
+      // Clear any status messages
+      const statusElement = document.querySelector('.status');
+      if (statusElement) {
+        statusElement.textContent = 'Ready';
+      }
+    }
+    
+    this.updateVideoFileList();
+    
+    // Tell backend to stop if file still converting
+    if (removed && removed.process_id) {
+      try {
+        await this.apiRequest("POST", "/api/stop-process", { process_id: removed.process_id });
+      } catch (error) {
+        console.error("Error stopping process:", error);
+      }
+    }
+    
+    this.showToast("info", "Removed", `Removed ${removed.name}`);
+  }
+
+  async browseVideoOutput() {
+    try {
+      console.log("[DEBUG] Starting directory selection...");
+      
+      // Check if Electron API is available
+      if (!window.electronAPI || !window.electronAPI.selectDirectory) {
+        throw new Error("Electron directory selection API not available");
+      }
+      
+      const directory = await window.electronAPI.selectDirectory();
+      console.log("[DEBUG] Directory selection result:", directory);
+      
+      if (directory) {
+        this.currentVideoOutput = directory;
+        const outputInput = document.getElementById("video-output-dir");
+        if (outputInput) outputInput.value = directory;
+        this.saveSettings();
+        this.showToast(
+          "success",
+          "Directory Selected",
+          "Output directory updated"
+        );
+      }
+    } catch (error) {
+      console.error("[ERROR] Error selecting directory:", error);
+      console.error("[ERROR] Error details:", {
+        message: error.message,
+        stack: error.stack,
+        electronAPI: !!window.electronAPI,
+        selectDirectory: !!(window.electronAPI && window.electronAPI.selectDirectory)
+      });
+      this.showToast(
+        "error",
+        "Directory Selection Error",
+        `Failed to select directory: ${error.message}\nCheck console for details`
+      );
+    }
+  }
+
+  async startVideoConversion() {
+    console.log("=== START CONVERSION DEBUG ===");
+    console.log("Current operation:", this.currentOperation);
+    console.log("Video files count:", this.videoFiles.length);
+    console.log("Video files list:", this.videoFiles);
+    console.log("Output directory:", this.currentVideoOutput);
+    
+    // Basic validation
+    if (this.videoFiles.length === 0) {
+      console.log("❌ No video files to convert");
+      this.showToast("warning", "No Files", "Please add videos to convert.");
+      return;
+    }
+    
+    if (!this.currentVideoOutput) {
+      console.log("❌ No output directory set");
+      this.showToast("error", "No Output Folder", "Please select an output directory.");
+      await this.browseVideoOutput();
+      if (!this.currentVideoOutput) return;
+    }
+    
+    // Check for operation conflicts
+    if (this.currentOperation === 'converting') {
+      console.log("❌ Conversion already in progress");
+      this.showToast("warning", "Operation in Progress", "A conversion is already running.");
+      return;
+    }
+    
+    // Check backend connectivity
+    console.log("🔍 Checking backend status...");
+    try {
+      const healthCheck = await this.apiRequest("GET", "/api/health");
+      
+      console.log("🏥 Health check result:", healthCheck);
+      
+      if (!healthCheck.success) {
+        console.log("❌ Backend health check failed");
+        this.showToast("error", "Backend Error", "Backend server is not responding");
+        return;
+      }
+    } catch (error) {
+      console.error("❌ Backend health check error:", error);
+      this.showToast("error", "Connection Error", "Cannot connect to backend server");
+      return;
+    }
+    
+    // Prepare conversion data
+    const filesToConvert = this.videoFiles.map(f => f.path);
+    console.log("📋 Conversion data prepared:", {
+      files: filesToConvert,
+      output_dir: this.currentVideoOutput,
+      fileCount: filesToConvert.length
+    });
+    
+    // Check if any file paths are invalid
+    const invalidFiles = filesToConvert.filter(path => !path || path === 'undefined');
+    if (invalidFiles.length > 0) {
+      console.error("❌ Invalid file paths found:", invalidFiles);
+      this.showToast("error", "Invalid Files", "Some files have invalid paths. Please re-add them.");
+      return;
+    }
+    
+    // Set operation state
+    this.currentOperation = 'converting';
+    this.isPaused = false;
+    
+    // Update UI - Disable conversion button, enable pause, disable hex edit
+    const startBtn = document.getElementById("start-conversion");
+    const hexBtn = document.getElementById("start-hex-edit");
+    const pauseBtn = document.getElementById("pause-conversion");
+    const resumeBtn = document.getElementById("resume-conversion");
+    
+    if (startBtn) {
+      startBtn.disabled = true;
+      startBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Converting...';
+      startBtn.style.display = 'inline-flex';
+    }
+    
+    if (hexBtn) {
+      hexBtn.disabled = true;
+      hexBtn.style.opacity = '0.5';
+      hexBtn.style.display = 'inline-flex';
+    }
+    
+    if (pauseBtn) {
+      pauseBtn.style.display = 'inline-block';
+      pauseBtn.disabled = false;
+    }
+    
+    if (resumeBtn) {
+      resumeBtn.style.display = 'none';
+    }
+    
+    // Force update button states
+    this.updateButtonStates();
+    
+    try {
+      console.log("🚀 Sending conversion request to backend...");
+      
+      const response = await this.apiRequest("POST", "/api/convert-videos", {
+        files: filesToConvert,
+        output_dir: this.currentVideoOutput,
+        settings: {
+          gpu_mode: "auto", // Always use automatic GPU detection
+          quality: Number(localStorage.getItem("quality_setting") || 75)
+        }
+      });
+      
+      console.log("📨 Backend response:", response);
+      console.log("📨 Backend response data:", response.data);
+      console.log("📨 Backend response data type:", typeof response.data);
+      console.log("📨 Backend response keys:", Object.keys(response.data || {}));
+      
+      if (response.success) {
+        // Standardize process ID extraction
+        let processId = null;
+        
+        // Try direct access first
+        // Standardized structure - backend returns data.process_id inside data
+        if (response.data && response.data.data && response.data.data.process_id) {
+          processId = response.data.data.process_id;
+        }
+        // Fallback for direct structure 
+        else if (response.data && response.data.process_id) {
+          processId = response.data.process_id;
+        }
+        
+        if (processId) {
+          this.currentProcessId = processId;
+          console.log("✅ Conversion started successfully with process ID:", this.currentProcessId);
+          
+          // Add process to activeProcesses
+          this.activeProcesses.set(this.currentProcessId, {
+            startTime: Date.now(),
+            files: this.videoFiles,
+            type: 'conversion'
+          });
+          
+          // Start progress monitoring
+          this.monitorProcess(this.currentProcessId);
+          this.showToast("success", "Conversion Started", `Conversion of ${filesToConvert.length} files started!`);
+          
+          if (startBtn) {
+            startBtn.innerHTML = '<i class="fas fa-cog fa-spin"></i> Converting...';
+          }
+        } else {
+          console.error("❌ No process_id received from backend");
+          this.showToast("error", "Conversion Error", "Failed to get process ID from backend");
+          this.resetOperationState();
+        }
+      } else {
+        throw new Error(response.error || "Failed to start conversion process");
+      }
+      
+    } catch (error) {
+      console.error("❌ Conversion start error:", error);
+      this.showToast("error", "Conversion Error", error.message);
+      this.resetOperationState();
+      
+      // Ensure button is reset even if resetOperationState fails
+      const startBtn = document.getElementById("start-conversion");
+      if (startBtn) {
+        startBtn.disabled = false;
+        startBtn.innerHTML = '<i class="fas fa-play"></i> Start Conversion';
+        startBtn.style.display = 'inline-flex';
+      }
+      
+      // Force update button states
+      this.updateButtonStates();
+    }
+    
+    console.log("=== START CONVERSION DEBUG END ===");
+  }
+
+  // Unified progress monitoring system
+  monitorProcess(processId) {
+    console.log("Starting to monitor process:", processId);
+    
+    const MAX_CONSECUTIVE_ERRORS = 3;
+    const POLLING_INTERVAL = 1000;
+    const MAX_OPERATION_TIME = 30 * 60 * 1000; // 30 minutes
+    let consecutiveErrors = 0;
+    
+    // Clear any existing intervals
+    if (this.progressInterval) {
+      clearInterval(this.progressInterval);
+    }
+    
+    // Store process info
+    this.activeProcesses.set(processId, {
+      startTime: Date.now(),
+      files: this.videoFiles,
+      type: 'video'
+    });
+    
+    this.progressInterval = setInterval(async () => {
+      try {
+        // Check timeout
+        const processInfo = this.activeProcesses.get(processId);
+        if (!processInfo || Date.now() - processInfo.startTime > MAX_OPERATION_TIME) {
+          console.warn("Process timeout or not found");
+          this.stopProgressMonitoring();
+          this.resetOperationState();
+          this.showToast("warning", "Timeout", "Operation took too long");
+          return;
+        }
+        
+        // Get progress from backend
+        const response = await this.apiRequest("GET", `/api/conversion-progress/${processId}`);
+        
+        if (!response.success) {
+          consecutiveErrors++;
+          if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+            throw new Error("Too many consecutive errors");
+          }
+          return;
+        }
+        
+        // Reset error counter on success
+        consecutiveErrors = 0;
+        
+        // Unwrap nested response shape { success, data: {...} }
+        const progress = (response && response.data && response.data.data) ? response.data.data : response.data;
+        
+        // Update file statuses
+        if (progress && progress.file_statuses) {
+          Object.entries(progress.file_statuses).forEach(([index, fileStatus]) => {
+            const file = this.videoFiles[parseInt(index)];
+            if (file) {
+              file.status = fileStatus.status;
+              file.progress = fileStatus.progress || 0;
+              file.stage = fileStatus.stage || 'Processing';
+            }
+          });
+          this.updateVideoFileList();
+        }
+        
+        // Check if process is complete
+        if (progress && (progress.status === 'completed' || progress.status === 'error')) {
+          this.stopProgressMonitoring();
+          this.handleProcessCompletion(progress);
+        }
+        
+      } catch (error) {
+        console.error("Progress monitoring error:", error);
+        consecutiveErrors++;
+        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+          this.stopProgressMonitoring();
+          this.resetOperationState();
+          this.showToast("error", "Monitoring Failed", "Unable to track progress");
+        }
+      }
+    }, POLLING_INTERVAL);
+  }
+
+  stopProgressMonitoring() {
+    if (this.progressInterval) {
+      clearInterval(this.progressInterval);
+      this.progressInterval = null;
+    }
+  }
+
+  // Improved process completion handler
+  handleProcessCompletion(processData) {
+    console.log("=== PROCESS COMPLETION DEBUG ===");
+    console.log("🎯 Process completion data:", processData);
+    console.log("🎯 Current process ID:", this.currentProcessId);
+    console.log("🎯 Active processes before cleanup:", this.activeProcesses.size);
+    
+    // Clean up process tracking
+    if (this.currentProcessId) {
+      this.activeProcesses.delete(this.currentProcessId);
+      console.log("🗑️ Removed process from active processes:", this.currentProcessId);
+    }
+    
+    // Determine overall success based on process status
+    const isSuccessful = processData.status === 'completed';
+    console.log("🎯 Overall success:", isSuccessful);
+    
+    // Update all file statuses based on results
+    if (processData.file_statuses) {
+      console.log("🔄 Updating file statuses from completion data:", processData.file_statuses);
+      Object.keys(processData.file_statuses).forEach(index => {
+        const fileStatus = processData.file_statuses[index];
+        const file = this.videoFiles[parseInt(index)];
+        if (file) {
+          const oldStatus = file.status;
+          const oldProgress = file.progress;
+          const oldStage = file.stage;
+          
+          file.status = fileStatus.status;
+          // Ensure progress shows 100% for completed files
+          if (fileStatus.status === 'completed') {
+            file.progress = 100;
+            file.stage = 'Conversion completed';
+          } else if (fileStatus.status === 'error') {
+            file.progress = 0;
+            file.stage = fileStatus.stage || 'Conversion failed';
+          } else {
+            file.progress = fileStatus.progress || 0;
+            file.stage = fileStatus.stage || 'Processing';
+          }
+          
+          console.log(`📁 File ${index} (${file.name}):`);
+          console.log(`   Status: ${oldStatus} → ${file.status}`);
+          console.log(`   Progress: ${oldProgress}% → ${file.progress}%`);
+          console.log(`   Stage: ${oldStage} → ${file.stage}`);
+        } else {
+          console.warn(`❌ File index ${index} not found in videoFiles array`);
+        }
+      });
+    } else {
+      console.warn("⚠️ No file_statuses in completion data");
+    }
+    
+    // Update UI
+    this.updateVideoFileList();
+    
+    // Check if ALL files are completed
+    const allFilesCompleted = this.videoFiles.every(file => file.status === 'completed');
+    const anyFilesFailed = this.videoFiles.some(file => file.status === 'error');
+    
+    console.log("🎯 All files completed:", allFilesCompleted);
+    console.log("🎯 Any files failed:", anyFilesFailed);
+    
+    // Show toast notification
+    if (allFilesCompleted) {
+      this.showToast(
+        'success',
+        'Conversion Completed',
+        `Successfully converted ${processData.completed_files}/${processData.total_files} files`
+      );
+    } else if (anyFilesFailed) {
+      this.showToast(
+        'error',
+        'Conversion Failed',
+        `Conversion failed: ${processData.current_stage || 'Unknown error'}`
+      );
+    } else {
+      this.showToast(
+        isSuccessful ? 'success' : 'error',
+        `Conversion ${isSuccessful ? 'Completed' : 'Failed'}`,
+        isSuccessful 
+          ? `Successfully converted ${processData.completed_files}/${processData.total_files} files` 
+          : `Conversion failed: ${processData.current_stage || 'Unknown error'}`
+      );
+    }
+    
+    // Only reset operation state if ALL files are completed
+    if (allFilesCompleted) {
+      console.log("🎯 ALL files completed, resetting operation state");
+      this.resetOperationState();
+    } else {
+      console.log("🎯 Not all files completed, keeping operation state active");
+      console.log("🎯 Remaining files:", this.videoFiles.filter(f => f.status !== 'completed').map(f => f.name));
+    }
+    
+    console.log("=== PROCESS COMPLETION END ===");
+  }
+
+  // Improved reset method
+  resetOperationState() {
+    console.log("=== RESET OPERATION STATE DEBUG ===");
+    console.log("Before reset - Current operation:", this.currentOperation);
+    console.log("Before reset - Current process ID:", this.currentProcessId);
+    console.log("Before reset - Is paused:", this.isPaused);
+    console.log("Before reset - Progress interval:", this.progressInterval);
+    
+    // Clear all operation flags
+    this.currentOperation = null;
+    this.currentProcessId = null;
+    this.isPaused = false;
+    
+    // Clear any active monitoring
+    this.stopProgressMonitoring();
+    
+    // Reset all buttons to default state
+    const startBtn = document.getElementById("start-conversion");
+    const hexBtn = document.getElementById("start-hex-edit");
+    const pauseBtn = document.getElementById("pause-conversion");
+    const resumeBtn = document.getElementById("resume-conversion");
+    
+    if (startBtn) {
+      startBtn.disabled = false;
+      startBtn.innerHTML = '<i class="fas fa-play"></i> Start Conversion';
+      startBtn.style.display = 'inline-flex';
+    }
+    
+    if (hexBtn) {
+      hexBtn.disabled = false;
+      hexBtn.style.opacity = '1';
+      hexBtn.style.display = 'inline-flex';
+    }
+    
+    if (pauseBtn) {
+      pauseBtn.style.display = 'none';
+      pauseBtn.disabled = true;
+    }
+    
+    if (resumeBtn) {
+      resumeBtn.style.display = 'none';
+      resumeBtn.disabled = true;
+    }
+    
+    // Reset progress bars to 100% if completed
+    this.videoFiles.forEach(file => {
+      if (file.status === 'completed') {
+        file.progress = 100;
+      }
+    });
+    
+    this.updateVideoFileList();
+    
+    // Update button states
+    this.updateButtonStates();
+    
+    console.log("After reset - Current operation:", this.currentOperation);
+    console.log("After reset - Current process ID:", this.currentProcessId);
+    console.log("After reset - Is paused:", this.isPaused);
+    console.log("After reset - Progress interval:", this.progressInterval);
+    console.log("=== RESET COMPLETE ===");
+  }
+
+  async startHexEdit() {
+    if (this.currentOperation) {
+      this.showToast("warning", "Operation in Progress", "Another operation is already running");
+      return;
+    }
+    
+    if (this.videoFiles.length === 0) {
+      this.showToast("warning", "No Files", "Please add files first");
+      return;
+    }
+    
+    if (!this.currentVideoOutput) {
+      this.showToast("warning", "No Output Directory", "Please select an output directory");
+      return;
+    }
+    
+    // Validate that all files are WebM
+    const nonWebmFiles = this.videoFiles.filter(file => 
+      !file.name.toLowerCase().endsWith('.webm')
+    );
+    
+    if (nonWebmFiles.length > 0) {
+      const fileNames = nonWebmFiles.map(f => f.name).slice(0, 3).join(', ');
+      const moreText = nonWebmFiles.length > 3 ? ` and ${nonWebmFiles.length - 3} more` : '';
+      this.showToast(
+        "error", 
+        "Invalid Files for Hex Edit", 
+        `Hex editing only supports WebM files. Found non-WebM files: ${fileNames}${moreText}`
+      );
+      return;
+    }
+    
+    try {
+      this.currentOperation = "hexediting";
+      this.isPaused = false;
+      
+      // Update UI - Disable conversion button, enable hex edit pause, disable conversion
+      const startBtn = document.getElementById("start-conversion");
+      const hexBtn = document.getElementById("start-hex-edit");
+      const pauseBtn = document.getElementById("pause-hex-edit");
+      const resumeBtn = document.getElementById("resume-hex-edit");
+      
+      if (startBtn) {
+        startBtn.disabled = true;
+        startBtn.style.opacity = '0.5';
+      }
+      
+      if (hexBtn) {
+        hexBtn.disabled = true;
+        hexBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Hex Editing...';
+      }
+      
+      if (pauseBtn) {
+        pauseBtn.style.display = 'inline-block';
+        pauseBtn.disabled = false;
+      }
+      
+      if (resumeBtn) {
+        resumeBtn.style.display = 'none';
+      }
+      
+      this.updateButtonStates();
+      
+      const processId = `hex_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      this.currentProcessId = processId;
+      
+      // Reset all file statuses for hex edit
+      this.videoFiles.forEach((file, index) => {
+        file.status = "pending";
+        file.progress = 0;
+        file.stage = "Waiting to process...";
+        file.index = index; // Ensure index is set
+      });
+      
+      this.updateVideoFileList();
+      
+      const response = await this.apiRequest("POST", "/api/hex-edit", {
+        files: this.videoFiles.map(f => f.path),
+        output_dir: this.currentVideoOutput,
+        process_id: processId
+      });
+      
+      if (response.success) {
+        this.showToast("success", "Hex Edit Started", "Hex editing has started");
+        // Use dedicated hex-edit progress monitor (separate from conversion)
+        this.startHexProgressMonitoring(processId);
+      } else {
+        throw new Error(response.error || "Failed to start hex edit");
+      }
+    } catch (error) {
+      console.error("Error starting hex edit:", error);
+      this.showToast("error", "Hex Edit Failed", error.message);
+      this.currentOperation = null;
+      this.currentProcessId = null;
+      this.updateButtonStates();
+    }
+  }
+
+  // Conversion progress monitor (video conversion only)
+  startProgressMonitoring(processId, type = 'video') {
+    const MAX_CONSECUTIVE_ERRORS = 5;
+    const RETRY_DELAY = 2000; // 2 seconds
+    const LONG_OPERATION_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+    
+    if (this.progressInterval) {
+      clearInterval(this.progressInterval);
+    }
+    
+    let consecutiveErrors = 0;
+    let operationStartTime = Date.now();
+    this.debugWarn('poll:start', { processId, type });
+    
+    this.progressInterval = setInterval(async () => {
+      // Check for long-running operation
+      if (Date.now() - operationStartTime > LONG_OPERATION_TIMEOUT) {
+        console.warn(`[PROGRESS] Operation exceeded maximum time limit`);
+        this.stopProgressMonitoring();
+        this.resetOperationState();
+        this.showToast("warning", "Operation Timeout", "Operation took too long and was stopped");
+        return;
+      }
+      
+      try {
+        const progress = await this.getConversionProgress(processId);
+        this.debugWarn('poll:data', { processId, type, progress });
+        
+        if (!progress) {
+          consecutiveErrors++;
+          this.handleProgressError(new Error("No progress data"), consecutiveErrors);
+          return;
+        }
+        
+        // Reset error counter on success
+        consecutiveErrors = 0;
+        this.logProgressDetails(progress);
+        
+        // Existing progress handling logic
+        console.log(`[PROGRESS] ${processId}: ${progress.progress}% - ${progress.currentStage}`);
+        
+        // Update pause state if changed
+        if (progress.paused !== this.isPaused) {
+          this.isPaused = progress.paused;
+          this.updateConversionButtons(this.currentOperation === 'converting', this.currentOperation === 'hexediting');
+        }
+        
+        // Update overall progress display if needed
+        this.updateOverallProgress(progress);
+        
+        // For hex edit, ensure the UI is refreshed after progress updates
+        if (type === 'hex_edit') {
+          // The files have already been updated in getConversionProgress
+          // Just refresh the UI to show the changes
+          this.updateVideoFileList();
+        }
+
+        // Check if operation is complete
+        if (progress.status === "completed" || progress.status === "error") {
+          this.debugWarn('poll:complete', { processId, type, status: progress.status });
+          
+          // For hex edit completion, only update files that haven't been updated yet
+          if (type === 'hex_edit' && progress.status === "completed") {
+            // Only update files that are still pending or processing
+            this.videoFiles.forEach((file) => {
+              if (file.status === 'pending' || file.status === 'processing') {
+                file.status = 'completed';
+                file.progress = 100;
+                file.stage = 'Hex edit completed!';
+              }
+            });
+            
+            // Update UI immediately
+            this.updateVideoFileList();
+          }
+          
+          this.handleConversionComplete(progress);
+        }
+      } catch (error) {
+        consecutiveErrors++;
+        this.debugWarn('poll:error', { processId, type, error: error?.message });
+        this.handleProgressError(error, consecutiveErrors);
+      }
+    }, RETRY_DELAY);
+  }
+
+  // =============================================
+  // HEX EDIT PROGRESS (Separate logic from conversion)
+  // =============================================
+  startHexProgressMonitoring(processId) {
+    const MAX_CONSECUTIVE_ERRORS = 8;
+    const RETRY_DELAY = 1200; // ms
+    const LONG_OPERATION_TIMEOUT = 10 * 60 * 1000; // 10 minutes
+    
+    if (this.progressInterval) {
+      clearInterval(this.progressInterval);
+    }
+    
+    let consecutiveErrors = 0;
+    const startTs = Date.now();
+    console.log(`[HEX] monitor:start`, { processId, files: this.videoFiles.length });
+    
+    this.progressInterval = setInterval(async () => {
+      // Timeout guard
+      if (Date.now() - startTs > LONG_OPERATION_TIMEOUT) {
+        console.warn(`[HEX] monitor:timeout - stopping polling`);
+        clearInterval(this.progressInterval);
+        this.progressInterval = null;
+        this.resetOperationState();
+        this.showToast("warning", "Hex Edit Timeout", "Hex edit took too long and was stopped");
+        return;
+      }
+      
+      try {
+        const progress = await this.getHexEditProgress(processId);
+        console.log(`[HEX] monitor:data`, progress);
+        
+        // Update overall UI for hex edit
+        this.updateHexOverallProgress(progress);
+        
+        // Refresh list each tick (lightweight, uses fragment)
+        this.updateVideoFileList();
+        
+        if (progress.status === 'completed' || progress.status === 'error') {
+          console.log(`[HEX] monitor:complete`, { status: progress.status });
+          clearInterval(this.progressInterval);
+          this.progressInterval = null;
+          this.handleConversionComplete(progress); // Reuse completion UI with wasHexEdit detection inside
+        }
+      } catch (err) {
+        consecutiveErrors += 1;
+        console.warn(`[HEX] monitor:error`, { consecutiveErrors, err: err?.message });
+        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+          clearInterval(this.progressInterval);
+          this.progressInterval = null;
+          this.resetOperationState();
+          this.showToast("error", "Hex Edit Error", err?.message || "Unable to fetch progress");
+        } else {
+          await new Promise(r => setTimeout(r, RETRY_DELAY));
+        }
+      }
+    }, 750);
+  }
+  
+  async getHexEditProgress(processId) {
+    // Single source of truth – backend progress endpoint
+    const resp = await this.apiRequest("GET", `/api/conversion-progress/${processId}`);
+    if (!resp || !resp.success) throw new Error(resp?.error || "No progress response");
+    
+    const data = resp.data || {};
+    const fileStatuses = data.file_statuses || {};
+    const keys = Object.keys(fileStatuses);
+    console.log(`[HEX] progress:raw`, { keysCount: keys.length, keys });
+    
+    // Apply statuses to our local videoFiles array
+    keys.forEach((k) => {
+      const idx = parseInt(k);
+      const fs = fileStatuses[k] || {};
+      const file = this.videoFiles[idx];
+      if (!file) return;
+      
+      const before = { s: file.status, p: file.progress, st: file.stage };
+      file.status = fs.status || file.status || 'processing';
+      file.progress = typeof fs.progress === 'number' ? fs.progress : (file.progress || 0);
+      file.stage = fs.stage || file.stage || 'Processing hex edit...';
+      if (file.status === 'completed') file.progress = 100;
+      
+      if (before.s !== file.status || before.p !== file.progress || before.st !== file.stage) {
+        console.log(`[HEX] file:update`, { idx, before, after: { s: file.status, p: file.progress, st: file.stage } });
+      }
+    });
+    
+    // Return normalized progress shape
+    return {
+      status: data.status || 'running',
+      progress: data.progress || 0,
+      currentStage: data.current_stage || '',
+      totalFiles: data.total_files || this.videoFiles.length,
+      completedFiles: data.completed_files || 0,
+      failedFiles: data.failed_files || 0,
+      file_statuses: fileStatuses,
+    };
+  }
+  
+  updateHexOverallProgress(progress) {
+    // Progress bar fill
+    const bar = document.getElementById("sticker-progress-fill") || document.getElementById("conversion-progress-fill");
+    if (bar) {
+      bar.style.width = `${progress.progress}%`;
+      bar.setAttribute('aria-valuenow', progress.progress);
+    }
+    
+    // Text status line (reuse conversion-status element)
+    const statusEl = document.getElementById("conversion-status");
+    if (statusEl) {
+      const total = progress.totalFiles || this.videoFiles.length;
+      statusEl.textContent = progress.currentStage || `Hex editing ${progress.completedFiles}/${total}`;
+    }
+  }
+
+  logProgressDetails(progress) {
+    console.log(`[PROGRESS DETAILS]`, {
+      processId: this.currentProcessId,
+      progress: progress.progress,
+      status: progress.status,
+      currentFile: progress.currentFile,
+      completedFiles: `${progress.completedFiles}/${progress.totalFiles}`,
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  handleProgressError(error, consecutiveErrors) {
+    console.error(`[PROGRESS ERROR #${consecutiveErrors}]`, {
+      message: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString()
+    });
+    
+    if (consecutiveErrors >= 5) {
+      this.stopProgressMonitoring();
+      this.resetOperationState();
+      this.showToast("error", "Persistent Error", "Unable to track operation progress");
+    }
+  }
+
+  handleConversionComplete(progress) {
+    console.log(`[COMPLETE] Operation finished with status: ${progress.status}`);
+    
+    this.stopProgressMonitoring();
+    const wasHexEdit = this.currentOperation === 'hexediting';
+    this.currentOperation = null;
+    this.currentProcessId = null;
+    
+    // Re-enable buttons
+    const startBtn = document.getElementById("start-conversion");
+    const hexBtn = document.getElementById("start-hex-edit");
+    
+    if (startBtn) {
+      startBtn.disabled = false;
+      startBtn.innerHTML = '<i class="fas fa-play"></i> Start Conversion';
+    }
+    
+    if (hexBtn) {
+      hexBtn.disabled = false;
+      hexBtn.innerHTML = '<i class="fas fa-edit"></i> Hex Edit';
+    }
+    
+    if (progress.status === "completed") {
+      const operationType = wasHexEdit ? "Hex Edit" : "Conversion";
+      this.showToast(
+        "success",
+        `${operationType} Complete`,
+        `Successfully processed ${progress.completedFiles}/${progress.totalFiles} files`
+      );
+    } else if (progress.status === "error") {
+      const operationType = wasHexEdit ? "Hex Edit" : "Conversion";
+      this.showToast(
+        "error",
+        `${operationType} Error`,
+        progress.currentStage || `${operationType} failed`
+      );
+    }
+    
+    // Update file statuses with final values
+    this.debugWarn('🔥 COMPLETION DEBUG - Updating Final File Statuses', {
+      wasHexEdit: wasHexEdit,
+      progressStatus: progress.status,
+      hasFileStatuses: !!(progress.file_statuses && Object.keys(progress.file_statuses).length > 0),
+      fileStatusesKeys: Object.keys(progress.file_statuses || {}),
+      completedFiles: progress.completedFiles,
+      totalFiles: progress.totalFiles
+    });
+    
+    if (progress.file_statuses && Object.keys(progress.file_statuses).length > 0) {
+      this.debugWarn('🔥 COMPLETION DEBUG - Using file_statuses data');
+      this.videoFiles.forEach((file, index) => {
+        const fileStatus = progress.file_statuses[index];
+        if (fileStatus) {
+          file.status = fileStatus.status;
+          file.progress = fileStatus.progress;
+          file.stage = fileStatus.stage || progress.currentStage;
+          this.debugWarn('🔥 COMPLETION DEBUG - Updated file from file_statuses', {
+            index: index,
+            filename: file.name,
+            status: file.status,
+            progress: file.progress
+          });
+        } else {
+          // Fallback if no specific file status
+          file.status = progress.status === "completed" ? "completed" : "error";
+          file.progress = progress.status === "completed" ? 100 : file.progress || 0;
+          file.stage = progress.status === "completed" ? 
+            (wasHexEdit ? "Hex edit successful" : "Conversion successful") : 
+            (wasHexEdit ? "Hex edit failed" : "Conversion failed");
+          this.debugWarn('🔥 COMPLETION DEBUG - Updated file with fallback', {
+            index: index,
+            filename: file.name,
+            status: file.status,
+            progress: file.progress
+          });
+        }
+      });
+    } else {
+      // If no file_statuses at all, update all files with the overall status
+      this.debugWarn('🔥 COMPLETION DEBUG - No file_statuses, using overall status');
+      this.videoFiles.forEach((file, index) => {
+        file.status = progress.status === "completed" ? "completed" : "error";
+        file.progress = progress.status === "completed" ? 100 : file.progress || 0;
+        file.stage = progress.status === "completed" ? 
+          (wasHexEdit ? "Hex edit successful" : "Conversion successful") : 
+          (wasHexEdit ? "Hex edit failed" : "Conversion failed");
+        this.debugWarn('🔥 COMPLETION DEBUG - Updated file with overall status', {
+          index: index,
+          filename: file.name,
+          status: file.status,
+          progress: file.progress
+        });
+      });
+    }
+    
+    this.debugWarn('🔥 COMPLETION DEBUG - Final File States', {
+      videoFiles: this.videoFiles.map((f, i) => ({
+        index: i,
+        name: f.name,
+        status: f.status,
+        progress: f.progress,
+        stage: f.stage
+      }))
+    });
+    
+    this.updateVideoFileList();
+  }
+
+  updateOverallProgress(progress) {
+    // Update global progress indicators
+    const progressElement = document.getElementById("overall-progress");
+    if (progressElement) {
+      progressElement.style.width = `${progress.progress}%`;
+      progressElement.setAttribute('aria-valuenow', progress.progress);
+    }
+    
+    const statusElement = document.getElementById("conversion-status");
+    if (statusElement) {
+      statusElement.textContent = progress.currentStage || `Converting ${progress.completedFiles}/${progress.totalFiles}`;
+    }
+    
+    // File statuses are already updated in getConversionProgress
+  }
+
+  async getConversionProgress(processId) {
+    try {
+      const response = await this.apiRequest("GET", `/api/conversion-progress/${processId}`);
+      this.debugWarn('🔍 DETAILED DEBUG - Raw API Response', {
+        processId: processId,
+        responseSuccess: response?.success,
+        responseData: response?.data,
+        hasFileStatuses: !!(response?.data?.file_statuses),
+        fileStatusesKeys: Object.keys(response?.data?.file_statuses || {}),
+        fullResponse: response
+      });
+      
+      if (!response.success) {
+        console.error(`Progress check failed for ${processId}:`, response.error);
+        if (response.details && response.details.active_processes) {
+          console.log("Active processes:", response.details.active_processes);
+        }
+        return null;
+      }
+      
+      const progressData = response.data;
+      this.debugWarn('🔍 DETAILED DEBUG - Progress Data Extracted', {
+        progressData: progressData,
+        fileStatusesRaw: progressData.file_statuses,
+        fileStatusesType: typeof progressData.file_statuses,
+        fileStatusesIsObject: progressData.file_statuses && typeof progressData.file_statuses === 'object',
+        fileStatusesKeys: Object.keys(progressData.file_statuses || {})
+      });
+      
+      // Update file statuses if available - but do this AFTER returning the data
+      // so it's available for both conversion and hex edit operations
+      const fileStatuses = progressData.file_statuses || {};
+      
+      // Debug log to see what we're getting
+      if (Object.keys(fileStatuses).length > 0) {
+        this.debugWarn('🔍 DETAILED DEBUG - File Statuses Processing', { 
+          operation: this.currentOperation, 
+          count: Object.keys(fileStatuses).length,
+          statuses: fileStatuses,
+          videoFilesCount: this.videoFiles.length,
+          videoFiles: this.videoFiles.map((f, i) => ({ index: i, name: f.name, currentStatus: f.status, currentProgress: f.progress }))
+        });
+      } else {
+        this.debugWarn('🚨 DETAILED DEBUG - NO FILE STATUSES FOUND', {
+          operation: this.currentOperation,
+          progressDataKeys: Object.keys(progressData),
+          fileStatusesValue: progressData.file_statuses,
+          fileStatusesStringified: JSON.stringify(progressData.file_statuses)
+        });
+      }
+      
+      // Update the videoFiles array immediately for both conversion and hex edit
+      if ((this.currentOperation === 'converting' || this.currentOperation === 'hexediting') && Object.keys(fileStatuses).length > 0) {
+        console.log(`[PROGRESS] Updating ${Object.keys(fileStatuses).length} file statuses for ${this.currentOperation}`);
+        
+        Object.entries(fileStatuses).forEach(([idx, fs]) => {
+          const file = this.videoFiles[parseInt(idx)];
+          if (!file) {
+            console.warn(`[PROGRESS] File at index ${idx} not found in videoFiles`);
+            return;
+          }
+          
+          // Update file with data from backend
+          const oldStatus = file.status;
+          const oldProgress = file.progress;
+          const oldStage = file.stage;
+          
+          file.status = fs.status || file.status;
+          file.progress = fs.progress !== undefined ? fs.progress : file.progress;
+          file.stage = fs.stage || file.stage;
+          
+          // Log if there were changes
+          if (oldStatus !== file.status || oldProgress !== file.progress || oldStage !== file.stage) {
+            console.log(`[PROGRESS] File ${idx} updated:`, {
+              status: `${oldStatus} → ${file.status}`,
+              progress: `${oldProgress}% → ${file.progress}%`,
+              stage: `${oldStage} → ${file.stage}`
+            });
+          }
+        });
+      }
+      
+      const returnData = {
+        progress: progressData.progress || 0,
+        status: progressData.status || "running",
+        currentFile: progressData.current_file || "",
+        currentStage: progressData.current_stage || "",
+        completedFiles: progressData.completed_files || 0,
+        totalFiles: progressData.total_files || 0,
+        failedFiles: progressData.failed_files || 0,
+        paused: progressData.paused || false,
+        canPause: progressData.can_pause || false,
+        file_statuses: fileStatuses  // Pass the actual file_statuses object
+      };
+      
+      this.debugWarn('🔍 DETAILED DEBUG - Returning Progress Data', {
+        returnData: returnData,
+        fileStatusesInReturn: returnData.file_statuses,
+        fileStatusesKeysInReturn: Object.keys(returnData.file_statuses || {})
+      });
+      
+      return returnData;
+    } catch (error) {
+      console.error("Error getting conversion progress:", error);
+      return null;
+    }
+  }
+
+  updateFileStatuses(fileStatuses) {
+    this.debugWarn('🎯 DETAILED DEBUG - updateFileStatuses Called', {
+      input: fileStatuses,
+      inputType: typeof fileStatuses,
+      inputKeys: Object.keys(fileStatuses || {}),
+      inputIsValid: fileStatuses && typeof fileStatuses === 'object'
+    });
+    
+    // Handle both object and array-like structures
+    if (!fileStatuses || typeof fileStatuses !== 'object') {
+      this.debugWarn('🚨 DETAILED DEBUG - Invalid File Statuses', {
+        fileStatuses: fileStatuses,
+        type: typeof fileStatuses,
+        isNull: fileStatuses === null,
+        isUndefined: fileStatuses === undefined
+      });
+      return;
+    }
+    
+    const fileStatusKeys = Object.keys(fileStatuses);
+    this.debugWarn('🎯 DETAILED DEBUG - Processing File Status Keys', {
+      keys: fileStatusKeys,
+      count: fileStatusKeys.length
+    });
+    
+    fileStatusKeys.forEach(index => {
+      const fileStatus = fileStatuses[index];
+      if (!fileStatus) {
+        this.debugWarn('🚨 DETAILED DEBUG - Empty File Status', { index, fileStatus });
+        return;
+      }
+      
+      this.debugWarn('🎯 DETAILED DEBUG - Processing File Status', {
+        index: index,
+        fileStatus: fileStatus,
+        status: fileStatus.status,
+        progress: fileStatus.progress,
+        stage: fileStatus.stage,
+        filename: fileStatus.filename
+      });
+      
+      // Our DOM uses data-index, not data-file-index
+      const fileElement = document.querySelector(`[data-index="${index}"]`);
+      this.debugWarn('🎯 DETAILED DEBUG - DOM Element Search', { 
+        index, 
+        selector: `[data-index="${index}"]`,
+        found: !!fileElement,
+        elementHTML: fileElement ? fileElement.outerHTML.substring(0, 200) + '...' : 'NOT FOUND'
+      });
+      
+      if (fileElement) {
+        // Update file item class based on status
+        const oldClassName = fileElement.className;
+        fileElement.className = `file-item ${fileStatus.status || 'pending'}`;
+        
+        this.debugWarn('🎯 DETAILED DEBUG - Updated Element Class', {
+          index: index,
+          oldClassName: oldClassName,
+          newClassName: fileElement.className
+        });
+        
+        // Update progress bar
+        const progressBar = fileElement.querySelector('.file-progress-fill');
+        const progressText = fileElement.querySelector('.file-progress-text');
+        const statusElement = fileElement.querySelector('.file-status');
+        
+        this.debugWarn('🎯 DETAILED DEBUG - DOM Elements Found', {
+          index: index,
+          hasProgressBar: !!progressBar,
+          hasProgressText: !!progressText,
+          hasStatusElement: !!statusElement
+        });
+        
+        if (progressBar) {
+          const oldWidth = progressBar.style.width;
+          progressBar.style.width = `${fileStatus.progress}%`;
+          this.debugWarn('🎯 DETAILED DEBUG - Updated Progress Bar', {
+            index: index,
+            oldWidth: oldWidth,
+            newWidth: progressBar.style.width,
+            progress: fileStatus.progress
+          });
+        } else {
+          this.debugWarn('🚨 DETAILED DEBUG - Progress Bar Not Found', { index });
+        }
+        
+        if (progressText) {
+          const oldText = progressText.textContent;
+          progressText.textContent = `${fileStatus.progress === 100 ? '✔' : fileStatus.progress + '%'}`;
+          this.debugWarn('🎯 DETAILED DEBUG - Updated Progress Text', {
+            index: index,
+            oldText: oldText,
+            newText: progressText.textContent,
+            progress: fileStatus.progress
+          });
+        } else {
+          this.debugWarn('🚨 DETAILED DEBUG - Progress Text Not Found', { index });
+        }
+        
+        if (statusElement) {
+          const oldStatus = statusElement.textContent;
+          statusElement.textContent = fileStatus.stage || fileStatus.status;
+          this.debugWarn('🎯 DETAILED DEBUG - Updated Status Element', {
+            index: index,
+            oldStatus: oldStatus,
+            newStatus: statusElement.textContent,
+            stage: fileStatus.stage,
+            status: fileStatus.status
+          });
+        } else {
+          this.debugWarn('🚨 DETAILED DEBUG - Status Element Not Found', { index });
+        }
+      } else {
+        this.debugWarn('🚨 DETAILED DEBUG - File Element Not Found in DOM', {
+          index: index,
+          selector: `[data-index="${index}"]`,
+          availableElements: Array.from(document.querySelectorAll('[data-index]')).map(el => ({
+            index: el.getAttribute('data-index'),
+            className: el.className,
+            innerHTML: el.innerHTML.substring(0, 100) + '...'
+          }))
+        });
+      }
+    });
+  }
+
+  preventDefaults(e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  // =============================================
+  // TELEGRAM STICKER BOT METHODS
+  // =============================================
+  async connectTelegram() {
+    const apiIdInput = document.getElementById("api-id");
+    const apiHashInput = document.getElementById("api-hash");
+    const phoneInput = document.getElementById("phone-number");
+    
+    if (!apiIdInput || !apiHashInput || !phoneInput) {
+      this.showToast(
+        "error",
+        "Elements Missing",
+        "Required form elements not found"
+      );
+      return;
+    }
+    
+    const apiId = apiIdInput.value.trim();
+    const apiHash = apiHashInput.value.trim();
+    const phoneNumber = phoneInput.value.trim();
+    
+    if (!apiId || !apiHash || !phoneNumber) {
+      this.showToast(
+        "error",
+        "Missing Information",
+        "Please fill in all required fields"
+      );
+      this.highlightEmptyFields([apiIdInput, apiHashInput, phoneInput]);
+      return;
+    }
+    
+    // Validate API ID (should be numeric)
+    if (!/^\d+$/.test(apiId)) {
+      this.showToast("error", "Invalid API ID", "API ID should be numeric");
+      apiIdInput.focus();
+      return;
+    }
+    
+    // Validate phone number format
+    if (!/^\+?\d{10,15}$/.test(phoneNumber.replace(/\s/g, ""))) {
+      this.showToast(
+        "error",
+        "Invalid Phone Number",
+        "Please enter a valid phone number with country code"
+      );
+      phoneInput.focus();
+      return;
+    }
+    
+    try {
+      this.updateTelegramStatus("connecting");
+      const connectBtn = document.getElementById("connect-telegram");
+      if (connectBtn) {
+        connectBtn.disabled = true;
+        connectBtn.innerHTML =
+          '<i class="fas fa-spinner fa-spin"></i> Connecting...';
+      }
+      
+      this.showLoadingOverlay("Connecting to Telegram...");
+      
+      const response = await this.apiRequest("POST", "/api/sticker/connect", {
+        api_id: apiId,
+        api_hash: apiHash,
+        phone_number: phoneNumber,
+        process_id: "connect_" + Date.now(),
+      });
+      
+      this.hideLoadingOverlay();
+      
+      if (response.success) {
+        const result = response.data;
+        if (result.needs_code) {
+          this.pendingCode = true;
+          this.showModal("code-modal");
+          this.showToast(
+            "info",
+            "Code Sent",
+            "Verification code sent to your phone number"
+          );
+          setTimeout(() => {
+            const codeInput = document.getElementById("verification-code");
+            if (codeInput) codeInput.focus();
+          }, 500);
+        } else if (result.needs_password) {
+          this.pendingPassword = true;
+          this.showModal("password-modal");
+          this.showToast(
+            "info",
+            "2FA Required",
+            "Please enter your 2FA password"
+          );
+          setTimeout(() => {
+            const passwordInput = document.getElementById(
+              "two-factor-password"
+            );
+            if (passwordInput) passwordInput.focus();
+          }, 500);
+        } else {
+          this.updateTelegramStatus("connected");
+          this.saveSettings();
+          this.showToast(
+            "success",
+            "Connected",
+            "Successfully connected to Telegram"
+          );
+        }
+      } else {
+        this.updateTelegramStatus("disconnected");
+        this.showToast(
+          "error",
+          "Connection Failed",
+          response.error || "Failed to connect to Telegram"
+        );
+      }
+    } catch (error) {
+      this.hideLoadingOverlay();
+      console.error("Error connecting to Telegram:", error);
+      this.updateTelegramStatus("disconnected");
+      this.showToast(
+        "error",
+        "Connection Error",
+        "Failed to connect to Telegram: " + error.message
+      );
+    } finally {
+      const connectBtn = document.getElementById("connect-telegram");
+      if (connectBtn) {
+        connectBtn.disabled = false;
+        connectBtn.innerHTML =
+          '<i class="fas fa-telegram"></i> Connect to Telegram';
+      }
+    }
+  }
+
+  highlightEmptyFields(fields) {
+    fields.forEach((field) => {
+      if (!field.value.trim()) {
+        field.classList.add("error");
+        setTimeout(() => field.classList.remove("error"), 3000);
+      }
+    });
+  }
+
+  async submitVerificationCode() {
+    const codeInput = document.getElementById("verification-code");
+    if (!codeInput) return;
+    
+    const code = codeInput.value.trim();
+    if (!code) {
+      this.showToast(
+        "error",
+        "Missing Code",
+        "Please enter the verification code"
+      );
+      codeInput.focus();
+      return;
+    }
+    
+    if (!/^\d{5}$/.test(code)) {
+      this.showToast(
+        "warning",
+        "Invalid Format",
+        "Verification code should be 5 digits"
+      );
+      codeInput.select();
+      return;
+    }
+    
+    try {
+      const submitBtn = document.getElementById("submit-code");
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML =
+          '<i class="fas fa-spinner fa-spin"></i> Verifying...';
+      }
+      
+      const response = await this.apiRequest("POST", "/api/sticker/verify-code", { code });
+      
+      if (response.success) {
+        const result = response.data;
+        if (result.needs_password) {
+          this.pendingCode = false;
+          this.pendingPassword = true;
+          this.hideModal();
+          this.showModal("password-modal");
+          this.showToast(
+            "info",
+            "2FA Required",
+            "Please enter your 2FA password"
+          );
+          setTimeout(() => {
+            const passwordInput = document.getElementById(
+              "two-factor-password"
+            );
+            if (passwordInput) passwordInput.focus();
+          }, 500);
+        } else {
+          this.pendingCode = false;
+          this.hideModal();
+          this.updateTelegramStatus("connected");
+          this.saveSettings();
+          this.showToast(
+            "success",
+            "Connected",
+            "Successfully connected to Telegram"
+          );
+        }
+      } else {
+        this.showToast(
+          "error",
+          "Verification Failed",
+          response.error || "Invalid verification code"
+        );
+        codeInput.select();
+      }
+    } catch (error) {
+      console.error("Error verifying code:", error);
+      this.showToast(
+        "error",
+        "Verification Error",
+        "Failed to verify code: " + error.message
+      );
+    } finally {
+      const submitBtn = document.getElementById("submit-code");
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fas fa-check"></i> Verify Code';
+      }
+    }
+  }
+
+  async submitPassword() {
+    const passwordInput = document.getElementById("two-factor-password");
+    if (!passwordInput) return;
+    
+    const password = passwordInput.value.trim();
+    if (!password) {
+      this.showToast(
+        "error",
+        "Missing Password",
+        "Please enter your 2FA password"
+      );
+      passwordInput.focus();
+      return;
+    }
+    
+    try {
+      const submitBtn = document.getElementById("submit-password");
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML =
+          '<i class="fas fa-spinner fa-spin"></i> Authenticating...';
+      }
+      
+      const response = await this.apiRequest("POST", "/api/sticker/verify-password", { password });
+      
+      if (response.success) {
+        this.pendingPassword = false;
+        this.hideModal();
+        this.updateTelegramStatus("connected");
+        this.saveSettings();
+        this.showToast(
+          "success",
+          "Connected",
+          "Successfully connected to Telegram"
+        );
+      } else {
+        this.showToast(
+          "error",
+          "Authentication Failed",
+          response.error || "Invalid password"
+        );
+        passwordInput.select();
+      }
+    } catch (error) {
+      console.error("Error verifying password:", error);
+      this.showToast(
+        "error",
+        "Authentication Error",
+        "Failed to verify password: " + error.message
+      );
+    } finally {
+      const submitBtn = document.getElementById("submit-password");
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fas fa-key"></i> Authenticate';
+      }
+    }
+  }
+
+  async addImages() {
+    try {
+      const files = await window.electronAPI.selectFiles({
+        filters: [
+          { name: "Image Files", extensions: ["png", "jpg", "jpeg", "webp"] },
+          { name: "All Files", extensions: ["*"] },
+        ],
+      });
+      
+      if (!files || files.length === 0) {
+        return;
+      }
+      
+      let addedCount = 0;
+      let skippedCount = 0;
+      
+      files.forEach((file) => {
+        if (this.mediaFiles.length >= 120) {
+          skippedCount++;
+          return;
+        }
+        
+        if (!this.mediaFiles.some((f) => f.file_path === file)) {
+          this.mediaFiles.push({
+            file_path: file,
+            name: file.split(/[\\/]/).pop(),
+            type: "image",
+            emoji: "😀",
+            status: "pending",
+          });
+          addedCount++;
+        } else {
+          skippedCount++;
+        }
+      });
+      
+      this.updateMediaFileList();
+      
+      if (addedCount > 0) {
+        this.showToast(
+          "success",
+          "Images Added",
+          `Added ${addedCount} image files`
+        );
+      }
+      
+      if (skippedCount > 0) {
+        this.showToast(
+          "warning",
+          "Some Files Skipped",
+          `${skippedCount} files were skipped (duplicates or limit reached)`
+        );
+      }
+    } catch (error) {
+      console.error("Error adding images:", error);
+      this.showToast(
+        "error",
+        "Error",
+        "Failed to add image files: " + error.message
+      );
+    }
+  }
+
+  async addStickerVideos() {
+    try {
+      const files = await window.electronAPI.selectFiles({
+        filters: [
+          { name: "Video Files", extensions: ["webm"] },
+          { name: "All Files", extensions: ["*"] },
+        ],
+      });
+      
+      if (!files || files.length === 0) {
+        return;
+      }
+      
+      let addedCount = 0;
+      let skippedCount = 0;
+      
+      files.forEach((file) => {
+        if (this.mediaFiles.length >= 120) {
+          skippedCount++;
+          return;
+        }
+        
+        if (!this.mediaFiles.some((f) => f.file_path === file)) {
+          this.mediaFiles.push({
+            file_path: file,
+            name: file.split(/[\\/]/).pop(),
+            type: "video",
+            emoji: "😀",
+            status: "pending",
+          });
+          addedCount++;
+        } else {
+          skippedCount++;
+        }
+      });
+      
+      this.updateMediaFileList();
+      
+      if (addedCount > 0) {
+        this.showToast(
+          "success",
+          "Videos Added",
+          `Added ${addedCount} video files`
+        );
+      }
+      
+      if (skippedCount > 0) {
+        this.showToast(
+          "warning",
+          "Some Files Skipped",
+          `${skippedCount} files were skipped (duplicates or limit reached)`
+        );
+      }
+    } catch (error) {
+      console.error("Error adding videos:", error);
+      this.showToast(
+        "error",
+        "Error",
+        "Failed to add video files: " + error.message
+      );
+    }
+  }
+
+  clearMedia() {
+    if (this.mediaFiles.length === 0) {
+      this.showToast("info", "Already Empty", "No media files to clear");
+      return;
+    }
+    
+    const count = this.mediaFiles.length;
+    this.mediaFiles = [];
+    this.updateMediaFileList();
+    this.showToast("info", "Cleared", `Removed ${count} media files`);
+  }
+
+  updateMediaFileList() {
+    const container = document.getElementById("media-file-list");
+    if (!container) return;
+    
+    if (this.mediaFiles.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <i class="fas fa-images"></i>
+          <p>No media files selected</p>
+          <small>Add images or videos for your sticker pack or drag & drop files here</small>
+        </div>
+      `;
+      return;
+    }
+    
+    container.innerHTML = this.mediaFiles
+      .map((file, index) => {
+        const icon = file.type === "video" ? "fas fa-video" : "fas fa-image";
+        const statusClass = file.status || "pending";
+        const statusIcon = this.getMediaStatusIcon(file.status);
+        
+        return `
+          <div class="media-item ${statusClass}" data-index="${index}">
+            <div class="media-info">
+              <div class="media-icon">
+                <i class="${icon}"></i>
+              </div>
+              <div class="media-details">
+                <div class="media-name" title="${file.file_path}">${file.name}</div>
+                <div class="media-type">${file.type.toUpperCase()}</div>
+                ${file.status && file.status !== "pending"
+                  ? `<div class="media-status"><i class="${statusIcon}"></i> ${this.getStatusText(file.status)}</div>`
+                  : ""
+                }
+              </div>
+            </div>
+            <div class="media-actions">
+              <button class="btn btn-sm btn-secondary emoji-btn" onclick="app.editEmoji(${index})" 
+                      title="Change Emoji">
+                ${file.emoji}
+              </button>
+              <button class="btn btn-sm btn-info" onclick="app.showMediaInfo(${index})" title="File Info">
+                <i class="fas fa-info"></i>
+              </button>
+              <button class="btn btn-sm btn-danger" onclick="app.removeMediaFile(${index})" 
+                      title="Remove File">
+                <i class="fas fa-trash"></i>
+              </button>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+    
+    // Update media counter
+    const counter = document.getElementById("media-counter");
+    if (counter) {
+      counter.textContent = this.mediaFiles.length;
+    }
+    
+    // Update progress if in progress
+    this.updateStickerProgress();
+  }
+
+  getMediaStatusIcon(status) {
+    const iconMap = {
+      pending: "fas fa-clock",
+      uploading: "fas fa-upload",
+      processing: "fas fa-cog fa-spin",
+      completed: "fas fa-check text-success",
+      error: "fas fa-exclamation-triangle text-danger",
+    };
+    return iconMap[status] || "fas fa-clock";
+  }
+
+  getStatusText(status) {
+    const textMap = {
+      pending: "Waiting",
+      uploading: "Uploading",
+      processing: "Processing",
+      completed: "Completed",
+      error: "Error",
+    };
+    return textMap[status] || status;
+  }
+
+  showMediaInfo(index) {
+    const file = this.mediaFiles[index];
+    if (!file) return;
+    
+    const info = `
+      <strong>File:</strong> ${file.name}<br>
+      <strong>Path:</strong> ${file.file_path}<br>
+      <strong>Type:</strong> ${file.type}<br>
+      <strong>Emoji:</strong> ${file.emoji}<br>
+      <strong>Status:</strong> ${file.status || "Pending"}<br>
+    `;
+    
+    this.showInfoModal("Media File Information", info);
+  }
+
+  removeMediaFile(index) {
+    if (index < 0 || index >= this.mediaFiles.length) return;
+    
+    const file = this.mediaFiles[index];
+    this.mediaFiles.splice(index, 1);
+    this.updateMediaFileList();
+    this.showToast("info", "File Removed", `Removed ${file.name}`);
+  }
+
+  editEmoji(index) {
+    if (index < 0 || index >= this.mediaFiles.length) return;
+    
+    this.currentEmojiIndex = index;
+    const currentEmoji = this.mediaFiles[index].emoji;
+    const fileName = this.mediaFiles[index].name;
+    const emojiInput = document.getElementById("emoji-input");
+    const filenameDisplay = document.getElementById("emoji-filename");
+    
+    if (emojiInput) emojiInput.value = currentEmoji;
+    if (filenameDisplay) filenameDisplay.textContent = fileName;
+    
+    this.showModal("emoji-modal");
+    
+    setTimeout(() => {
+      if (emojiInput) {
+        emojiInput.focus();
+        emojiInput.select();
+      }
+    }, 100);
+  }
+
+  saveEmoji() {
+    if (this.currentEmojiIndex === null || this.currentEmojiIndex < 0) return;
+    
+    const emojiInput = document.getElementById("emoji-input");
+    if (!emojiInput) return;
+    
+    const newEmoji = emojiInput.value.trim();
+    if (!newEmoji) {
+      this.showToast("warning", "Empty Emoji", "Please enter an emoji");
+      emojiInput.focus();
+      return;
+    }
+    
+    if (this.currentEmojiIndex < this.mediaFiles.length) {
+      this.mediaFiles[this.currentEmojiIndex].emoji = newEmoji;
+      this.updateMediaFileList();
+      this.showToast(
+        "success",
+        "Emoji Updated",
+        `Emoji updated to ${newEmoji}`
+      );
+    }
+    
+    this.hideModal();
+    this.currentEmojiIndex = null;
+  }
+
+  async createStickerPack() {
+    if (!this.telegramConnected) {
+      this.showToast(
+        "error",
+        "Not Connected",
+        "Please connect to Telegram first"
+      );
+      return;
+    }
+    
+    if (this.mediaFiles.length === 0) {
+      this.showToast("error", "No Media", "Please add media files first");
+      return;
+    }
+    
+    const packNameInput = document.getElementById("pack-name");
+    if (!packNameInput) {
+      this.showToast("error", "Missing Input", "Pack name input not found");
+      return;
+    }
+    
+    const packName = packNameInput.value.trim();
+    if (!packName) {
+      this.showToast("error", "Missing Pack Name", "Please enter a pack name");
+      packNameInput.focus();
+      return;
+    }
+    
+    // Validate pack name
+    if (packName.length < 3) {
+      this.showToast(
+        "error",
+        "Pack Name Too Short",
+        "Pack name must be at least 3 characters"
+      );
+      packNameInput.focus();
+      return;
+    }
+    
+    if (packName.length > 64) {
+      this.showToast(
+        "error",
+        "Pack Name Too Long",
+        "Pack name must be less than 64 characters"
+      );
+      packNameInput.focus();
+      return;
+    }
+    
+    const stickerTypeInputs = document.querySelectorAll(
+      'input[name="sticker-type"]'
+    );
+    let stickerType = "video";
+    
+    for (const input of stickerTypeInputs) {
+      if (input.checked) {
+        stickerType = input.value;
+        break;
+      }
+    }
+    
+    // Validate media files match sticker type
+    const incompatibleFiles = this.mediaFiles.filter((f) => {
+      if (stickerType === "video" && f.type !== "video") return true;
+      if (stickerType === "image" && f.type !== "image") return true;
+      return false;
+    });
+    
+    if (incompatibleFiles.length > 0) {
+      const proceed = confirm(
+        `${incompatibleFiles.length} files don't match the sticker type (${stickerType}). Continue with compatible files only?`
+      );
+      if (!proceed) return;
+    }
+    
+    try {
+      const processId = "sticker_" + Date.now();
+      this.showLoadingOverlay("Starting sticker pack creation...");
+      
+      const response = await this.apiRequest("POST", "/api/sticker/create-pack", {
+        pack_name: packName,
+        sticker_type: stickerType,
+        media_files: this.mediaFiles.filter((f) => {
+          if (stickerType === "video") return f.type === "video";
+          if (stickerType === "image") return f.type === "image";
+          return true;
+        }),
+        process_id: processId,
+      });
+      
+      this.hideLoadingOverlay();
+      
+      if (response.success) {
+        this.showToast(
+          "success",
+          "Creation Started",
+          "Sticker pack creation started"
+        );
+        
+        const createBtn = document.getElementById("create-sticker-pack");
+        if (createBtn) {
+          createBtn.disabled = true;
+          createBtn.innerHTML =
+            '<i class="fas fa-spinner fa-spin"></i> Creating Pack...';
+        }
+        
+        // Start monitoring progress
+        this.startStickerProgressMonitoring(processId);
+      } else {
+        this.showToast(
+          "error",
+          "Creation Failed",
+          response.error || "Failed to start creation"
+        );
+      }
+    } catch (error) {
+      this.hideLoadingOverlay();
+      console.error("Error creating sticker pack:", error);
+      this.showToast(
+        "error",
+        "Creation Error",
+        "Failed to create sticker pack: " + error.message
+      );
+    }
+  }
+
+  startStickerProgressMonitoring(processId) {
+    if (this.stickerProgressInterval) {
+      clearInterval(this.stickerProgressInterval);
+    }
+    
+    this.stickerProgressInterval = setInterval(async () => {
+      try {
+        const response = await this.apiRequest("GET", `/api/conversion-progress/${processId}`);
+        
+        if (response.success) {
+          const progress = response.data.progress;
+          this.updateStickerProgressDisplay(progress);
+          
+          // Update individual media file statuses
+          if (progress.current_file) {
+            const fileIndex = this.mediaFiles.findIndex(
+              (f) =>
+                f.name === progress.current_file ||
+                f.file_path.includes(progress.current_file)
+            );
+            if (fileIndex >= 0) {
+              this.mediaFiles[fileIndex].status =
+                progress.status || "processing";
+            }
+          }
+          
+          if (progress.status === "completed") {
+            clearInterval(this.stickerProgressInterval);
+            this.onStickerProcessCompleted(true, progress);
+          } else if (progress.status === "error") {
+            clearInterval(this.stickerProgressInterval);
+            this.onStickerProcessCompleted(false, progress);
+          }
+        } else {
+          console.error("Sticker progress monitoring failed:", response.error);
+          clearInterval(this.stickerProgressInterval);
+          this.onStickerProcessCompleted(false, { error: response.error });
+        }
+      } catch (error) {
+        console.error("Error monitoring sticker progress:", error);
+        clearInterval(this.stickerProgressInterval);
+        this.onStickerProcessCompleted(false, { error: error.message });
+      }
+    }, 2000);
+  }
+
+  updateStickerProgressDisplay(progress) {
+    const statusElement = document.getElementById("sticker-status");
+    const progressBar = document.getElementById("sticker-progress-bar");
+    const progressText = document.getElementById("sticker-progress-text");
+    
+    if (statusElement && progress.current_stage) {
+      statusElement.textContent = progress.current_stage;
+    }
+    
+    if (progressBar && progress.progress !== undefined) {
+      progressBar.style.width = `${progress.progress}%`;
+    }
+    
+    if (
+      progressText &&
+      progress.completed_files !== undefined &&
+      progress.total_files !== undefined
+    ) {
+      progressText.textContent = `${progress.completed_files}/${progress.total_files} files processed`;
+    }
+  }
+
+  updateStickerProgress() {
+    // Update progress based on media file statuses
+    const completed = this.mediaFiles.filter(
+      (f) => f.status === "completed"
+    ).length;
+    const total = this.mediaFiles.length;
+    
+    const progressBar = document.getElementById("sticker-progress-bar");
+    const progressText = document.getElementById("sticker-progress-text");
+    
+    if (progressBar && total > 0) {
+      const percentage = (completed / total) * 100;
+      progressBar.style.width = `${percentage}%`;
+    }
+    
+    if (progressText) {
+      progressText.textContent = `${completed}/${total} files processed`;
+    }
+  }
+
+  onStickerProcessCompleted(success, progressData) {
+    const createBtn = document.getElementById("create-sticker-pack");
+    
+    // Reset button
+    if (createBtn) {
+      createBtn.disabled = false;
+      createBtn.innerHTML = '<i class="fas fa-rocket"></i> Create Sticker Pack';
+    }
+    
+    // Mark all files as completed or error
+    this.mediaFiles.forEach((file) => {
+      if (file.status !== "completed") {
+        file.status = success ? "completed" : "error";
+      }
+    });
+    
+    this.updateMediaFileList();
+    
+    // Show completion notification
+    if (success) {
+      this.showToast(
+        "success",
+        "Pack Created",
+        "Sticker pack created successfully!"
+      );
+      this.playNotificationSound();
+      this.showSystemNotification(
+        "Sticker Pack Created",
+        "Your sticker pack has been published successfully!"
+      );
+      
+      // Show pack link if available
+      if (progressData.pack_link) {
+        this.showPackLinkModal(progressData.pack_link);
+      }
+    } else {
+      this.showToast(
+        "error",
+        "Creation Failed",
+        `Sticker pack creation failed: ${progressData.error || "Unknown error"}`
+      );
+    }
+    
+    // Clear progress
+    const statusElement = document.getElementById("sticker-status");
+    if (statusElement) {
+      statusElement.textContent = success
+        ? "Pack created successfully!"
+        : "Pack creation failed";
+    }
+  }
+
+  showPackLinkModal(packLink) {
+    const modalHtml = `
+      <div class="modal-header">
+        <h3><i class="fas fa-check-circle text-success"></i> Sticker Pack Created!</h3>
+      </div>
+      <div class="modal-body">
+        <p>Your sticker pack has been created successfully!</p>
+        <div class="pack-link-container">
+          <label>Pack Link:</label>
+          <input type="text" class="form-control" value="${packLink}" readonly id="pack-link-input">
+        </div>
+        <p class="help-text">Share this link with others to let them add your sticker pack.</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="app.copyPackLink()">
+          <i class="fas fa-copy"></i> Copy Link
+        </button>
+        <button class="btn btn-primary" onclick="app.openPackLink('${packLink}')">
+          <i class="fas fa-external-link-alt"></i> Open Pack
+        </button>
+        <button class="btn btn-success" onclick="app.hideModal()">
+          <i class="fas fa-check"></i> Done
+        </button>
+      </div>
+    `;
+    
+    const modal = document.getElementById("info-modal");
+    if (modal) {
+      modal.innerHTML = modalHtml;
+      this.showModal("info-modal");
+    }
+  }
+
+  copyPackLink() {
+    const input = document.getElementById("pack-link-input");
+    if (input) {
+      input.select();
+      document.execCommand("copy");
+      this.showToast("success", "Copied", "Pack link copied to clipboard!");
+    }
+  }
+
+  openPackLink(link) {
+    window.electronAPI.openExternal(link);
+    this.showToast("info", "Opening", "Opening sticker pack in Telegram...");
+  }
+
+  // =============================================
+  // UTILITY METHODS
+  // =============================================
+  showModal(modalId) {
+    const overlay = document.getElementById("modal-overlay");
+    const modal = document.getElementById(modalId);
+    
+    if (overlay && modal) {
+      overlay.classList.add("active");
+      modal.style.display = "block";
+      
+      // Focus first input if available
+      const firstInput = modal.querySelector("input, textarea, select");
+      if (firstInput) {
+        setTimeout(() => firstInput.focus(), 100);
+      }
+    }
+  }
+
+  hideModal() {
+    const overlay = document.getElementById("modal-overlay");
+    if (overlay) {
+      overlay.classList.remove("active");
+    }
+    
+    const modals = document.querySelectorAll(".modal");
+    modals.forEach((modal) => {
+      modal.style.display = "none";
+    });
+    
+    // Clear modal inputs
+    this.clearModalInputs();
+  }
+
+  clearModalInputs() {
+    const inputs = ["verification-code", "two-factor-password", "emoji-input"];
+    inputs.forEach((id) => {
+      const input = document.getElementById(id);
+      if (input) input.value = "";
+    });
+    this.currentEmojiIndex = null;
+  }
+
+  showInfoModal(title, content) {
+    const modalHtml = `
+      <div class="modal-header">
+        <h3><i class="fas fa-info-circle"></i> ${title}</h3>
+      </div>
+      <div class="modal-body">
+        <div class="info-content">${content}</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="app.hideModal()">
+          <i class="fas fa-check"></i> Close
+        </button>
+      </div>
+    `;
+    
+    const modal = document.getElementById("info-modal");
+    if (modal) {
+      modal.innerHTML = modalHtml;
+      this.showModal("info-modal");
+    }
+  }
+
+  showLoadingOverlay(message) {
+    const overlay = document.getElementById("loading-overlay");
+    const messageElement = document.getElementById("loading-message");
+    
+    if (overlay) {
+      overlay.classList.add("active");
+    }
+    
+    if (messageElement) {
+      messageElement.textContent = message || "Loading...";
+    }
+  }
+
+  hideLoadingOverlay() {
+    const overlay = document.getElementById("loading-overlay");
+    if (overlay) {
+      overlay.classList.remove("active");
+    }
+  }
+
+  showToast(type, title, message) {
+    const toastContainer = document.getElementById("toast-container");
+    if (!toastContainer) return;
+    
+    const toastId = "toast-" + Date.now();
+    const iconMap = {
+      success: "fas fa-check-circle",
+      error: "fas fa-times-circle",
+      warning: "fas fa-exclamation-triangle",
+      info: "fas fa-info-circle",
+    };
+    
+    const toast = document.createElement("div");
+    toast.className = `toast ${type}`;
+    toast.id = toastId;
+    
+    toast.innerHTML = `
+      <div class="toast-icon">
+        <i class="${iconMap[type]}"></i>
+      </div>
+      <div class="toast-content">
+        <div class="toast-title">${title}</div>
+        <div class="toast-message">${message}</div>
+      </div>
+      <button class="toast-close" onclick="document.getElementById('${toastId}').remove()">
+        <i class="fas fa-times"></i>
+      </button>
+    `;
+    
+    toastContainer.appendChild(toast);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+      const toastElement = document.getElementById(toastId);
+      if (toastElement) {
+        toastElement.style.animation = "slideOutRight 0.3s ease forwards";
+        setTimeout(() => toastElement.remove(), 300);
+      }
+    }, 5000);
+    
+    // Add click to dismiss
+    toast.addEventListener("click", () => {
+      toast.style.animation = "slideOutRight 0.3s ease forwards";
+      setTimeout(() => toast.remove(), 300);
+    });
+  }
+
+  playNotificationSound() {
+    if (localStorage.getItem("enable_sounds") === "true") {
+      try {
+        const audio = new Audio(
+          "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSyD0/PEfCwEKHnN8+OVSA0Oarrj58VdEw1Gne54fFkYkGo5UgkRuBsHJwFZ"
+        );
+        audio.volume = 0.3;
+        audio.play().catch(() => {}); // Ignore errors
+      } catch (error) {
+        // Ignore audio errors
+      }
+    }
+  }
+
+  showSystemNotification(title, body) {
+    if (
+      localStorage.getItem("enable_notifications") === "true" &&
+      "Notification" in window
+    ) {
+      if (Notification.permission === "granted") {
+        new Notification(title, {
+          body: body,
+          icon: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3Njape.org5vuPBoAAANCSURBVFiFtZc9aBRBFMd/M2uC",
+        });
+      } else if (Notification.permission !== "denied") {
+        Notification.requestPermission().then((permission) => {
+          if (permission === "granted") {
+            new Notification(title, { body: body });
+          }
+        });
+      }
+    }
+  }
+
+  toggleTheme() {
+    const currentTheme = document.documentElement.getAttribute("data-theme");
+    const newTheme = currentTheme === "dark" ? "light" : "dark";
+    this.applyTheme(newTheme);
+    localStorage.setItem("app_theme", newTheme);
+  }
+
+  applyTheme(theme) {
+    document.documentElement.setAttribute("data-theme", theme);
+    const themeToggle = document.getElementById("theme-toggle");
+    if (themeToggle) {
+      const icon = themeToggle.querySelector("i");
+      if (icon) {
+        icon.className = theme === "dark" ? "fas fa-sun" : "fas fa-moon";
+      }
+    }
+  }
+
+  async updateSystemInfo() {
+    // Update Backend Status
+    const backendStatusEl = document.getElementById("backend-status-text");
+    if (backendStatusEl) {
+      try {
+        const health = await this.apiRequest("GET", "/api/health");
+        if (health && health.success) {
+          backendStatusEl.textContent = "Connected";
+          backendStatusEl.style.color = "#28a745";
+        } else {
+          backendStatusEl.textContent = "Disconnected";
+          backendStatusEl.style.color = "#dc3545";
+        }
+      } catch (err) {
+        backendStatusEl.textContent = "Disconnected";
+        backendStatusEl.style.color = "#dc3545";
+      }
+    }
+    
+    // Update FFmpeg Status - only if backend is connected
+    const ffmpegStatusEl = document.getElementById("ffmpeg-status");
+    if (ffmpegStatusEl) {
+      try {
+        // Check if FFmpeg is available using a simpler method
+        ffmpegStatusEl.textContent = "Available"; // Assume available if backend is running
+        ffmpegStatusEl.style.color = "#28a745";
+      } catch {
+        ffmpegStatusEl.textContent = "Unknown";
+        ffmpegStatusEl.style.color = "#ffc107";
+      }
+    }
+    
+    // Update Python Version - hardcode for now
+    const pythonVersionEl = document.getElementById("python-version");
+    if (pythonVersionEl) {
+      pythonVersionEl.textContent = "3.x"; // Default value
+    }
+    
+    // Update memory usage
+    this.monitorPerformance();
+    
+    // Update file counts
+    const videoCountElement = document.getElementById("video-file-count");
+    const mediaCountElement = document.getElementById("media-file-count");
+    
+    if (videoCountElement)
+      videoCountElement.textContent = this.videoFiles.length;
+    if (mediaCountElement)
+      mediaCountElement.textContent = this.mediaFiles.length;
+  }
+
+  async exportSettings() {
+    try {
+      const settings = {
+        telegram_api_id: localStorage.getItem("telegram_api_id") || "",
+        telegram_api_hash: localStorage.getItem("telegram_api_hash") || "",
+        telegram_phone: localStorage.getItem("telegram_phone") || "",
+        video_output_dir: localStorage.getItem("video_output_dir") || "",
+        quality_setting: localStorage.getItem("quality_setting") || "80",
+        auto_convert: localStorage.getItem("auto_convert") || "false",
+        enable_sounds: localStorage.getItem("enable_sounds") || "true",
+        enable_notifications:
+          localStorage.getItem("enable_notifications") || "true",
+        app_theme: localStorage.getItem("app_theme") || "dark",
+        export_date: new Date().toISOString(),
+      };
+      
+      const dataStr = JSON.stringify(settings, null, 2);
+      const dataBlob = new Blob([dataStr], { type: "application/json" });
+      
+      // Create download link
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(dataBlob);
+      link.download = `telegram-utilities-settings-${new Date()
+        .toISOString()
+        .slice(0, 10)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      this.showToast(
+        "success",
+        "Settings Exported",
+        "Settings exported successfully"
+      );
+    } catch (error) {
+      console.error("Error exporting settings:", error);
+      this.showToast(
+        "error",
+        "Export Failed",
+        "Failed to export settings: " + error.message
+      );
+    }
+  }
+
+  async importSettings() {
+    try {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".json";
+      
+      input.onchange = async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        try {
+          const text = await file.text();
+          const settings = JSON.parse(text);
+          
+          // Validate settings structure
+          const requiredFields = [
+            "telegram_api_id",
+            "telegram_api_hash",
+            "telegram_phone",
+          ];
+          const hasRequiredFields = requiredFields.some(
+            (field) => settings[field]
+          );
+          
+          if (!hasRequiredFields) {
+            throw new Error("Invalid settings file format");
+          }
+          
+          // Import settings
+          Object.keys(settings).forEach((key) => {
+            if (key !== "export_date" && settings[key] !== undefined) {
+              localStorage.setItem(key, settings[key]);
+            }
+          });
+          
+          // Reload settings
+          this.loadSettings();
+          this.loadAdvancedSettings();
+          
+          // Apply theme
+          if (settings.app_theme) {
+            this.applyTheme(settings.app_theme);
+          }
+          
+          this.showToast(
+            "success",
+            "Settings Imported",
+            "Settings imported successfully"
+          );
+        } catch (error) {
+          console.error("Error importing settings:", error);
+          this.showToast(
+            "error",
+            "Import Failed",
+            "Failed to import settings: " + error.message
+          );
+        }
+      };
+      
+      input.click();
+    } catch (error) {
+      console.error("Error importing settings:", error);
+      this.showToast(
+        "error",
+        "Import Failed",
+        "Failed to import settings: " + error.message
+      );
+    }
+  }
+
+  clearApplicationData() {
+    const confirmMessage = `
+This will permanently delete:
+• All saved API credentials
+• Application settings and preferences  
+• Session data and cached files
+• File lists and progress data
+This action cannot be undone. Are you sure?
+        `;
+    
+    if (confirm(confirmMessage.trim())) {
+      try {
+        // Clear localStorage
+        const keysToKeep = ["app_theme"]; // Keep theme preference
+        const theme = localStorage.getItem("app_theme");
+        localStorage.clear();
+        if (theme) localStorage.setItem("app_theme", theme);
+        
+        // Reset application state
+        this.videoFiles = [];
+        this.mediaFiles = [];
+        this.currentVideoOutput = "";
+        this.telegramConnected = false;
+        this.pendingCode = false;
+        this.pendingPassword = false;
+        
+        // Clear form values
+        const formInputs = [
+          "api-id",
+          "api-hash",
+          "phone-number",
+          "video-output-dir",
+          "pack-name",
+        ];
+        formInputs.forEach((id) => {
+          const input = document.getElementById(id);
+          if (input) input.value = "";
+        });
+        
+        // Reset UI
+        this.updateVideoFileList();
+        this.updateMediaFileList();
+        this.updateTelegramStatus("disconnected");
+        
+        // Clear any active processes
+        this.stopProgressMonitoring();
+        
+        if (this.stickerProgressInterval) {
+          clearInterval(this.stickerProgressInterval);
+          this.stickerProgressInterval = null;
+        }
+        
+        // Clear backend session
+        this.apiRequest("POST", "/api/clear-session")
+          .then(() => {
+            console.log("Backend session cleared");
+          })
+          .catch(err => {
+            console.log("Failed to clear backend session:", err);
+          });
+        
+        this.showToast(
+          "success",
+          "Data Cleared",
+          "All application data has been cleared successfully"
+        );
+      } catch (error) {
+        console.error("Error clearing data:", error);
+        this.showToast(
+          "error",
+          "Clear Failed",
+          "Failed to clear some data: " + error.message
+        );
+      }
+    }
+  }
+
+  updateButtonStates() {
+    const startConversionBtn = document.getElementById("start-conversion");
+    const pauseConversionBtn = document.getElementById("pause-conversion");
+    const resumeConversionBtn = document.getElementById("resume-conversion");
+    const startHexEditBtn = document.getElementById("start-hex-edit");
+    const pauseHexEditBtn = document.getElementById("pause-hex-edit");
+    const resumeHexEditBtn = document.getElementById("resume-hex-edit");
+    
+    // Reset all buttons first
+    [startConversionBtn, pauseConversionBtn, resumeConversionBtn, 
+     startHexEditBtn, pauseHexEditBtn, resumeHexEditBtn].forEach(btn => {
+      if (btn) btn.style.display = "none";
+    });
+    
+    if (!this.currentOperation) {
+      // No operation running
+      if (startConversionBtn) {
+        startConversionBtn.style.display = "inline-flex";
+        startConversionBtn.disabled = false;
+        startConversionBtn.innerHTML = '<i class="fas fa-play"></i> Start Conversion';
+      }
+      
+      if (startHexEditBtn) {
+        startHexEditBtn.style.display = "inline-flex";
+        startHexEditBtn.disabled = false;
+        startHexEditBtn.innerHTML = '<i class="fas fa-edit"></i> Hex Edit';
+        startHexEditBtn.style.opacity = '1';
+      }
+    } else if (this.currentOperation === "converting") {
+      // Conversion running
+      if (startHexEditBtn) {
+        startHexEditBtn.style.display = "inline-flex";
+        startHexEditBtn.disabled = true;
+      }
+      
+      if (this.isPaused) {
+        if (resumeConversionBtn) resumeConversionBtn.style.display = "inline-flex";
+      } else {
+        if (pauseConversionBtn) pauseConversionBtn.style.display = "inline-flex";
+      }
+    } else if (this.currentOperation === "hexediting") {
+      // Hex editing running
+      if (startConversionBtn) {
+        startConversionBtn.style.display = "inline-flex";
+        startConversionBtn.disabled = true;
+      }
+      
+      if (this.isPaused) {
+        if (resumeHexEditBtn) resumeHexEditBtn.style.display = "inline-flex";
+      } else {
+        if (pauseHexEditBtn) pauseHexEditBtn.style.display = "inline-flex";
+      }
+    }
+  }
+
+  async pauseOperation() {
+    if (!this.currentProcessId || this.isPaused) return;
+    
+    try {
+      const response = await this.apiRequest("POST", "/api/pause-operation", {
+        process_id: this.currentProcessId
+      });
+      
+      if (response.success) {
+        this.isPaused = true;
+        
+        // Update UI for pause state
+        const pauseBtn = document.getElementById("pause-conversion");
+        const resumeBtn = document.getElementById("resume-conversion");
+        
+        if (pauseBtn) {
+          pauseBtn.style.display = 'none';
+        }
+        
+        if (resumeBtn) {
+          resumeBtn.style.display = 'inline-block';
+          resumeBtn.disabled = false;
+        }
+        
+        this.updateButtonStates();
+        this.showToast("info", "Operation Paused", "The current operation has been paused");
+      }
+    } catch (error) {
+      console.error("Error pausing operation:", error);
+      this.showToast("error", "Pause Failed", "Failed to pause the operation");
+    }
+  }
+
+  async resumeOperation() {
+    if (!this.currentProcessId || !this.isPaused) return;
+    
+    try {
+      const response = await this.apiRequest("POST", "/api/resume-operation", {
+        process_id: this.currentProcessId
+      });
+      
+      if (response.success) {
+        this.isPaused = false;
+        
+        // Update UI for resume state
+        const pauseBtn = document.getElementById("pause-conversion");
+        const resumeBtn = document.getElementById("resume-conversion");
+        
+        if (pauseBtn) {
+          pauseBtn.style.display = 'inline-block';
+          pauseBtn.disabled = false;
+        }
+        
+        if (resumeBtn) {
+          resumeBtn.style.display = 'none';
+        }
+        
+        this.updateButtonStates();
+        this.showToast("info", "Operation Resumed", "The operation has been resumed");
+      }
+    } catch (error) {
+      console.error("Error resuming operation:", error);
+      this.showToast("error", "Resume Failed", "Failed to resume the operation");
+    }
+  }
+
+  updateConversionButtons(isConverting, isHexEditing) {
+    const startBtn = document.getElementById("start-conversion");
+    const hexBtn = document.getElementById("start-hex-edit");
+    const pauseBtn = document.getElementById("pause-conversion");
+    const resumeBtn = document.getElementById("resume-conversion");
+    
+    if (isConverting) {
+      if (startBtn) {
+        startBtn.disabled = true;
+        startBtn.innerHTML = '<i class="fas fa-cog fa-spin"></i> Converting...';
+      }
+      
+      if (hexBtn) {
+        hexBtn.disabled = true;
+        hexBtn.style.opacity = '0.5';
+      }
+      
+      if (this.isPaused) {
+        if (pauseBtn) pauseBtn.style.display = 'none';
+        if (resumeBtn) resumeBtn.style.display = 'inline-block';
+      } else {
+        if (pauseBtn) pauseBtn.style.display = 'inline-block';
+        if (resumeBtn) resumeBtn.style.display = 'none';
+      }
+    } else if (isHexEditing) {
+      if (startBtn) {
+        startBtn.disabled = true;
+        startBtn.style.opacity = '0.5';
+      }
+      
+      if (hexBtn) {
+        hexBtn.disabled = true;
+        hexBtn.innerHTML = '<i class="fas fa-cog fa-spin"></i> Hex Editing...';
+      }
+      
+      if (this.isPaused) {
+        if (pauseBtn) pauseBtn.style.display = 'none';
+        if (resumeBtn) resumeBtn.style.display = 'inline-block';
+      } else {
+        if (pauseBtn) pauseBtn.style.display = 'inline-block';
+        if (resumeBtn) resumeBtn.style.display = 'none';
+      }
+    }
+  }
+
+  // Initialize start time for uptime calculation
+  startTime = new Date();
+
+  async runBenchmark() {
+    const benchmarkBtn = document.getElementById('benchmark-btn');
+    const benchmarkResults = document.getElementById('benchmark-results');
+    const benchmarkContent = document.getElementById('benchmark-content');
+    
+    // Disable button and show loading
+    benchmarkBtn.disabled = true;
+    benchmarkBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running Benchmark...';
+    
+    // Clear previous results
+    benchmarkContent.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin fa-2x"></i><br>Running performance tests...</div>';
+    benchmarkResults.style.display = 'block';
+    
+    try {
+      const response = await this.apiRequest('POST', '/api/benchmark', {});
+      
+      if (response.success && response.results) {
+        const results = response.results;
+        
+        // Format and display results
+        let html = '<div class="benchmark-summary">';
+        
+        // CPU Results
+        if (results.summary && results.summary.cpu) {
+          const cpu = results.summary.cpu;
+          html += `
+            <div class="mb-3">
+              <h6><i class="fas fa-microprocessor"></i> CPU Performance</h6>
+              <div class="row">
+                <div class="col-6">
+                  <small class="text-muted">Avg Time:</small><br>
+                  <strong>${cpu.avg_conversion_time}s</strong>
+                </div>
+                <div class="col-6">
+                  <small class="text-muted">Speed:</small><br>
+                  <strong>${cpu.avg_speed_multiplier}x</strong>
+                </div>
+                <div class="col-6">
+                  <small class="text-muted">FPS:</small><br>
+                  <strong>${cpu.avg_fps}</strong>
+                </div>
+                <div class="col-6">
+                  <small class="text-muted">CPU Usage:</small><br>
+                  <strong>${cpu.avg_cpu_usage}%</strong>
+                </div>
+              </div>
+            </div>`;
+        }
+        
+        // GPU Results
+        if (results.summary && results.summary.gpu) {
+          const gpu = results.summary.gpu;
+          html += `
+            <div class="mb-3">
+              <h6><i class="fas fa-tv"></i> GPU Performance</h6>
+              <div class="row">
+                <div class="col-6">
+                  <small class="text-muted">Avg Time:</small><br>
+                  <strong>${gpu.avg_conversion_time}s</strong>
+                </div>
+                <div class="col-6">
+                  <small class="text-muted">Speed:</small><br>
+                  <strong>${gpu.avg_speed_multiplier}x</strong>
+                </div>
+                <div class="col-6">
+                  <small class="text-muted">FPS:</small><br>
+                  <strong>${gpu.avg_fps}</strong>
+                </div>
+                <div class="col-6">
+                  <small class="text-muted">GPU Usage:</small><br>
+                  <strong>${gpu.avg_gpu_usage || 'N/A'}%</strong>
+                </div>
+              </div>
+            </div>`;
+        }
+        
+        // Comparison and Recommendation
+        if (results.summary) {
+          const speedup = results.summary.speedup;
+          const recommendation = results.summary.recommendation;
+          
+          html += '<hr>';
+          
+          if (speedup) {
+            const speedupClass = speedup > 1 ? 'text-success' : 'text-warning';
+            html += `<div class="mb-2">
+              <strong>GPU Speedup:</strong> 
+              <span class="${speedupClass}">${speedup}x ${speedup > 1 ? 'faster' : 'slower'}</span>
+            </div>`;
+          }
+          
+          html += `<div class="alert ${recommendation === 'GPU' ? 'alert-success' : 'alert-info'} mb-0">
+            <strong>Recommendation:</strong> Use ${recommendation} for best performance
+          </div>`;
+        }
+        
+        html += '</div>';
+        benchmarkContent.innerHTML = html;
+        
+        // Show success toast
+        this.showToast('Benchmark completed successfully!', 'success');
+        
+      } else {
+        benchmarkContent.innerHTML = `
+          <div class="alert alert-danger mb-0">
+            <i class="fas fa-exclamation-triangle"></i> 
+            Benchmark failed: ${response.error || 'Unknown error'}
+          </div>`;
+        this.showToast('Benchmark failed', 'error');
+      }
+      
+    } catch (error) {
+      console.error('Benchmark error:', error);
+      benchmarkContent.innerHTML = `
+        <div class="alert alert-danger mb-0">
+          <i class="fas fa-exclamation-triangle"></i> 
+          Failed to run benchmark: ${error.message}
+        </div>`;
+      this.showToast('Failed to run benchmark', 'error');
+    } finally {
+      // Re-enable button
+      benchmarkBtn.disabled = false;
+      benchmarkBtn.innerHTML = '<i class="fas fa-tachometer-alt"></i> Run Benchmark';
+    }
+  }
+}
+
+// Initialize the application
+const app = new TelegramUtilities();
+
+// Make app globally available for onclick handlers
+window.app = app;
+
+// Additional global functions for inline event handlers
+window.removeVideoFile = (index) => app.removeVideoFile(index);
+window.removeMediaFile = (index) => app.removeMediaFile(index);
+window.editEmoji = (index) => app.editEmoji(index);
+window.showFileInfo = (index) => app.showFileInfo(index);
+window.showMediaInfo = (index) => app.showMediaInfo(index);
+
+// Handle page visibility changes
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    // Refresh status when page becomes visible
+    app.checkBackendStatus();
+    app.updateSystemInfo();
+  }
+});
+
+// Handle window resize
+window.addEventListener("resize", () => {
+  // Adjust layout if needed
+  app.updateVideoFileList();
+  app.updateMediaFileList();
+});
+
+// Handle before unload
+window.addEventListener("beforeunload", (event) => {
+  if (app.currentProcessId || app.stickerProgressInterval) {
+    event.preventDefault();
+    event.returnValue =
+      "Processing is in progress. Are you sure you want to leave?";
+    return event.returnValue;
+  }
+});
+
+// Global click handler for debugging
+document.addEventListener("click", (event) => {
+  console.log("🖱️ Global click detected:", {
+    target: event.target,
+    id: event.target.id,
+    className: event.target.className,
+    tagName: event.target.tagName
+  });
+});
+
+console.log("Telegram Utilities application loaded successfully!");

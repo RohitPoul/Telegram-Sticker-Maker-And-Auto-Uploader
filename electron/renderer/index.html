@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Telegram Utilities - Advanced Video Converter & Sticker Bot</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="app-container">
+      <!-- Header -->
+      <header class="app-header">
+        <div class="header-content">
+          <div class="logo">
+            <i class="fas fa-paper-plane"></i>
+            <h1>Telegram Utilities</h1>
+          </div>
+          <div class="status-indicators">
+            <div id="backend-status" class="status-item disconnected">
+              <i class="fas fa-circle"></i>
+              <span id="backend-status-text">Backend</span>
+            </div>
+            <div id="telegram-status" class="status-item disconnected">
+              <i class="fas fa-circle"></i>
+              <span>Telegram</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Navigation -->
+      <nav class="app-nav">
+        <button class="nav-item active" data-tab="video-converter">
+          <i class="fas fa-video"></i>
+          <span>Video Converter</span>
+        </button>
+        <button class="nav-item" data-tab="sticker-bot">
+          <i class="fas fa-robot"></i>
+          <span>Sticker Bot</span>
+        </button>
+        <button class="nav-item" data-tab="settings">
+          <i class="fas fa-cog"></i>
+          <span>Settings</span>
+        </button>
+      </nav>
+
+      <!-- Main Content -->
+      <main class="app-main">
+        <!-- Video Converter Tab -->
+        <div id="video-converter" class="tab-content active">
+          <div class="section-header">
+            <h2><i class="fas fa-video"></i> GPU-Accelerated Video Converter</h2>
+            <p>Convert videos to WebM format with precise size control and hex editing capabilities</p>
+          </div>
+
+          <div class="converter-grid">
+            <!-- File Management -->
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fas fa-folder-open"></i> File Management</h3>
+                <div class="file-count">
+                  <span id="video-file-count">0</span> files
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="file-controls">
+                  <button id="add-videos" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Add Videos
+                  </button>
+                  <button id="clear-videos" class="btn btn-secondary">
+                    <i class="fas fa-trash"></i> Clear All
+                  </button>
+                </div>
+                <div id="video-file-list" class="file-list">
+                  <div class="empty-state">
+                    <i class="fas fa-video"></i>
+                    <p>No videos selected</p>
+                    <small>Click "Add Videos" to get started</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Conversion Settings -->
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fas fa-cogs"></i> Conversion Settings</h3>
+              </div>
+              <div class="card-body">
+                <!-- Acceleration Mode Display -->
+                <div class="acceleration-mode">
+                  <div class="mode-header">
+                    <i class="fas fa-microchip"></i>
+                    <span>Acceleration Mode</span>
+                  </div>
+                  <div class="mode-status" id="acceleration-status">
+                    <span class="mode-badge" id="mode-badge">Detecting...</span>
+                    <small class="mode-details" id="mode-details"></small>
+                  </div>
+                  <div class="mode-actions" style="margin-top:8px; display:flex; gap:8px;">
+                    <button id="check-gpu" class="btn btn-sm btn-secondary"><i class="fas fa-sync"></i> Check GPU</button>
+                    <button id="install-gpu-support" class="btn btn-sm btn-primary" style="display:none;"><i class="fas fa-download"></i> Install GPU Support</button>
+                    <button id="benchmark-btn" class="btn btn-sm btn-info" onclick="app.runBenchmark()"><i class="fas fa-tachometer-alt"></i> Run Benchmark</button>
+                  </div>
+                  <!-- Benchmark Results -->
+                  <div id="benchmark-results" class="mt-3" style="display: none;">
+                    <div class="alert alert-info">
+                      <h6 class="alert-heading">Benchmark Results</h6>
+                      <div id="benchmark-content">
+                        <!-- Results will be populated here -->
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- System Stats Display -->
+                <div class="system-stats" id="system-stats">
+                  <div class="stats-row">
+                    <div class="stat-item">
+                      <i class="fas fa-microchip"></i>
+                      <span class="stat-label">CPU:</span>
+                      <span class="stat-value" id="cpu-usage">0%</span>
+                    </div>
+                    <div class="stat-item">
+                      <i class="fas fa-memory"></i>
+                      <span class="stat-label">RAM:</span>
+                      <span class="stat-value" id="ram-usage">0MB / 0MB</span>
+                    </div>
+                  </div>
+                  <div class="stats-row" id="gpu-stats-row" style="display: none;">
+                    <div class="stat-item">
+                      <i class="fas fa-desktop"></i>
+                      <span class="stat-label" id="gpu-label">GPU:</span>
+                      <span class="stat-value" id="gpu-name">Not detected</span>
+                    </div>
+                    <div class="stat-item">
+                      <i class="fas fa-tachometer-alt"></i>
+                      <span class="stat-label" id="vram-label">VRAM:</span>
+                      <span class="stat-value" id="gpu-memory">0MB / 0MB</span>
+                    </div>
+                  </div>
+                  <div class="stats-info" id="gpu-info" style="display: none;">
+                    <small id="gpu-details"></small>
+                  </div>
+                </div>
+                
+                <div class="form-group">
+                  <label for="video-output-dir">Output Directory</label>
+                  <div class="input-group">
+                    <input type="text" id="video-output-dir" class="form-control" 
+                           placeholder="Select output directory" readonly>
+                    <button id="browse-video-output" class="btn btn-secondary">
+                      <i class="fas fa-folder"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="conversion-actions">
+                  <div class="conversion-primary-actions">
+                    <button id="start-conversion" class="btn btn-large btn-success">
+                      <i class="fas fa-play"></i> Start Conversion
+                    </button>
+                    <button id="start-hex-edit" class="btn btn-large btn-warning">
+                      <i class="fas fa-edit"></i> Hex Edit
+                    </button>
+                  </div>
+                  <div class="conversion-control-actions">
+                    <button id="pause-conversion" class="btn btn-large btn-warning" style="display: none;">
+                      <i class="fas fa-pause"></i> Pause Conversion
+                    </button>
+                    <button id="resume-conversion" class="btn btn-large btn-success" style="display: none;">
+                      <i class="fas fa-play"></i> Resume Conversion
+                    </button>
+                    <button id="pause-hex-edit" class="btn btn-large btn-warning" style="display: none;">
+                      <i class="fas fa-pause"></i> Pause Hex Edit
+                    </button>
+                    <button id="resume-hex-edit" class="btn btn-large btn-success" style="display: none;">
+                      <i class="fas fa-play"></i> Resume Hex Edit
+                    </button>
+                  </div>
+                </div>
+
+                <div id="conversion-status" class="conversion-status">
+                  <span class="status-text">Ready</span>
+                  <span class="progress-text"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sticker Bot Tab -->
+        <div class="tab-content" id="sticker-bot">
+          <div class="section-header">
+            <h2><i class="fas fa-smile"></i> Telegram Sticker Bot</h2>
+            <p>
+              Automatically create Telegram sticker packs from your media files
+            </p>
+          </div>
+
+          <div class="sticker-grid">
+            <!-- Telegram Connection -->
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fas fa-telegram"></i> Telegram Connection</h3>
+                <div class="connection-status" id="telegram-connection-status">
+                  <i class="fas fa-circle text-danger"></i>
+                  <span>Disconnected</span>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="form-group">
+                  <label>API ID</label>
+                  <div class="input-group with-toggle">
+                    <input
+                      type="password"
+                      id="api-id"
+                      class="form-control"
+                      placeholder="Your Telegram API ID"
+                    />
+                    <div class="input-buttons">
+                      <button class="btn-input-action btn-paste" data-target="api-id" title="Paste from clipboard">
+                        <i class="fas fa-paste"></i>
+                      </button>
+                      <button class="btn-input-action btn-toggle-visibility" data-target="api-id" title="Toggle visibility">
+                        <i class="fas fa-eye-slash"></i>
+                      </button>
+                    </div>
+                  </div>
+                  <small class="help-text"
+                    >Get from
+                    <a href="https://my.telegram.org" target="_blank"
+                      >my.telegram.org</a
+                    ></small
+                  >
+                </div>
+                <div class="form-group">
+                  <label>API Hash</label>
+                  <div class="input-group with-toggle">
+                    <input
+                      type="password"
+                      id="api-hash"
+                      class="form-control"
+                      placeholder="Your Telegram API Hash"
+                    />
+                    <div class="input-buttons">
+                      <button class="btn-input-action btn-paste" data-target="api-hash" title="Paste from clipboard">
+                        <i class="fas fa-paste"></i>
+                      </button>
+                      <button class="btn-input-action btn-toggle-visibility" data-target="api-hash" title="Toggle visibility">
+                        <i class="fas fa-eye-slash"></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label>Phone Number</label>
+                  <div class="input-group with-toggle">
+                    <input
+                      type="password"
+                      id="phone-number"
+                      class="form-control"
+                      placeholder="+1234567890"
+                    />
+                    <div class="input-buttons">
+                      <button class="btn-input-action btn-paste" data-target="phone-number" title="Paste from clipboard">
+                        <i class="fas fa-paste"></i>
+                      </button>
+                      <button class="btn-input-action btn-toggle-visibility" data-target="phone-number" title="Toggle visibility">
+                        <i class="fas fa-eye-slash"></i>
+                      </button>
+                    </div>
+                  </div>
+                  <small class="help-text"
+                    >Include country code (e.g. +1, +44, +91)</small
+                  >
+                </div>
+                <button class="btn btn-primary btn-large" id="connect-telegram">
+                  <i class="fas fa-plug"></i> Connect to Telegram
+                </button>
+              </div>
+            </div>
+
+            <!-- Media Management -->
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fas fa-images"></i> Media Management</h3>
+                <div class="media-counter">
+                  <span id="media-counter">0 files</span>
+                  <small>/120 max</small>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="media-controls">
+                  <button class="btn btn-primary" id="add-images">
+                    <i class="fas fa-image"></i> Add Images
+                  </button>
+                  <button class="btn btn-primary" id="add-sticker-videos">
+                    <i class="fas fa-video"></i> Add Videos
+                  </button>
+                  <button class="btn btn-secondary" id="clear-media">
+                    <i class="fas fa-trash"></i> Clear All
+                  </button>
+                </div>
+                <div class="media-list" id="sticker-media-list">
+                  <div class="empty-state">
+                    <i class="fas fa-file-image"></i>
+                    <p>No media files selected</p>
+                    <small
+                      >Add images or videos for your sticker pack (max 120
+                      files)</small
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+    <div class="card">
+        <div class="card-header">
+          <h3><i class="fas fa-chart-line"></i> Creation Status</h3>
+      </div>
+      <div class="card-body">
+          <div id="sticker-status">Ready to create sticker pack</div>
+      </div>
+    </div>
+
+            <!-- Pack Configuration -->
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fas fa-box"></i> Pack Configuration</h3>
+              </div>
+              <div class="card-body">
+                <div class="form-group">
+                  <label>Pack Name</label>
+                  <input
+                    type="text"
+                    id="pack-name"
+                    class="form-control"
+                    placeholder="My Awesome Sticker Pack"
+                    maxlength="64"
+                  />
+                  <small class="help-text">Pack name (max 64 characters)</small>
+                </div>
+                <div class="form-group">
+                  <label>Sticker Type</label>
+                  <div class="radio-group">
+                    <label class="radio-item">
+                      <input
+                        type="radio"
+                        name="sticker-type"
+                        value="image"
+                        checked
+                      />
+                      <span><i class="fas fa-image"></i> Image Stickers</span>
+                    </label>
+                    <label class="radio-item">
+                      <input type="radio" name="sticker-type" value="video" />
+                      <span><i class="fas fa-video"></i> Video Stickers</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="pack-actions">
+                  <button
+                    class="btn btn-success btn-large"
+                    id="create-sticker-pack"
+                    disabled
+                  >
+                    <i class="fas fa-magic"></i> Create Sticker Pack
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sticker Progress Section -->
+          <div class="card" id="sticker-progress-section" style="display: none">
+            <div class="card-header">
+              <h3><i class="fas fa-magic"></i> Creating Sticker Pack</h3>
+              <button class="btn btn-danger btn-sm" id="cancel-sticker-process">
+                <i class="fas fa-stop"></i> Cancel
+              </button>
+            </div>
+            <div class="card-body">
+              <div class="progress-info">
+                <div class="current-file" id="sticker-current-file">
+                  Initializing...
+                </div>
+                <div class="progress-stats" id="sticker-progress-stats">
+                  0 / 0 stickers processed
+                </div>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill" id="sticker-progress-fill"></div>
+              </div>
+              <div class="progress-percentage" id="sticker-progress-percentage">
+                0%
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div class="tab-content" id="settings">
+          <div class="section-header">
+            <h2><i class="fas fa-cog"></i> Application Settings</h2>
+            <p>Configure application preferences and view system information</p>
+          </div>
+
+          <div class="settings-grid">
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fas fa-info-circle"></i> System Information</h3>
+              </div>
+              <div class="card-body">
+                <div class="info-item">
+                  <label>Application Version</label>
+                  <span>1.0.0</span>
+                </div>
+                <div class="info-item">
+                  <label>Backend Status</label>
+                  <span id="backend-status-text">Checking...</span>
+                </div>
+                <div class="info-item">
+                  <label>FFmpeg Available</label>
+                  <span id="ffmpeg-status">Checking...</span>
+                </div>
+                <div class="info-item">
+                  <label>Python Version</label>
+                  <span id="python-version">Unknown</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fas fa-palette"></i> Appearance</h3>
+              </div>
+              <div class="card-body">
+                <div class="form-group">
+                  <label>Theme</label>
+                  <select id="theme-selector" class="form-control">
+                    <option value="dark">Dark Theme</option>
+                    <option value="light">Light Theme</option>
+                    <option value="auto">Auto (System)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fas fa-database"></i> Data Management</h3>
+              </div>
+              <div class="card-body">
+                <div class="form-group">
+                  <label>Clear Application Data</label>
+                  <p class="help-text">
+                    This will clear all saved settings, session data, and cached
+                    files
+                  </p>
+                  <button class="btn btn-warning" id="clear-data">
+                    <i class="fas fa-trash"></i> Clear All Data
+                  </button>
+                </div>
+                <div class="form-group">
+                  <label>Export Settings</label>
+                  <p class="help-text">
+                    Export your settings to a file for backup
+                  </p>
+                  <button class="btn btn-outline" id="export-settings">
+                    <i class="fas fa-download"></i> Export Settings
+                  </button>
+                </div>
+                <div class="form-group">
+                  <label>Import Settings</label>
+                  <p class="help-text">Import settings from a backup file</p>
+                  <button class="btn btn-outline" id="import-settings">
+                    <i class="fas fa-upload"></i> Import Settings
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fas fa-question-circle"></i> About</h3>
+              </div>
+              <div class="card-body">
+                <div class="about-content">
+                  <h4>Telegram Utilities</h4>
+                  <p>Advanced video converter and sticker bot for Telegram</p>
+                  <p><strong>Features:</strong></p>
+                  <ul>
+                    <li>GPU-accelerated video conversion to WebM</li>
+                    <li>Precise file size control (254KB target)</li>
+                    <li>Automated Telegram sticker pack creation</li>
+                    <li>Hex editing capabilities</li>
+                    <li>Individual file progress tracking</li>
+                  </ul>
+                  <div class="about-links">
+                    <button
+                      class="btn btn-outline btn-sm"
+                      onclick="window.electronAPI.openExternal('https://github.com/telegram-utilities')"
+                    >
+                      <i class="fab fa-github"></i> GitHub
+                    </button>
+                    <button
+                      class="btn btn-outline btn-sm"
+                      onclick="window.electronAPI.openExternal('https://t.me/telegram_utilities')"
+                    >
+                      <i class="fab fa-telegram"></i> Support
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- Toast Notifications Container -->
+      <div class="toast-container" id="toast-container"></div>
+
+      <!-- Loading Overlay -->
+      <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-spinner">
+          <div class="spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+          </div>
+          <p>Processing...</p>
+        </div>
+      </div>
+
+      <!-- Modal Dialogs -->
+      <div class="modal-overlay" id="modal-overlay">
+        <!-- Telegram Code Verification Modal -->
+        <div class="modal" id="code-modal" style="display: none">
+          <div class="modal-header">
+            <h3><i class="fas fa-key"></i> Telegram Verification</h3>
+          </div>
+          <div class="modal-body">
+            <p>Enter the 5-digit verification code sent to your phone:</p>
+            <input
+              type="text"
+              id="verification-code"
+              class="form-control"
+              placeholder="12345"
+              maxlength="5"
+              autocomplete="off"
+            />
+            <small class="help-text"
+              >Check your Telegram app or SMS for the code</small
+            >
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" id="cancel-code">Cancel</button>
+            <button class="btn btn-primary" id="submit-code">
+              Verify Code
+            </button>
+          </div>
+        </div>
+
+        <!-- Two-Factor Authentication Modal -->
+        <div class="modal" id="password-modal" style="display: none">
+          <div class="modal-header">
+            <h3><i class="fas fa-shield-alt"></i> Two-Factor Authentication</h3>
+          </div>
+          <div class="modal-body">
+            <p>Enter your Telegram 2FA password:</p>
+            <input
+              type="password"
+              id="two-factor-password"
+              class="form-control"
+              placeholder="Password"
+              autocomplete="current-password"
+            />
+            <small class="help-text"
+              >This is the cloud password you set up in Telegram</small
+            >
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" id="cancel-password">
+              Cancel
+            </button>
+            <button class="btn btn-primary" id="submit-password">
+              Authenticate
+            </button>
+          </div>
+        </div>
+
+        <!-- Emoji Selection Modal -->
+        <div class="modal" id="emoji-modal" style="display: none">
+          <div class="modal-header">
+            <h3><i class="fas fa-smile"></i> Select Emoji</h3>
+          </div>
+          <div class="modal-body">
+            <p>Choose an emoji for this sticker:</p>
+            <input
+              type="text"
+              id="emoji-input"
+              class="form-control"
+              placeholder="😀"
+              maxlength="4"
+            />
+            <div class="emoji-picker">
+              <div class="emoji-category">
+                <h4>Popular</h4>
+                <div class="emoji-grid">
+                  <button class="emoji-btn" data-emoji="😀">😀</button>
+                  <button class="emoji-btn" data-emoji="😂">😂</button>
+                  <button class="emoji-btn" data-emoji="😍">😍</button>
+                  <button class="emoji-btn" data-emoji="🔥">🔥</button>
+                  <button class="emoji-btn" data-emoji="💯">💯</button>
+                  <button class="emoji-btn" data-emoji="❤️">❤️</button>
+                  <button class="emoji-btn" data-emoji="👍">👍</button>
+                  <button class="emoji-btn" data-emoji="😎">😎</button>
+                  <button class="emoji-btn" data-emoji="🎉">🎉</button>
+                  <button class="emoji-btn" data-emoji="✨">✨</button>
+                  <button class="emoji-btn" data-emoji="💪">💪</button>
+                  <button class="emoji-btn" data-emoji="🎯">🎯</button>
+                </div>
+              </div>
+              <div class="emoji-actions">
+                <button
+                  class="btn btn-secondary btn-sm"
+                  onclick="app.setRandomEmojis()"
+                >
+                  <i class="fas fa-dice"></i> Random Emojis for All
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" id="cancel-emoji">Cancel</button>
+            <button class="btn btn-primary" id="save-emoji">Save Emoji</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>

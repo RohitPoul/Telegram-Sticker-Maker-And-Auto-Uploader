@@ -1,0 +1,52 @@
+{
+  "name": "telegram-utilities",
+  "version": "1.0.0", 
+  "description": "Advanced Telegram Utilities - Video Converter & Sticker Bot",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "install-python": "cd python && pip install -r requirements.txt"
+  },
+  "build": {
+    "appId": "com.telegramutils.app",
+    "productName": "Telegram Utilities",
+    "directories": {
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "python/**/*",
+      "node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "python/",
+        "to": "python/"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "electron/assets/icon.ico"
+    },
+    "mac": {
+      "target": "dmg", 
+      "icon": "electron/assets/icon.icns"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "electron/assets/icon.png"
+    }
+  },
+  "devDependencies": {
+    "electron": "^27.0.0",
+    "electron-builder": "^24.6.4"
+  },
+  "dependencies": {
+    "axios": "^1.5.0",
+    "electron-store": "^8.1.0"
+  }
+}

@@ -1,0 +1,387 @@
+const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
+const path = require("path");
+const { spawn, exec } = require("child_process");
+const fs = require("fs");
+const axios = require("axios");
+
+app.disableHardwareAcceleration();
+app.commandLine.appendSwitch("disable-gpu");
+app.commandLine.appendSwitch("disable-gpu-compositing");
+
+let mainWindow;
+let pythonProcess;
+const BACKEND_PORT = 5000;
+const BACKEND_HOST = "127.0.0.1";
+const BACKEND_URL = `http://${BACKEND_HOST}:${BACKEND_PORT}`;
+
+function cleanupPythonProcess() {
+    if (pythonProcess) {
+        pythonProcess.kill('SIGTERM');
+        setTimeout(() => {
+            if (pythonProcess && !pythonProcess.killed) {
+                pythonProcess.kill('SIGKILL');
+            }
+        }, 5000);
+        pythonProcess = null;
+    }
+}
+
+function createWindow() {
+    mainWindow = new BrowserWindow({
+        width: 1400,
+        height: 900,
+        minWidth: 1200,
+        minHeight: 800,
+        webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            preload: path.join(__dirname, "preload.js"),
+        },
+        titleBarStyle: "default",
+        icon: path.join(__dirname, "assets", "icon.png"),
+        show: false,
+    });
+
+    mainWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
+
+    // Optional DevTools: controlled by env flag
+    if (!app.isPackaged && process.env.ELECTRON_DEVTOOLS === '1') {
+        mainWindow.webContents.openDevTools({ mode: "detach" });
+    }
+
+    mainWindow.once("ready-to-show", () => {
+        mainWindow.show();
+        // no noisy log
+    });
+
+    mainWindow.on('close', async () => {
+        try {
+            await axios.post(`${BACKEND_URL}/api/stop-process`, { process_id: 'ALL' }).catch(() => {});
+            await new Promise(r => setTimeout(r, 1000));
+        } finally {
+            cleanupPythonProcess();
+        }
+    });
+
+    mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+        shell.openExternal(url);
+        return { action: "deny" };
+    });
+
+    // no noisy log on did-finish-load
+    mainWindow.webContents.on("did-finish-load", () => {});
+}
+
+function startPythonBackend() {
+    return new Promise((resolve, reject) => {
+        const pythonPath = path.join(__dirname, "..", "python");
+        const scriptPath = path.join(pythonPath, "backend.py");
+        const pythonCmd = process.platform === "win32" ? "python" : "python3";
+        
+        // Start Python backend quietly
+        
+        pythonProcess = spawn(pythonCmd, [scriptPath], {
+            cwd: pythonPath,
+            stdio: ["ignore", "ignore", "ignore"],
+            env: {
+                ...process.env,
+                BACKEND_LOG_LEVEL: process.env.BACKEND_LOG_LEVEL || 'WARNING',
+                BACKEND_LOG_TO_STDOUT: '0',
+            },
+        });
+
+        // Resolve when process has spawned successfully
+        pythonProcess.on('spawn', () => resolve());
+
+        // Rely on health check instead of stdout parsing
+
+        pythonProcess.on("close", (code) => {
+            pythonProcess = null;
+        });
+
+        pythonProcess.on("error", (error) => {
+            console.error("Failed to start Python process:", error);
+            reject(error);
+        });
+
+        // No assumption based on stdout; readiness handled in waitForBackend
+    });
+}
+
+async function waitForBackend() {
+    const maxAttempts = 60;
+    let attempts = 0;
+    
+    // quiet health checks
+    
+    while (attempts < maxAttempts) {
+        try {
+            const response = await axios.get(`${BACKEND_URL}/api/health`, {
+                timeout: 5000,
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            if (response.data && response.data.status === "healthy") {
+                return true;
+            }
+            
+            throw new Error("Backend not healthy");
+        } catch (error) {
+            attempts++;
+            
+            if (attempts < maxAttempts) {
+                // Exponential backoff
+                const delay = Math.min(1000 * Math.pow(2, attempts), 10000);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+    }
+    
+    throw new Error(`Backend failed to start after ${maxAttempts} attempts`);
+}
+
+// IPC HANDLERS
+ipcMain.handle("select-files", async (event, options) => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+        properties: ["openFile", "multiSelections"],
+        filters: options.filters || [{ name: "All Files", extensions: ["*"] }],
+    });
+    return result.filePaths;
+});
+
+ipcMain.handle("select-directory", async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+        properties: ["openDirectory"],
+    });
+    return result.filePaths[0];
+});
+
+ipcMain.handle('api-request', async (event, { method, endpoint, data }) => {
+    try {
+        // quiet request logging; enable by setting E_MAIN_VERBOSE=1
+        const verbose = process.env.E_MAIN_VERBOSE === '1';
+        if (verbose) {
+            console.log(`[API REQUEST] ${method} ${BACKEND_URL}${endpoint}`);
+            if (data) console.log(`[API REQUEST] Data:`, JSON.stringify(data, null, 2));
+        }
+        
+        const config = {
+            method,
+            url: `${BACKEND_URL}${endpoint}`,
+            timeout: 60000,
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        };
+        
+        if (data) {
+            config.data = data;
+        }
+        
+        const response = await axios(config);
+        
+        if (verbose) console.log(`[API SUCCESS] Status: ${response.status}`);
+        return { success: true, data: response.data };
+    } catch (error) {
+        console.error(`[API ERROR] ${error.message}`);
+        if (error.response) {
+            // keep error details minimal
+            return {
+                success: false,
+                error: error.response.data?.error || error.message,
+                status: error.response.status,
+                details: error.response.data
+            };
+        }
+        return {
+            success: false,
+            error: error.message,
+            code: error.code
+        };
+    }
+});
+
+ipcMain.handle("open-external", async (event, url) => {
+    shell.openExternal(url);
+});
+
+// GPU INFO: query DXGI/ANGLE info from Electron
+ipcMain.handle("get-gpu-info", async () => {
+    try {
+        const gpuInfo = await app.getGPUInfo('complete');
+
+        const adapters = [];
+        const seen = new Set();
+        const pushUnique = (g) => {
+            const key = `${g.vendor}|${g.device}|${g.driverVersion}`;
+            if (seen.has(key)) return;
+            seen.add(key);
+            g.index = adapters.length;
+            g.description = `${g.index}. ${g.device || 'Unknown'}${g.active ? ' (Active)' : ''}`;
+            adapters.push(g);
+        };
+
+        // 1) Electron GPUInfo baseline
+        for (const [idx, d] of (gpuInfo?.gpuDevice || []).entries()) {
+            pushUnique({
+                vendor: d.vendorString || '',
+                device: d.deviceString || '',
+                driver: d.driverVendor || '',
+                driverVersion: d.driverVersion || '',
+                vendorId: d.vendorId || '',
+                deviceId: d.deviceId || '',
+                vramMB: d.vram || 0,
+                active: !!d.active,
+                source: 'electron'
+            });
+        }
+
+        // 2) OS-level enrichment (Windows)
+        if (process.platform === 'win32') {
+            const ps = 'Get-CimInstance Win32_VideoController | Select-Object Name,AdapterCompatibility,DriverVersion,VideoProcessor,AdapterRAM | ConvertTo-Json -Depth 3';
+            const cmd = `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "${ps}"`;
+            await new Promise((resolve) => {
+                exec(cmd, { timeout: 5000 }, (err, stdout) => {
+                    try {
+                        if (!err && stdout) {
+                            const json = JSON.parse(stdout);
+                            const list = Array.isArray(json) ? json : [json];
+                            for (const item of list) {
+                                pushUnique({
+                                    vendor: item.AdapterCompatibility || '',
+                                    device: item.Name || item.VideoProcessor || 'Unknown',
+                                    driver: item.AdapterCompatibility || '',
+                                    driverVersion: item.DriverVersion || '',
+                                    vramMB: item.AdapterRAM ? Math.round(Number(item.AdapterRAM) / (1024*1024)) : 0,
+                                    active: true,
+                                    source: 'win32'
+                                });
+                            }
+                        }
+                    } catch { /* ignore */ }
+                    resolve();
+                });
+            });
+
+            // NVIDIA details if available
+            await new Promise((resolve) => {
+                exec('nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv,noheader,nounits', { timeout: 3000 }, (err, stdout) => {
+                    if (!err && stdout) {
+                        const lines = stdout.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+                        for (const line of lines) {
+                            const [name, drv, mem] = line.split(',').map(s => s.trim());
+                            pushUnique({
+                                vendor: 'NVIDIA',
+                                device: name || 'NVIDIA GPU',
+                                driver: 'NVIDIA',
+                                driverVersion: drv || '',
+                                vramMB: mem ? Number(mem) : 0,
+                                active: true,
+                                source: 'nvidia-smi'
+                            });
+                        }
+                    }
+                    resolve();
+                });
+            });
+
+            // dxdiag fallback for friendlier adapter names
+            await new Promise((resolve) => {
+                const osTmp = require('os').tmpdir();
+                const outFile = path.join(osTmp, `dxdiag_${Date.now()}.txt`);
+                exec(`dxdiag /whql:off /t ${outFile}`, { timeout: 7000 }, (err) => {
+                    if (!err && fs.existsSync(outFile)) {
+                        try {
+                            const txt = fs.readFileSync(outFile, 'utf8');
+                            // Parse blocks starting with 'Card name:'
+                            const lines = txt.split(/\r?\n/);
+                            let cur = {};
+                            const flush = () => {
+                                if (cur.name) {
+                                    pushUnique({
+                                        vendor: cur.vendor || '',
+                                        device: cur.name,
+                                        driver: 'DX',
+                                        driverVersion: cur.driverVersion || '',
+                                        vramMB: cur.memMB || 0,
+                                        active: true,
+                                        source: 'dxdiag'
+                                    });
+                                }
+                                cur = {};
+                            };
+                            for (const l of lines) {
+                                const mName = l.match(/^\s*Card name:\s*(.+)$/i);
+                                if (mName) { flush(); cur.name = mName[1].trim(); continue; }
+                                const mVen = l.match(/^\s*Manufacturer:\s*(.+)$/i);
+                                if (mVen) { cur.vendor = mVen[1].trim(); continue; }
+                                const mDrv = l.match(/^\s*Driver Version:\s*([^\s]+)\b/i);
+                                if (mDrv) { cur.driverVersion = mDrv[1].trim(); continue; }
+                                const mMem = l.match(/^\s*Dedicated Memory:\s*([0-9,\.]+)\s*MB/i);
+                                if (mMem) { cur.memMB = Math.round(Number(mMem[1].replace(/[,]/g, ''))); continue; }
+                            }
+                            flush();
+                        } catch { /* ignore */ }
+                        try { fs.unlinkSync(outFile); } catch { /* ignore */ }
+                    }
+                    resolve();
+                });
+            });
+        }
+
+        return { success: true, adapters, featureStatus: gpuInfo?.auxAttributes || {} };
+    } catch (error) {
+        return { success: false, error: error?.message || String(error) };
+    }
+});
+
+// APP LIFECYCLE
+app.whenReady().then(async () => {
+    try {
+        await startPythonBackend();
+        await waitForBackend();
+        createWindow();
+        
+        app.on("activate", () => {
+            if (BrowserWindow.getAllWindows().length === 0) {
+                createWindow();
+            }
+        });
+        
+    } catch (error) {
+        // Minimal error log for startup failure
+        console.error("Failed to start application:", error?.message || error);
+        cleanupPythonProcess();
+        app.quit();
+    }
+});
+
+app.on("window-all-closed", () => {
+    cleanupPythonProcess();
+    if (process.platform !== "darwin") {
+        app.quit();
+    }
+});
+
+app.on("before-quit", () => {
+    cleanupPythonProcess();
+});
+
+process.on("uncaughtException", (error) => {
+    console.error("Uncaught Exception:", error?.message || error);
+    cleanupPythonProcess();
+});
+
+process.on("unhandledRejection", (reason) => {
+    console.error("Unhandled Rejection:", (reason && reason.message) || reason);
+});
+
+process.on('SIGINT', () => {
+    cleanupPythonProcess();
+    process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+    cleanupPythonProcess();
+    process.exit(0);
+});

@@ -1,0 +1,8 @@
+flask==2.3.3
+flask-cors==4.0.0
+requests==2.31.0
+telethon==1.30.3
+cryptg==0.4.0
+Pillow==10.1.0
+pyOpenSSL==24.0.0
+psutil==5.9.6

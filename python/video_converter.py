@@ -31,7 +31,7 @@ class VideoConverterCore:
 
         # Performance-oriented tuning
         self.VPX_CPU_USED = 5  # slightly faster preset
-        self.MAX_ATTEMPTS = 12  # fewer iterations; rely on smarter steps
+        self.MAX_ATTEMPTS = 99999  # Essentially infinite attempts - user will improve core logic
         
         # Initialize GPU Manager
         self.gpu_manager = GPUManager()
@@ -298,31 +298,17 @@ class VideoConverterCore:
                             'filename': filename
                         })
 
-                    # Choose acceleration based on preflight result
+                    # For now, force CPU mode to ensure stability
+                    # We'll re-enable GPU after fixing the CUDA issues
                     use_cuda_preproc = False
-                    try:
-                        if isinstance(self.gpu_config, dict):
-                            filters = self.gpu_config.get('ffmpeg', {}).get('filters', {})
-                            use_cuda_preproc = bool(filters.get('scale_cuda') and filters.get('hwupload_cuda'))
-                    except Exception:
-                        use_cuda_preproc = False
-
-                    if use_cuda_preproc and self.selected_gpu and self.selected_gpu.type == GPUType.NVIDIA:
-                        # Safe CUDA preprocessing path
-                        ffmpeg_pre_args = ["-hwaccel", "cuda", "-hwaccel_output_format", "cuda"]
-                        scale_filter = (
-                            f"hwupload_cuda,scale_cuda={self.SCALE_WIDTH}:{self.SCALE_HEIGHT},"
-                            f"hwdownload,format=yuv420p,pad={self.SCALE_WIDTH}:{self.SCALE_HEIGHT}:(ow-iw)/2:(oh-ih)/2"
-                        )
-                        self.logger.info(f"[FFMPEG] Using CUDA preprocessing for {filename}")
-                    else:
-                        # CPU path
-                        ffmpeg_pre_args = []
-                        scale_filter = (
-                            f"scale={self.SCALE_WIDTH}:{self.SCALE_HEIGHT}:force_original_aspect_ratio=decrease,"
-                            f"pad={self.SCALE_WIDTH}:{self.SCALE_HEIGHT}:(ow-iw)/2:(oh-ih)/2"
-                        )
-                        self.logger.info(f"[FFMPEG] Using CPU preprocessing for {filename}")
+                    
+                    # CPU path - always use this for now
+                    ffmpeg_pre_args = []
+                    scale_filter = (
+                        f"scale={self.SCALE_WIDTH}:{self.SCALE_HEIGHT}:force_original_aspect_ratio=decrease,"
+                        f"pad={self.SCALE_WIDTH}:{self.SCALE_HEIGHT}:(ow-iw)/2:(oh-ih)/2"
+                    )
+                    self.logger.info(f"[FFMPEG] Using CPU processing for {filename} (GPU temporarily disabled for stability)")
 
                     # Pass log base for two-pass; suppress console noise
                     pass_log_base = os.path.join(self.TEMP_DIR, f"ffmpeg_pass_{os.getpid()}_{int(time.time())}_{attempt}")
@@ -530,12 +516,12 @@ class VideoConverterCore:
                         })
                     return False
 
-            self.logger.error(f"[ERROR] {filename}: Failed to achieve target size after maximum attempts.")
+            self.logger.error(f"[ERROR] {filename}: Failed to achieve target size after {max_attempts} attempts.")
             if process_id and file_index is not None:
                 self.update_file_status(process_id, file_index, {
                     'status': 'error',
                     'progress': 0,
-                    'stage': 'Failed after 100 attempts',
+                    'stage': f'Failed after {max_attempts} attempts',
                     'filename': filename
                 })
             return False
