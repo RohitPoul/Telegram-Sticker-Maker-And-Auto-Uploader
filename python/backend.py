@@ -196,76 +196,9 @@ def health_check():
         }
     })
 
-@app.route('/api/temp-stats', methods=['GET', 'OPTIONS'], strict_slashes=False)
-def get_temp_stats():
-    """Get temporary file statistics"""
-    if request.method == 'OPTIONS':
-        return '', 200
-    
-    try:
-        from pathlib import Path
-        temp_dir = Path('./temp')
-        count = 0
-        size = 0
-        
-        if temp_dir.exists():
-            for file in temp_dir.glob('**/*'):
-                if file.is_file():
-                    count += 1
-                    size += file.stat().st_size
-        
-        return jsonify({
-            'success': True,
-            'data': {
-                'count': count,
-                'size_mb': round(size / (1024 * 1024), 2)
-            }
-        })
-    except Exception as e:
-        logger.error(f"Failed to get temp stats: {e}")
-        return jsonify({
-            'success': True,
-            'data': {'count': 0, 'size_mb': 0}
-        })
 
-@app.route('/api/clean-temp', methods=['POST', 'OPTIONS'], strict_slashes=False)
-def clean_temp_files():
-    """Clean temporary files"""
-    if request.method == 'OPTIONS':
-        return '', 200
-    
-    try:
-        from pathlib import Path
-        temp_dir = Path('./temp')
-        cleaned = 0
-        
-        if temp_dir.exists():
-            for file in temp_dir.glob('**/*'):
-                if file.is_file():
-                    try:
-                        file.unlink()
-                        cleaned += 1
-                    except:
-                        pass
-        
-        # Also clean up any .2pass files
-        for pass_file in Path('.').glob('*.2pass'):
-            try:
-                pass_file.unlink()
-                cleaned += 1
-            except:
-                pass
-        
-        return jsonify({
-            'success': True,
-            'data': {'cleaned': cleaned}
-        })
-    except Exception as e:
-        logger.error(f"Failed to clean temp files: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+
+
 
 @app.route('/api/restart', methods=['POST', 'OPTIONS'], strict_slashes=False)
 def restart_backend():
@@ -424,6 +357,75 @@ def install_cuda():
 
 
 # System stats route
+@app.route('/api/get-file-info', methods=['POST', 'OPTIONS'], strict_slashes=False)
+def get_file_info():
+    """Get detailed file metadata"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    try:
+        data = request.get_json()
+        file_path = data.get('path', '')
+        
+        if not file_path or not os.path.exists(file_path):
+            return jsonify({"success": False, "error": "File not found"}), 404
+        
+        # Get basic file stats
+        stats = os.stat(file_path)
+        file_info = {
+            "size": stats.st_size,
+            "modified": stats.st_mtime,
+            "created": stats.st_ctime
+        }
+        
+        # For images, get dimensions
+        if file_path.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
+            try:
+                from PIL import Image
+                with Image.open(file_path) as img:
+                    file_info["width"], file_info["height"] = img.size
+            except:
+                pass
+        
+        # For videos, get duration and dimensions
+        elif file_path.lower().endswith(('.mp4', '.webm', '.mov', '.avi')):
+            try:
+                import subprocess
+                import json
+                
+                # Get video metadata using ffprobe
+                cmd = [
+                    'ffprobe',
+                    '-v', 'quiet',
+                    '-print_format', 'json',
+                    '-show_format',
+                    '-show_streams',
+                    file_path
+                ]
+                
+                result = subprocess.run(cmd, capture_output=True, text=True)
+                if result.returncode == 0:
+                    metadata = json.loads(result.stdout)
+                    
+                    # Get duration
+                    if 'format' in metadata and 'duration' in metadata['format']:
+                        file_info["duration"] = float(metadata['format']['duration'])
+                    
+                    # Get dimensions from video stream
+                    for stream in metadata.get('streams', []):
+                        if stream.get('codec_type') == 'video':
+                            file_info["width"] = stream.get('width')
+                            file_info["height"] = stream.get('height')
+                            break
+            except:
+                pass
+        
+        return jsonify({"success": True, "data": file_info})
+        
+    except Exception as e:
+        logger.error(f"Error getting file info: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @app.route('/api/system-stats', methods=['GET', 'OPTIONS'], strict_slashes=False)
 def system_stats():
     if request.method == 'OPTIONS':
