@@ -167,12 +167,32 @@ body {
 /* Main Content */
 .app-main {
   flex: 1;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 0;
   max-width: 100%;
   margin: 0;
   width: 100%;
   height: calc(100vh - 60px);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(102, 126, 234, 0.3) transparent;
+}
+
+.app-main::-webkit-scrollbar {
+  width: 8px;
+}
+
+.app-main::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.app-main::-webkit-scrollbar-thumb {
+  background: rgba(102, 126, 234, 0.3);
+  border-radius: 4px;
+}
+
+.app-main::-webkit-scrollbar-thumb:hover {
+  background: rgba(102, 126, 234, 0.5);
 }
 
 .tab-content {
@@ -202,26 +222,26 @@ body {
 }
 
 .section-header {
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
   text-align: center;
-  padding: 0.5rem 0;
+  padding: 0.3rem 0;
 }
 
 .section-header h2 {
-  font-size: 1.5rem;
-  margin-bottom: 0.25rem;
+  font-size: 1.3rem;
+  margin-bottom: 0.2rem;
   color: var(--text-primary);
 }
 
 .section-header h2 i {
   color: var(--primary-color);
-  margin-right: 0.5rem;
-  font-size: 1.25rem;
+  margin-right: 0.4rem;
+  font-size: 1.1rem;
 }
 
 .section-header p {
   color: var(--text-secondary);
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   max-width: 600px;
   margin: 0 auto;
 }
@@ -267,7 +287,7 @@ body {
 
 .card-header {
   background: var(--bg-tertiary);
-  padding: 0.75rem 1rem;
+  padding: 0.85rem 1rem;
   border-bottom: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
@@ -275,7 +295,7 @@ body {
 }
 
 .card-header h3 {
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -287,7 +307,7 @@ body {
 }
 
 .card-body {
-  padding: 0.75rem 1rem;
+  padding: 0.6rem 0.9rem;
 }
 
 /* Form Controls */
@@ -659,10 +679,9 @@ body {
 }
 
 /* File Lists */
-.file-list,
-.media-list {
-  min-height: 200px;
-  max-height: 300px;
+.file-list {
+  min-height: 150px;
+  max-height: 250px;
   overflow-y: auto;
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius);
