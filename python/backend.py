@@ -63,10 +63,7 @@ try:
     GPU_MANAGER_AVAILABLE = True
     logger.info("[OK] GPU manager imported successfully")
     
-    # Import benchmark module
-    from benchmark import VideoBenchmark
-    BENCHMARK_AVAILABLE = True
-    logger.info("[OK] Benchmark module imported successfully")
+
     
     # Log detected GPUs
     if gpu_manager.gpus:
@@ -84,14 +81,14 @@ except ImportError as e:
     video_converter = None
     GPU_MANAGER_AVAILABLE = False
     gpu_manager = None
-    BENCHMARK_AVAILABLE = False
+
 except Exception as e:
     logger.error(f"[ERROR] Video converter initialization failed: {e} ({type(e).__name__})")
     VIDEO_CONVERTER_AVAILABLE = False
     video_converter = None
     GPU_MANAGER_AVAILABLE = False
     gpu_manager = None
-    BENCHMARK_AVAILABLE = False
+
 
 # Flask app
 app = Flask(__name__)
@@ -179,7 +176,25 @@ def validate_file_access(file_paths):
 def health_check():
     if request.method == 'OPTIONS':
         return '', 200
-    return jsonify({"status": "healthy", "timestamp": time.time(), "success": True})
+    
+    # Check FFmpeg availability
+    ffmpeg_available = False
+    try:
+        import subprocess
+        result = subprocess.run(['ffmpeg', '-version'], capture_output=True, text=True, timeout=2)
+        ffmpeg_available = result.returncode == 0
+    except:
+        ffmpeg_available = False
+    
+    return jsonify({
+        "status": "healthy", 
+        "timestamp": time.time(), 
+        "success": True,
+        "data": {
+            "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+            "ffmpeg_available": ffmpeg_available
+        }
+    })
 
 # System info route
 @app.route('/api/system-info', methods=['GET', 'OPTIONS'], strict_slashes=False)
@@ -309,54 +324,7 @@ def install_cuda():
         logger.error(f"Error starting CUDA install: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
-# Benchmark routes
-@app.route('/api/benchmark', methods=['POST', 'OPTIONS'], strict_slashes=False)
-def run_benchmark():
-    """Run a comprehensive CPU vs GPU benchmark"""
-    if request.method == 'OPTIONS':
-        return '', 200
-    try:
-        if not BENCHMARK_AVAILABLE:
-            return jsonify({
-                'success': False,
-                'error': 'Benchmark module not available'
-            }), 500
-        
-        data = request.get_json()
-        custom_file = data.get('file') if data else None
-        
-        logger.info(f"Starting benchmark test{' with custom file: ' + custom_file if custom_file else ''}")
-        
-        # Create benchmark instance
-        benchmark = VideoBenchmark()
-        
-        # Run comprehensive benchmark
-        results = benchmark.run_comprehensive_benchmark(custom_file)
-        
-        logger.info(f"Benchmark completed successfully")
-        
-        return jsonify({
-            'success': True,
-            'results': results
-        })
-        
-    except Exception as e:
-        logger.error(f"Benchmark failed: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
 
-@app.route('/api/benchmark/status', methods=['GET', 'OPTIONS'], strict_slashes=False)
-def benchmark_status():
-    """Check if benchmark module is available"""
-    if request.method == 'OPTIONS':
-        return '', 200
-    return jsonify({
-        'available': BENCHMARK_AVAILABLE,
-        'gpu_available': GPU_MANAGER_AVAILABLE and bool(gpu_manager.gpus if GPU_MANAGER_AVAILABLE else False),
-        'cuda_available': gpu_manager.cuda_available if GPU_MANAGER_AVAILABLE else False
-    })
 
 # System stats route
 @app.route('/api/system-stats', methods=['GET', 'OPTIONS'], strict_slashes=False)

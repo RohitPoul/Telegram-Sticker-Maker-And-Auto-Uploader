@@ -40,16 +40,55 @@ class TelegramUtilities {
         checkBtn.innerHTML = '<i class="fas fa-sync fa-spin"></i> Checking...';
         try {
           await this.detectAccelerationMode();
-          this.showToast('success', 'GPU Check', 'Detection complete');
           const resp = await this.apiRequest('GET', '/api/gpu-detect');
-          const installBtn = document.getElementById('install-gpu-support');
-          if (installBtn) {
-            const best = resp?.gpus && resp.gpus[0];
-            const needs = resp?.needs_cuda_install && best?.type === 'nvidia';
-            installBtn.style.display = needs ? 'inline-flex' : 'none';
+          
+          // Show detailed GPU information
+          if (resp && resp.success) {
+            let message = '';
+            
+            // Show detected GPUs
+            if (resp.gpus && resp.gpus.length > 0) {
+              const gpu = resp.gpus[0];
+              message += `<strong>GPU Detected:</strong> ${gpu.name}<br>`;
+              message += `<strong>Type:</strong> ${gpu.type.toUpperCase()}<br>`;
+              message += `<strong>Memory:</strong> ${gpu.memory_mb ? (gpu.memory_mb / 1024).toFixed(1) + ' GB' : 'Unknown'}<br>`;
+              
+              if (gpu.cuda_version) {
+                message += `<strong>CUDA:</strong> ${gpu.cuda_version}<br>`;
+              }
+              
+              // Show acceleration status
+              const modeBadge = document.getElementById("mode-badge");
+              if (modeBadge) {
+                const currentMode = modeBadge.textContent;
+                message += `<br><strong>Current Mode:</strong> ${currentMode}`;
+              }
+            } else {
+              message = '<strong>No GPU detected</strong><br>Running in CPU mode';
+            }
+            
+            // Show CUDA status for NVIDIA
+            if (resp.cuda_info) {
+              if (!resp.cuda_info.nvcc_available && resp.gpus && resp.gpus[0]?.type === 'nvidia') {
+                message += '<br><br><em>CUDA toolkit not installed - GPU acceleration limited</em>';
+              }
+            }
+            
+            // Display results in a nice format
+            this.showDetailedMessage('GPU Detection Results', message);
+            
+            // Update install button visibility
+            const installBtn = document.getElementById('install-gpu-support');
+            if (installBtn) {
+              const best = resp?.gpus && resp.gpus[0];
+              const needs = resp?.needs_cuda_install && best?.type === 'nvidia';
+              installBtn.style.display = needs ? 'inline-flex' : 'none';
+            }
+          } else {
+            this.showToast('error', 'GPU Check', 'Failed to detect GPU');
           }
         } catch (e) {
-          this.showToast('error', 'GPU Check', 'Failed to detect GPU');
+          this.showToast('error', 'GPU Check', 'Failed to detect GPU: ' + e.message);
         } finally {
           checkBtn.disabled = false;
           checkBtn.innerHTML = '<i class="fas fa-sync"></i> Check GPU';
@@ -783,6 +822,9 @@ class TelegramUtilities {
       case "settings":
         this.updateSystemInfo();
         break;
+      case "about":
+        // Empty for now - will add new content later
+        break;
     }
   }
 
@@ -1056,13 +1098,29 @@ class TelegramUtilities {
         });
         this.updateBackendStatus(false);
         document.getElementById("backend-status-text").textContent = "Disconnected";
+        document.getElementById("backend-status-text").style.color = "#dc3545";
         document.getElementById("ffmpeg-status").textContent = "Not Available";
+        document.getElementById("ffmpeg-status").style.color = "#dc3545";
         return;
       }
       
       this.updateBackendStatus(true);
       document.getElementById("backend-status-text").textContent = "Connected";
+      document.getElementById("backend-status-text").style.color = "#28a745";
+      
+      // Check FFmpeg status from the health response
+      if (response.data && response.data.ffmpeg_available !== undefined) {
+        document.getElementById("ffmpeg-status").textContent = response.data.ffmpeg_available ? "Available" : "Not Available";
+        document.getElementById("ffmpeg-status").style.color = response.data.ffmpeg_available ? "#28a745" : "#dc3545";
+      } else {
       document.getElementById("ffmpeg-status").textContent = "Available";
+        document.getElementById("ffmpeg-status").style.color = "#28a745";
+      }
+      
+      // Update Python version if available
+      if (response.data && response.data.python_version) {
+        document.getElementById("python-version").textContent = response.data.python_version;
+      }
     } catch (error) {
       console.error("Backend status check failed:", {
         message: error.message,
@@ -1070,8 +1128,10 @@ class TelegramUtilities {
         timestamp: new Date().toISOString()
       });
       this.updateBackendStatus(false);
-      document.getElementById("backend-status-text").textContent = "Error";
+      document.getElementById("backend-status-text").textContent = "Disconnected";
+      document.getElementById("backend-status-text").style.color = "#dc3545";
       document.getElementById("ffmpeg-status").textContent = "Unknown";
+      document.getElementById("ffmpeg-status").style.color = "#6c757d";
     }
   }
 
@@ -3722,6 +3782,113 @@ class TelegramUtilities {
     localStorage.setItem("app_theme", newTheme);
   }
 
+  showDetailedMessage(title, htmlContent) {
+    // Create a modal-like overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      animation: fadeIn 0.2s ease;
+    `;
+    
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+      background: #2a2a2a;
+      border-radius: 8px;
+      padding: 20px;
+      max-width: 500px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      border: 1px solid #444;
+      animation: slideIn 0.3s ease;
+    `;
+    
+    modal.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #444; padding-bottom: 10px;">
+        <h3 style="margin: 0; color: #fff; font-size: 18px;">
+          <i class="fas fa-microchip" style="margin-right: 8px; color: #007bff;"></i>
+          ${title}
+        </h3>
+        <button style="
+          background: transparent;
+          border: none;
+          color: #888;
+          font-size: 24px;
+          cursor: pointer;
+          padding: 0;
+          width: 30px;
+          height: 30px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: color 0.2s;
+        " onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#888'" onclick="this.closest('div').parentElement.parentElement.remove()">×</button>
+      </div>
+      <div style="color: #ddd; line-height: 1.8; font-size: 14px;">
+        ${htmlContent}
+      </div>
+      <div style="margin-top: 20px; text-align: right; border-top: 1px solid #444; padding-top: 15px;">
+        <button style="
+          background: #007bff;
+          color: white;
+          border: none;
+          padding: 10px 24px;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 500;
+          transition: background 0.2s;
+        " onmouseover="this.style.background='#0056b3'" onmouseout="this.style.background='#007bff'" onclick="this.closest('div').parentElement.parentElement.remove()">OK</button>
+      </div>
+    `;
+    
+    // Add animations if not already present
+    if (!document.getElementById('gpu-modal-animations')) {
+      const style = document.createElement('style');
+      style.id = 'gpu-modal-animations';
+      style.textContent = `
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes slideIn {
+          from { transform: translateY(-20px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    
+    // Close on overlay click
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        overlay.remove();
+      }
+    });
+    
+    // Close on Escape key
+    const escHandler = (e) => {
+      if (e.key === 'Escape') {
+        overlay.remove();
+        document.removeEventListener('keydown', escHandler);
+      }
+    };
+    document.addEventListener('keydown', escHandler);
+  }
+
   applyTheme(theme) {
     document.documentElement.setAttribute("data-theme", theme);
     const themeToggle = document.getElementById("theme-toggle");
@@ -3734,11 +3901,12 @@ class TelegramUtilities {
   }
 
   async updateSystemInfo() {
+    try {
+      const health = await this.apiRequest("GET", "/api/health");
+      
     // Update Backend Status
     const backendStatusEl = document.getElementById("backend-status-text");
     if (backendStatusEl) {
-      try {
-        const health = await this.apiRequest("GET", "/api/health");
         if (health && health.success) {
           backendStatusEl.textContent = "Connected";
           backendStatusEl.style.color = "#28a745";
@@ -3746,29 +3914,54 @@ class TelegramUtilities {
           backendStatusEl.textContent = "Disconnected";
           backendStatusEl.style.color = "#dc3545";
         }
-      } catch (err) {
+      }
+
+      // Update FFmpeg Status based on actual backend response
+      const ffmpegStatusEl = document.getElementById("ffmpeg-status");
+      if (ffmpegStatusEl) {
+        if (health && health.success) {
+          // Check if backend provides ffmpeg status
+          if (health.data && health.data.ffmpeg_available !== undefined) {
+            ffmpegStatusEl.textContent = health.data.ffmpeg_available ? "Available" : "Not Available";
+            ffmpegStatusEl.style.color = health.data.ffmpeg_available ? "#28a745" : "#dc3545";
+          } else {
+            // Default to available if backend is running
+            ffmpegStatusEl.textContent = "Available";
+            ffmpegStatusEl.style.color = "#28a745";
+          }
+        } else {
+          ffmpegStatusEl.textContent = "Not Available";
+          ffmpegStatusEl.style.color = "#dc3545";
+        }
+      }
+
+      // Update Python Version from backend
+      const pythonVersionEl = document.getElementById("python-version");
+      if (pythonVersionEl) {
+        if (health && health.success && health.data && health.data.python_version) {
+          pythonVersionEl.textContent = health.data.python_version;
+        } else {
+          pythonVersionEl.textContent = "3.x";
+        }
+      }
+    } catch (error) {
+      // If backend is not available, show disconnected state
+      const backendStatusEl = document.getElementById("backend-status-text");
+      if (backendStatusEl) {
         backendStatusEl.textContent = "Disconnected";
         backendStatusEl.style.color = "#dc3545";
-      }
     }
     
-    // Update FFmpeg Status - only if backend is connected
     const ffmpegStatusEl = document.getElementById("ffmpeg-status");
     if (ffmpegStatusEl) {
-      try {
-        // Check if FFmpeg is available using a simpler method
-        ffmpegStatusEl.textContent = "Available"; // Assume available if backend is running
-        ffmpegStatusEl.style.color = "#28a745";
-      } catch {
         ffmpegStatusEl.textContent = "Unknown";
-        ffmpegStatusEl.style.color = "#ffc107";
-      }
+        ffmpegStatusEl.style.color = "#6c757d";
     }
     
-    // Update Python Version - hardcode for now
     const pythonVersionEl = document.getElementById("python-version");
     if (pythonVersionEl) {
-      pythonVersionEl.textContent = "3.x"; // Default value
+        pythonVersionEl.textContent = "Unknown";
+      }
     }
     
     // Update memory usage
@@ -4144,131 +4337,7 @@ This action cannot be undone. Are you sure?
   // Initialize start time for uptime calculation
   startTime = new Date();
 
-  async runBenchmark() {
-    const benchmarkBtn = document.getElementById('benchmark-btn');
-    const benchmarkResults = document.getElementById('benchmark-results');
-    const benchmarkContent = document.getElementById('benchmark-content');
-    
-    // Disable button and show loading
-    benchmarkBtn.disabled = true;
-    benchmarkBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running Benchmark...';
-    
-    // Clear previous results
-    benchmarkContent.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin fa-2x"></i><br>Running performance tests...</div>';
-    benchmarkResults.style.display = 'block';
-    
-    try {
-      const response = await this.apiRequest('POST', '/api/benchmark', {});
-      
-      if (response.success && response.results) {
-        const results = response.results;
-        
-        // Format and display results
-        let html = '<div class="benchmark-summary">';
-        
-        // CPU Results
-        if (results.summary && results.summary.cpu) {
-          const cpu = results.summary.cpu;
-          html += `
-            <div class="mb-3">
-              <h6><i class="fas fa-microprocessor"></i> CPU Performance</h6>
-              <div class="row">
-                <div class="col-6">
-                  <small class="text-muted">Avg Time:</small><br>
-                  <strong>${cpu.avg_conversion_time}s</strong>
-                </div>
-                <div class="col-6">
-                  <small class="text-muted">Speed:</small><br>
-                  <strong>${cpu.avg_speed_multiplier}x</strong>
-                </div>
-                <div class="col-6">
-                  <small class="text-muted">FPS:</small><br>
-                  <strong>${cpu.avg_fps}</strong>
-                </div>
-                <div class="col-6">
-                  <small class="text-muted">CPU Usage:</small><br>
-                  <strong>${cpu.avg_cpu_usage}%</strong>
-                </div>
-              </div>
-            </div>`;
-        }
-        
-        // GPU Results
-        if (results.summary && results.summary.gpu) {
-          const gpu = results.summary.gpu;
-          html += `
-            <div class="mb-3">
-              <h6><i class="fas fa-tv"></i> GPU Performance</h6>
-              <div class="row">
-                <div class="col-6">
-                  <small class="text-muted">Avg Time:</small><br>
-                  <strong>${gpu.avg_conversion_time}s</strong>
-                </div>
-                <div class="col-6">
-                  <small class="text-muted">Speed:</small><br>
-                  <strong>${gpu.avg_speed_multiplier}x</strong>
-                </div>
-                <div class="col-6">
-                  <small class="text-muted">FPS:</small><br>
-                  <strong>${gpu.avg_fps}</strong>
-                </div>
-                <div class="col-6">
-                  <small class="text-muted">GPU Usage:</small><br>
-                  <strong>${gpu.avg_gpu_usage || 'N/A'}%</strong>
-                </div>
-              </div>
-            </div>`;
-        }
-        
-        // Comparison and Recommendation
-        if (results.summary) {
-          const speedup = results.summary.speedup;
-          const recommendation = results.summary.recommendation;
-          
-          html += '<hr>';
-          
-          if (speedup) {
-            const speedupClass = speedup > 1 ? 'text-success' : 'text-warning';
-            html += `<div class="mb-2">
-              <strong>GPU Speedup:</strong> 
-              <span class="${speedupClass}">${speedup}x ${speedup > 1 ? 'faster' : 'slower'}</span>
-            </div>`;
-          }
-          
-          html += `<div class="alert ${recommendation === 'GPU' ? 'alert-success' : 'alert-info'} mb-0">
-            <strong>Recommendation:</strong> Use ${recommendation} for best performance
-          </div>`;
-        }
-        
-        html += '</div>';
-        benchmarkContent.innerHTML = html;
-        
-        // Show success toast
-        this.showToast('Benchmark completed successfully!', 'success');
-        
-      } else {
-        benchmarkContent.innerHTML = `
-          <div class="alert alert-danger mb-0">
-            <i class="fas fa-exclamation-triangle"></i> 
-            Benchmark failed: ${response.error || 'Unknown error'}
-          </div>`;
-        this.showToast('Benchmark failed', 'error');
-      }
-      
-    } catch (error) {
-      console.error('Benchmark error:', error);
-      benchmarkContent.innerHTML = `
-        <div class="alert alert-danger mb-0">
-          <i class="fas fa-exclamation-triangle"></i> 
-          Failed to run benchmark: ${error.message}
-        </div>`;
-      this.showToast('Failed to run benchmark', 'error');
-    } finally {
-      // Re-enable button
-      benchmarkBtn.disabled = false;
-      benchmarkBtn.innerHTML = '<i class="fas fa-tachometer-alt"></i> Run Benchmark';
-    }
-  }
+  // Removed profile card functionality - will add new content later
 }
 
 // Initialize the application

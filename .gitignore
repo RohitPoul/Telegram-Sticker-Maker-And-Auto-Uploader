@@ -38,8 +38,7 @@ python/test_*.py
 python/debug_*.py
 python/comprehensive_*.py
 python/gpu_config.json
-python/benchmark_results/
-python/benchmark.log
+
 test_*.html
 ffmpeg2pass*.log
 *.2pass
