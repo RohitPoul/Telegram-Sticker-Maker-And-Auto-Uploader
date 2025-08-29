@@ -196,6 +196,103 @@ def health_check():
         }
     })
 
+@app.route('/api/temp-stats', methods=['GET', 'OPTIONS'], strict_slashes=False)
+def get_temp_stats():
+    """Get temporary file statistics"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    try:
+        from pathlib import Path
+        temp_dir = Path('./temp')
+        count = 0
+        size = 0
+        
+        if temp_dir.exists():
+            for file in temp_dir.glob('**/*'):
+                if file.is_file():
+                    count += 1
+                    size += file.stat().st_size
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'count': count,
+                'size_mb': round(size / (1024 * 1024), 2)
+            }
+        })
+    except Exception as e:
+        logger.error(f"Failed to get temp stats: {e}")
+        return jsonify({
+            'success': True,
+            'data': {'count': 0, 'size_mb': 0}
+        })
+
+@app.route('/api/clean-temp', methods=['POST', 'OPTIONS'], strict_slashes=False)
+def clean_temp_files():
+    """Clean temporary files"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    try:
+        from pathlib import Path
+        temp_dir = Path('./temp')
+        cleaned = 0
+        
+        if temp_dir.exists():
+            for file in temp_dir.glob('**/*'):
+                if file.is_file():
+                    try:
+                        file.unlink()
+                        cleaned += 1
+                    except:
+                        pass
+        
+        # Also clean up any .2pass files
+        for pass_file in Path('.').glob('*.2pass'):
+            try:
+                pass_file.unlink()
+                cleaned += 1
+            except:
+                pass
+        
+        return jsonify({
+            'success': True,
+            'data': {'cleaned': cleaned}
+        })
+    except Exception as e:
+        logger.error(f"Failed to clean temp files: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/restart', methods=['POST', 'OPTIONS'], strict_slashes=False)
+def restart_backend():
+    """Restart the backend server"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    try:
+        # Schedule a restart after sending response
+        def restart():
+            time.sleep(1)
+            os._exit(0)  # This will cause the process to restart if managed by a process manager
+        
+        import threading
+        threading.Thread(target=restart).start()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Backend restart initiated'
+        })
+    except Exception as e:
+        logger.error(f"Failed to restart backend: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 # System info route
 @app.route('/api/system-info', methods=['GET', 'OPTIONS'], strict_slashes=False)
 def system_info():

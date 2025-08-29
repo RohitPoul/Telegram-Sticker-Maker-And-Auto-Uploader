@@ -413,20 +413,89 @@
                 </div>
                 <div class="info-item">
                   <label>Backend Status</label>
-                  <span id="backend-status-text">Checking...</span>
+                  <span id="backend-status-text">Connecting...</span>
                 </div>
                 <div class="info-item">
-                  <label>FFmpeg Available</label>
+                  <label>FFmpeg Status</label>
                   <span id="ffmpeg-status">Checking...</span>
                 </div>
                 <div class="info-item">
-                  <label>Python Version</label>
-                  <span id="python-version">Unknown</span>
+                  <label>Platform</label>
+                  <span id="platform-info">Loading...</span>
+                </div>
+                <div class="info-item">
+                  <label>Architecture</label>
+                  <span id="arch-info">Loading...</span>
+                </div>
+                <div class="info-item">
+                  <label>Uptime</label>
+                  <span id="app-uptime">0s</span>
                 </div>
               </div>
             </div>
 
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fas fa-cog"></i> System Management</h3>
+              </div>
+              <div class="card-body">
+                <div class="info-item">
+                  <label>Cache Size</label>
+                  <span id="cache-size">0 MB</span>
+                </div>
+                <div class="info-item">
+                  <label>Temp Files</label>
+                  <span id="temp-files">0 files</span>
+                </div>
+                <div class="button-group" style="margin-top: 15px;">
+                  <button class="btn btn-secondary" onclick="app.clearCache()">
+                    <i class="fas fa-broom"></i> Clear Cache
+                  </button>
+                  <button class="btn btn-secondary" onclick="app.cleanTempFiles()">
+                    <i class="fas fa-trash"></i> Clean Temp
+                  </button>
+                  <button class="btn btn-secondary" onclick="app.restartBackend()">
+                    <i class="fas fa-redo"></i> Restart Backend
+                  </button>
+                </div>
+              </div>
+            </div>
 
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fas fa-database"></i> Database Info</h3>
+              </div>
+              <div class="card-body">
+                <div class="info-item">
+                  <label>Total Conversions</label>
+                  <span id="total-conversions">0</span>
+                </div>
+                <div class="info-item">
+                  <label>Successful</label>
+                  <span id="successful-conversions" style="color: #28a745;">0</span>
+                </div>
+                <div class="info-item">
+                  <label>Failed</label>
+                  <span id="failed-conversions" style="color: #dc3545;">0</span>
+                </div>
+                <div class="info-item">
+                  <label>Total Stickers Created</label>
+                  <span id="total-stickers">0</span>
+                </div>
+                <div class="info-item">
+                  <label>Session Started</label>
+                  <span id="session-start">Just now</span>
+                </div>
+                <div class="button-group" style="margin-top: 15px;">
+                  <button class="btn btn-secondary" onclick="app.exportStats()">
+                    <i class="fas fa-download"></i> Export Stats
+                  </button>
+                  <button class="btn btn-secondary" onclick="app.resetStats()">
+                    <i class="fas fa-sync"></i> Reset Stats
+                  </button>
+                </div>
+              </div>
+            </div>
 
             <div class="card">
               <div class="card-header">

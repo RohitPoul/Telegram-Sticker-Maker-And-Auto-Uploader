@@ -22,6 +22,14 @@ class TelegramUtilities {
     this.stickerProgressInterval = null;
     this.currentOperation = null; // 'converting', 'hexediting', null
     this.isPaused = false;
+    this.startTime = new Date();
+    this.systemInfoInterval = null;
+    this.sessionStats = {
+      totalConversions: 0,
+      successfulConversions: 0,
+      failedConversions: 0,
+      totalStickers: 0
+    };
     this.init();
   }
   
@@ -821,6 +829,18 @@ class TelegramUtilities {
         break;
       case "settings":
         this.updateSystemInfo();
+        // Update system info every 5 seconds while on settings tab
+        if (this.systemInfoInterval) {
+          clearInterval(this.systemInfoInterval);
+        }
+        this.systemInfoInterval = setInterval(() => {
+          if (document.getElementById("settings").classList.contains("active")) {
+            this.updateSystemInfo();
+          } else {
+            clearInterval(this.systemInfoInterval);
+            this.systemInfoInterval = null;
+          }
+        }, 5000);
         break;
       case "about":
         // Empty for now - will add new content later
@@ -1117,10 +1137,7 @@ class TelegramUtilities {
         document.getElementById("ffmpeg-status").style.color = "#28a745";
       }
       
-      // Update Python version if available
-      if (response.data && response.data.python_version) {
-        document.getElementById("python-version").textContent = response.data.python_version;
-      }
+
     } catch (error) {
       console.error("Backend status check failed:", {
         message: error.message,
@@ -2371,6 +2388,14 @@ class TelegramUtilities {
     
     if (progress.status === "completed") {
       const operationType = wasHexEdit ? "Hex Edit" : "Conversion";
+      
+      // Update stats for successful conversions
+      if (!wasHexEdit) {
+        this.sessionStats.totalConversions++;
+        this.sessionStats.successfulConversions++;
+        this.updateStats();
+      }
+      
       this.showToast(
         "success",
         `${operationType} Complete`,
@@ -2378,6 +2403,14 @@ class TelegramUtilities {
       );
     } else if (progress.status === "error") {
       const operationType = wasHexEdit ? "Hex Edit" : "Conversion";
+      
+      // Update stats for failed conversions
+      if (!wasHexEdit) {
+        this.sessionStats.totalConversions++;
+        this.sessionStats.failedConversions++;
+        this.updateStats();
+      }
+      
       this.showToast(
         "error",
         `${operationType} Error`,
@@ -3513,6 +3546,12 @@ class TelegramUtilities {
   onStickerProcessCompleted(success, progressData) {
     const createBtn = document.getElementById("create-sticker-pack");
     
+    // Update stats
+    if (success) {
+      this.sessionStats.totalStickers += this.mediaFiles.length;
+    }
+    this.updateStats();
+    
     // Reset button
     if (createBtn) {
       createBtn.disabled = false;
@@ -3900,13 +3939,13 @@ class TelegramUtilities {
     }
   }
 
-  async updateSystemInfo() {
+    async updateSystemInfo() {
     try {
       const health = await this.apiRequest("GET", "/api/health");
       
-    // Update Backend Status
-    const backendStatusEl = document.getElementById("backend-status-text");
-    if (backendStatusEl) {
+      // Update Backend Status
+      const backendStatusEl = document.getElementById("backend-status-text");
+      if (backendStatusEl) {
         if (health && health.success) {
           backendStatusEl.textContent = "Connected";
           backendStatusEl.style.color = "#28a745";
@@ -3916,32 +3955,20 @@ class TelegramUtilities {
         }
       }
 
-      // Update FFmpeg Status based on actual backend response
+      // Update FFmpeg Status
       const ffmpegStatusEl = document.getElementById("ffmpeg-status");
       if (ffmpegStatusEl) {
         if (health && health.success) {
-          // Check if backend provides ffmpeg status
           if (health.data && health.data.ffmpeg_available !== undefined) {
-            ffmpegStatusEl.textContent = health.data.ffmpeg_available ? "Available" : "Not Available";
+            ffmpegStatusEl.textContent = health.data.ffmpeg_available ? "Ready" : "Not Found";
             ffmpegStatusEl.style.color = health.data.ffmpeg_available ? "#28a745" : "#dc3545";
           } else {
-            // Default to available if backend is running
-            ffmpegStatusEl.textContent = "Available";
+            ffmpegStatusEl.textContent = "Ready";
             ffmpegStatusEl.style.color = "#28a745";
           }
         } else {
           ffmpegStatusEl.textContent = "Not Available";
           ffmpegStatusEl.style.color = "#dc3545";
-        }
-      }
-
-      // Update Python Version from backend
-      const pythonVersionEl = document.getElementById("python-version");
-      if (pythonVersionEl) {
-        if (health && health.success && health.data && health.data.python_version) {
-          pythonVersionEl.textContent = health.data.python_version;
-        } else {
-          pythonVersionEl.textContent = "3.x";
         }
       }
     } catch (error) {
@@ -3950,22 +3977,61 @@ class TelegramUtilities {
       if (backendStatusEl) {
         backendStatusEl.textContent = "Disconnected";
         backendStatusEl.style.color = "#dc3545";
-    }
-    
-    const ffmpegStatusEl = document.getElementById("ffmpeg-status");
-    if (ffmpegStatusEl) {
+      }
+      
+      const ffmpegStatusEl = document.getElementById("ffmpeg-status");
+      if (ffmpegStatusEl) {
         ffmpegStatusEl.textContent = "Unknown";
         ffmpegStatusEl.style.color = "#6c757d";
-    }
-    
-    const pythonVersionEl = document.getElementById("python-version");
-    if (pythonVersionEl) {
-        pythonVersionEl.textContent = "Unknown";
       }
     }
     
-    // Update memory usage
-    this.monitorPerformance();
+    // Update Platform Info
+    const platformEl = document.getElementById("platform-info");
+    if (platformEl) {
+      const platform = navigator.platform;
+      if (platform.includes("Win")) {
+        platformEl.textContent = "Windows";
+      } else if (platform.includes("Mac")) {
+        platformEl.textContent = "macOS";
+      } else if (platform.includes("Linux")) {
+        platformEl.textContent = "Linux";
+      } else {
+        platformEl.textContent = platform;
+      }
+    }
+    
+    // Update Architecture
+    const archEl = document.getElementById("arch-info");
+    if (archEl) {
+      const is64bit = navigator.userAgent.includes("x64") || 
+                     navigator.userAgent.includes("x86_64") || 
+                     navigator.userAgent.includes("Win64");
+      archEl.textContent = is64bit ? "64-bit" : "32-bit";
+    }
+    
+
+    
+    // Update Uptime
+    const uptimeEl = document.getElementById("app-uptime");
+    if (uptimeEl && this.startTime) {
+      const now = new Date();
+      const diff = now - this.startTime;
+      const hours = Math.floor(diff / 3600000);
+      const minutes = Math.floor((diff % 3600000) / 60000);
+      const seconds = Math.floor((diff % 60000) / 1000);
+      
+      if (hours > 0) {
+        uptimeEl.textContent = `${hours}h ${minutes}m ${seconds}s`;
+      } else if (minutes > 0) {
+        uptimeEl.textContent = `${minutes}m ${seconds}s`;
+      } else {
+        uptimeEl.textContent = `${seconds}s`;
+      }
+    }
+    
+    // Update stats
+    this.updateStats();
     
     // Update file counts
     const videoCountElement = document.getElementById("video-file-count");
@@ -4334,9 +4400,120 @@ This action cannot be undone. Are you sure?
     }
   }
 
-  // Initialize start time for uptime calculation
-  startTime = new Date();
-
+  // System Management Functions
+  async clearCache() {
+    try {
+      // Clear localStorage cache
+      const keysToKeep = ['telegram_api_id', 'telegram_api_hash', 'telegram_bot_token', 'telegram_chat_id'];
+      const allKeys = Object.keys(localStorage);
+      allKeys.forEach(key => {
+        if (!keysToKeep.includes(key)) {
+          localStorage.removeItem(key);
+        }
+      });
+      
+      // Update display
+      document.getElementById('cache-size').textContent = '0 MB';
+      this.showToast('Cache cleared successfully', 'success');
+    } catch (error) {
+      console.error('Failed to clear cache:', error);
+      this.showToast('Failed to clear cache', 'error');
+    }
+  }
+  
+  async cleanTempFiles() {
+    try {
+      const response = await this.apiRequest('POST', '/api/clean-temp');
+      if (response && response.success) {
+        document.getElementById('temp-files').textContent = '0 files';
+        this.showToast('Temp files cleaned successfully', 'success');
+      } else {
+        this.showToast('Failed to clean temp files', 'error');
+      }
+    } catch (error) {
+      console.error('Failed to clean temp files:', error);
+      this.showToast('Failed to clean temp files', 'error');
+    }
+  }
+  
+  async restartBackend() {
+    try {
+      this.showToast('Restarting backend...', 'info');
+      const response = await this.apiRequest('POST', '/api/restart');
+      
+      // Wait a bit for backend to restart
+      setTimeout(() => {
+        this.checkBackendStatus();
+        this.showToast('Backend restarted successfully', 'success');
+      }, 3000);
+    } catch (error) {
+      console.error('Failed to restart backend:', error);
+      // Try to reconnect after a delay
+      setTimeout(() => {
+        this.checkBackendStatus();
+      }, 5000);
+    }
+  }
+  
+  exportStats() {
+    const stats = {
+      session: this.sessionStats,
+      timestamp: new Date().toISOString(),
+      uptime: document.getElementById('app-uptime').textContent,
+      platform: document.getElementById('platform-info').textContent,
+      architecture: document.getElementById('arch-info').textContent
+    };
+    
+    const blob = new Blob([JSON.stringify(stats, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sticker-maker-stats-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    this.showToast('Stats exported successfully', 'success');
+  }
+  
+  resetStats() {
+    if (confirm('Are you sure you want to reset all statistics?')) {
+      this.sessionStats = {
+        totalConversions: 0,
+        successfulConversions: 0,
+        failedConversions: 0,
+        totalStickers: 0
+      };
+      this.updateStats();
+      this.showToast('Statistics reset successfully', 'success');
+    }
+  }
+  
+  updateStats() {
+    // Update conversion stats
+    document.getElementById('total-conversions').textContent = this.sessionStats.totalConversions;
+    document.getElementById('successful-conversions').textContent = this.sessionStats.successfulConversions;
+    document.getElementById('failed-conversions').textContent = this.sessionStats.failedConversions;
+    document.getElementById('total-stickers').textContent = this.sessionStats.totalStickers;
+    
+    // Update cache size (approximate)
+    const cacheSize = Math.round(JSON.stringify(localStorage).length / 1024);
+    document.getElementById('cache-size').textContent = `${cacheSize} KB`;
+    
+    // Update temp files count
+    this.updateTempFileCount();
+  }
+  
+  async updateTempFileCount() {
+    try {
+      const response = await this.apiRequest('GET', '/api/temp-stats');
+      if (response && response.success && response.data) {
+        document.getElementById('temp-files').textContent = `${response.data.count || 0} files`;
+      }
+    } catch (error) {
+      // Silently fail, not critical
+    }
+  }
+  
   // Removed profile card functionality - will add new content later
 }
 

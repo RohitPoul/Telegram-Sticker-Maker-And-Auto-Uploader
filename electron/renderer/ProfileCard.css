@@ -1,0 +1,338 @@
+:root {
+  --pointer-x: 50%;
+  --pointer-y: 50%;
+  --pointer-from-center: 0;
+  --pointer-from-top: 0.5;
+  --pointer-from-left: 0.5;
+  --card-opacity: 0;
+  --rotate-x: 0deg;
+  --rotate-y: 0deg;
+  --background-x: 50%;
+  --background-y: 50%;
+  --grain: none;
+  --icon: none;
+  --behind-gradient: none;
+  --inner-gradient: none;
+  --sunpillar-1: hsl(2, 100%, 73%);
+  --sunpillar-2: hsl(53, 100%, 69%);
+  --sunpillar-3: hsl(93, 100%, 69%);
+  --sunpillar-4: hsl(176, 100%, 76%);
+  --sunpillar-5: hsl(228, 100%, 74%);
+  --sunpillar-6: hsl(283, 100%, 73%);
+  --sunpillar-clr-1: var(--sunpillar-1);
+  --sunpillar-clr-2: var(--sunpillar-2);
+  --sunpillar-clr-3: var(--sunpillar-3);
+  --sunpillar-clr-4: var(--sunpillar-4);
+  --sunpillar-clr-5: var(--sunpillar-5);
+  --sunpillar-clr-6: var(--sunpillar-6);
+  --card-radius: 30px;
+}
+
+.pc-card-wrapper {
+  perspective: 1000px;
+  position: relative;
+  display: inline-block;
+}
+
+.pc-card {
+  height: 75vh;
+  max-height: 650px;
+  min-height: 400px;
+  width: auto;
+  aspect-ratio: 0.718;
+  border-radius: 20px;
+  position: relative;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  transform: translateZ(0);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  overflow: hidden;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.pc-card:hover,
+.pc-card.active {
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9);
+}
+
+.pc-card * {
+  border-radius: 20px;
+  pointer-events: none;
+}
+
+.pc-inside {
+  inset: 1px;
+  position: absolute;
+  background-image: linear-gradient(145deg,#60496e8c 0%,#71C4FF44 100%);
+  background-color: rgba(0, 0, 0, 0.9);
+  transform: translate3d(0, 0, 0.01px);
+}
+
+.pc-shine {
+  display: none; /* Disabled for performance */
+}
+
+.pc-glare {
+  transform: translateZ(2px);
+  overflow: hidden;
+  background: radial-gradient(circle at var(--pointer-x) var(--pointer-y), 
+    rgba(255, 255, 255, 0.1) 0%, 
+    transparent 50%);
+  opacity: 0.3;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.pc-avatar-content {
+  overflow: hidden;
+  position: relative;
+  height: 100%;
+}
+
+.pc-avatar-content .avatar {
+  width: 100%;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%) translateZ(0);
+  bottom: 0;
+  opacity: 1;
+  object-fit: cover;
+  height: 100%;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: optimize-contrast;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  filter: contrast(1.02) brightness(1.01); /* Slight enhancement for clarity */
+  will-change: transform;
+}
+
+.pc-avatar-content::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  backdrop-filter: blur(30px);
+  mask: linear-gradient(to bottom,
+      rgba(0, 0, 0, 0) 0%,
+      rgba(0, 0, 0, 0) 60%,
+      rgba(0, 0, 0, 1) 90%,
+      rgba(0, 0, 0, 1) 100%);
+  pointer-events: none;
+}
+
+.pc-user-info {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  right: 20px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(30px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 15px;
+  padding: 12px 14px;
+  pointer-events: auto;
+}
+
+.pc-user-details {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pc-mini-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.pc-mini-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: optimize-contrast;
+  filter: contrast(1.02) brightness(1.01);
+}
+
+.pc-user-text {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pc-handle {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1;
+}
+
+.pc-status {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1;
+}
+
+.pc-contact-btn {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(10px);
+  background: transparent;
+  pointer-events: auto !important;
+  z-index: 10;
+  position: relative;
+}
+
+.pc-contact-btn:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: translateY(-1px);
+  transition: all 0.2s ease;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.pc-content {
+  max-height: 100%;
+  overflow: hidden;
+  text-align: center;
+  position: relative;
+  z-index: 5;
+}
+
+.pc-details {
+  width: 100%;
+  position: absolute;
+  top: 3em;
+  display: flex;
+  flex-direction: column;
+}
+
+.pc-details h3 {
+  font-weight: 600;
+  margin: 0;
+  font-size: min(5vh, 3em);
+  margin: 0;
+  background-image: linear-gradient(to bottom, #fff, #6f6fbe);
+  background-size: 1em 1.5em;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  -webkit-background-clip: text;
+}
+
+.pc-details p {
+  font-weight: 600;
+  position: relative;
+  top: -12px;
+  white-space: nowrap;
+  font-size: 16px;
+  margin: 0 auto;
+  width: min-content;
+  background-image: linear-gradient(to bottom, #fff, #4a4ac0);
+  background-size: 1em 1.5em;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  -webkit-background-clip: text;
+}
+
+/* About section specific styles */
+#about {
+  overflow: hidden !important;
+  height: calc(100vh - 60px);
+  position: fixed;
+  top: 60px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.about-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+}
+
+.about-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  max-width: 90%;
+  max-height: 90%;
+}
+
+.about-text {
+  text-align: center;
+  max-width: 600px;
+}
+
+.about-text h2 {
+  font-size: 2.5em;
+  margin-bottom: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.about-text p {
+  font-size: 1.1em;
+  line-height: 1.6;
+  color: #aaa;
+  margin-bottom: 15px;
+}
+
+/* Avatar image is now used instead of placeholder */
+
+/* Removed complex animations for better performance */
+
+@media (max-width: 1024px) {
+  .pc-card {
+    height: 70vh;
+    max-height: 550px;
+  }
+}
+
+@media (max-width: 768px) {
+  .pc-card {
+    height: 65vh;
+    max-height: 500px;
+  }
+}
+
+@media (max-width: 480px) {
+  .pc-card {
+    height: 60vh;
+    max-height: 450px;
+  }
+
+  .pc-user-info {
+    bottom: 10px;
+    left: 10px;
+    right: 10px;
+    padding: 8px 10px;
+  }
+
+  .pc-mini-avatar {
+    width: 32px;
+    height: 32px;
+  }
+}
