@@ -83,12 +83,21 @@ function startPythonBackend() {
         
         pythonProcess = spawn(pythonCmd, [scriptPath], {
             cwd: pythonPath,
-            stdio: ["ignore", "ignore", "ignore"],
+            stdio: ["ignore", "pipe", "pipe"],
             env: {
                 ...process.env,
                 BACKEND_LOG_LEVEL: process.env.BACKEND_LOG_LEVEL || 'WARNING',
                 BACKEND_LOG_TO_STDOUT: '0',
             },
+        });
+        
+        // Log backend output for debugging
+        pythonProcess.stdout.on('data', (data) => {
+            console.log(`Backend: ${data}`);
+        });
+        
+        pythonProcess.stderr.on('data', (data) => {
+            console.error(`Backend Error: ${data}`);
         });
 
         // Resolve when process has spawned successfully
