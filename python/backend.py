@@ -9,6 +9,7 @@ import time
 import uuid
 import signal
 import atexit
+import platform  # Add this import
 from pathlib import Path
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -585,11 +586,22 @@ def start_video_conversion():
         input_files = data.get('files', [])
         output_dir = data.get('output_dir', '')
         settings = data.get('settings', {})
-        process_id = f"conversion-{int(time.time())}"  # Generate unique process ID
+        process_id = data.get('process_id', f"conversion-{int(time.time())}")  # Generate unique process ID
 
         logger.info(f"[API] Files: {len(input_files)}")
         logger.info(f"[API] Output: {output_dir}")
         logger.info(f"[API] Process ID: {process_id}")
+
+        # Check for existing process
+        with process_lock:
+            if process_id in active_processes:
+                existing_process = active_processes[process_id]
+                if existing_process.get('status') in ['processing', 'initializing']:
+                    return jsonify({
+                        "success": False, 
+                        "error": "A process with this ID is already in progress",
+                        "existing_process_status": existing_process.get('status')
+                    }), 400
 
         if not input_files:
             return jsonify({"success": False, "error": "No files provided"}), 400
