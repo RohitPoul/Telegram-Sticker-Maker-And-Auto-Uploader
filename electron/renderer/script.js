@@ -556,19 +556,16 @@ class TelegramUtilities {
   // Unified API request wrapper with better error handling
   async apiRequest(method, endpoint, data = null) {
     try {
-      const response = await window.electronAPI.apiRequest({
-        method,
-        endpoint,
-        data
-      });
+      // Use electronAPI.apiRequest which is handled in the main process
+      const response = await window.electronAPI.apiRequest({ method, endpoint, data });
       
       if (!response.success) {
-        throw new Error(response.error || "Request failed");
+        throw new Error(response.error || "API request failed");
       }
       
-      return response;
+      return response.data;
     } catch (error) {
-      console.error(`API request failed: ${method} ${endpoint}`, error);
+      console.error(`API Request Error (${method} ${endpoint}):`, error);
       throw error;
     }
   }
