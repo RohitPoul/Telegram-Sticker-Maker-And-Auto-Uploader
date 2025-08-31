@@ -573,7 +573,21 @@ def register_sticker_routes(app):
             pack_name = data.get('pack_name', '')
             sticker_type = data.get('sticker_type', 'video')
             media_files = data.get('media_files', [])
-            process_id = data.get('process_id', '')
+            process_id = data.get('process_id', f'sticker_{int(time.time())}')
+
+            # Import active_processes from backend
+            from backend import active_processes, process_lock
+
+            # Check for existing process
+            with process_lock:
+                if process_id in active_processes:
+                    existing_process = active_processes[process_id]
+                    if existing_process.get('status') in ['processing', 'initializing']:
+                        return jsonify({
+                            "success": False, 
+                            "error": "A process with this ID is already in progress",
+                            "existing_process_status": existing_process.get('status')
+                        }), 400
 
             if not pack_name:
                 return jsonify({"success": False, "error": "Pack name is required"}), 400
