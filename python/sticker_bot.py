@@ -577,6 +577,7 @@ def register_sticker_routes(app):
 
             # Import active_processes from backend
             from backend import active_processes, process_lock
+            import queue
 
             # Check for existing process
             with process_lock:
@@ -595,16 +596,37 @@ def register_sticker_routes(app):
             if not media_files:
                 return jsonify({"success": False, "error": "No media files provided"}), 400
 
+            # Create a queue to communicate results
+            result_queue = queue.Queue()
+
             def creation_thread():
                 try:
-                    sticker_bot.create_sticker_pack(pack_name, sticker_type, media_files, process_id)
+                    result = sticker_bot.create_sticker_pack(pack_name, sticker_type, media_files, process_id)
+                    result_queue.put(result)
                 except Exception as e:
-                    logging.error(f"Sticker creation error: {e}")
+                    result_queue.put({"success": False, "error": str(e)})
 
             thread = threading.Thread(target=creation_thread, daemon=True)
             thread.start()
 
-            return jsonify({"success": True, "process_id": process_id})
+            # Wait for thread to complete with a timeout
+            try:
+                thread.join(timeout=10)  # 10-second timeout
+                if thread.is_alive():
+                    return jsonify({
+                        "success": False, 
+                        "error": "Sticker pack creation timed out"
+                    }), 500
+
+                # Get result from queue
+                result = result_queue.get(block=False)
+                return jsonify(result)
+
+            except queue.Empty:
+                return jsonify({
+                    "success": False, 
+                    "error": "No result received from sticker pack creation"
+                }), 500
 
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500
