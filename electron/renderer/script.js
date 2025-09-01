@@ -33,6 +33,7 @@ class TelegramUtilities {
       totalStickers: 0
     };
     this.init();
+    this.initializeNavigation(); // Add this line to initialize navigation
   }
   
   async init() {
@@ -907,42 +908,40 @@ class TelegramUtilities {
   }
 
   handleTabSwitch(tabId) {
+    console.log('Switching to tab:', tabId);
+    const tabContents = document.querySelectorAll(".tab-content");
+    console.log('All tab contents:', tabContents);
+    
+    tabContents.forEach((content) => {
+      console.log('Removing active from:', content.id);
+      content.classList.remove("active");
+    });
+    
+    const targetTab = document.getElementById(tabId);
+    console.log('Target tab:', targetTab);
+    
+    if (targetTab) {
+      console.log('Adding active to:', tabId);
+      targetTab.classList.add("active");
+    } else {
+      console.error('Tab not found:', tabId);
+    }
+
     switch (tabId) {
-      case "video-converter":
-        if (this.videoFiles.length === 0) {
-          setTimeout(() => {
-            document.getElementById("add-videos").focus();
-          }, 100);
-        }
+      case 'video-converter':
+        // Specific actions for video converter tab
         break;
-      case "sticker-bot":
-        if (!this.telegramConnected) {
-          setTimeout(() => {
-            const apiIdInput = document.getElementById("api-id");
-            if (apiIdInput && !apiIdInput.value) {
-              apiIdInput.focus();
-            }
-          }, 100);
-        }
+      case 'sticker-bot':
+        // Specific actions for sticker bot tab
         break;
-      case "settings":
-        this.updateSystemInfo();
+      case 'settings':
         // Update system info every 5 seconds while on settings tab
-        if (this.systemInfoInterval) {
-          clearInterval(this.systemInfoInterval);
-        }
-        this.systemInfoInterval = setInterval(() => {
-          if (document.getElementById("settings").classList.contains("active")) {
-            this.updateSystemInfo();
-          } else {
-            clearInterval(this.systemInfoInterval);
-            this.systemInfoInterval = null;
-          }
-        }, 5000);
         break;
-      case "about":
-        // Empty for now - will add new content later
+      case 'about':
+        // Specific actions for about tab
         break;
+      default:
+        console.warn('Unknown tab:', tabId);
     }
   }
 
@@ -4859,6 +4858,379 @@ This action cannot be undone. Are you sure?
   }
   
   // Removed profile card functionality - will add new content later
+  
+  // About Me Section Functionality
+  initializeAboutSection() {
+    this.setupSupportButtons();
+    this.setupProjectLinks();
+    this.setupChannelPromotion();
+  }
+  
+  setupSupportButtons() {
+    // Coffee button
+    const coffeeBtn = document.querySelector('.coffee-btn');
+    if (coffeeBtn) {
+      coffeeBtn.addEventListener('click', () => {
+        this.showSupportModal('coffee', 'Buy Me a Coffee', 
+          'Support my open source work with a coffee! ☕\n\n' +
+          'This will open your default browser to a coffee donation page.\n' +
+          'You can replace this with your actual coffee.me or similar link later.');
+      });
+    }
+    
+    // PayPal button
+    const paypalBtn = document.querySelector('.paypal-btn');
+    if (paypalBtn) {
+      paypalBtn.addEventListener('click', () => {
+        this.showSupportModal('paypal', 'PayPal Donation', 
+          'Support my work via PayPal! 💰\n\n' +
+          'This will open your default browser to PayPal.\n' +
+          'You can replace this with your actual PayPal.me link later.');
+      });
+    }
+    
+    // GitHub Sponsors button
+    const githubBtn = document.querySelector('.github-btn');
+    if (githubBtn) {
+      githubBtn.addEventListener('click', () => {
+        this.showSupportModal('github', 'GitHub Sponsors', 
+          'Become a GitHub Sponsor! 🌟\n\n' +
+          'This will open your GitHub profile for sponsorship.\n' +
+          'You can replace this with your actual GitHub Sponsors link later.');
+      });
+    }
+    
+    // Star Projects button
+    const starBtn = document.querySelector('.star-btn');
+    if (starBtn) {
+      starBtn.addEventListener('click', () => {
+        this.showSupportModal('star', 'Star Projects', 
+          'Show your appreciation by starring my projects! ⭐\n\n' +
+          'This will open your GitHub repositories.\n' +
+          'You can replace this with your actual project links later.');
+      });
+    }
+  }
+  
+  setupProjectLinks() {
+    // Add click tracking for project links
+    const projectLinks = document.querySelectorAll('.project-link');
+    projectLinks.forEach(link => {
+      link.addEventListener('click', (e) => {
+        // Track project clicks
+        console.log('🚀 Project link clicked:', link.href);
+        this.showToast('info', 'Opening Project', 'Opening project in your browser...');
+      });
+    });
+  }
+  
+  setupChannelPromotion() {
+    const channelBtn = document.querySelector('.channel-join-btn');
+    if (channelBtn) {
+      channelBtn.addEventListener('click', (e) => {
+        console.log('📱 Channel join button clicked');
+        this.showToast('success', 'Joining Channel', 'Opening Telegram channel in your browser...');
+      });
+    }
+  }
+  
+  showSupportModal(type, title, message) {
+    // Create a simple modal for support options
+    const modal = document.createElement('div');
+    modal.className = 'support-modal';
+    modal.innerHTML = `
+      <div class="support-modal-content">
+        <div class="support-modal-header">
+          <h3>${title}</h3>
+          <button class="support-modal-close">&times;</button>
+        </div>
+        <div class="support-modal-body">
+          <p>${message.replace(/\n/g, '<br>')}</p>
+        </div>
+        <div class="support-modal-footer">
+          <button class="btn btn-secondary support-modal-cancel">Cancel</button>
+          <button class="btn btn-primary support-modal-proceed">Proceed</button>
+        </div>
+      </div>
+    `;
+    
+    // Add modal styles
+    const style = document.createElement('style');
+    style.textContent = `
+      .support-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        animation: fadeIn 0.3s ease;
+      }
+      
+      .support-modal-content {
+        background: var(--bg-card);
+        border-radius: 15px;
+        max-width: 500px;
+        width: 90%;
+        max-height: 80vh;
+        overflow-y: auto;
+        border: 1px solid var(--border-color);
+        animation: slideUp 0.3s ease;
+      }
+      
+      .support-modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.5rem;
+        border-bottom: 1px solid var(--border-color);
+      }
+      
+      .support-modal-header h3 {
+        margin: 0;
+        color: var(--text-primary);
+      }
+      
+      .support-modal-close {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        color: var(--text-secondary);
+        cursor: pointer;
+        padding: 0;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        transition: background 0.3s ease;
+      }
+      
+      .support-modal-close:hover {
+        background: var(--bg-input);
+      }
+      
+      .support-modal-body {
+        padding: 1.5rem;
+        color: var(--text-secondary);
+        line-height: 1.6;
+      }
+      
+      .support-modal-footer {
+        padding: 1.5rem;
+        border-top: 1px solid var(--border-color);
+        display: flex;
+        gap: 1rem;
+        justify-content: flex-end;
+      }
+      
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      
+      @keyframes slideUp {
+        from { transform: translateY(20px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+      }
+    `;
+    
+    document.head.appendChild(style);
+    document.body.appendChild(modal);
+    
+    // Handle close button
+    const closeBtn = modal.querySelector('.support-modal-close');
+    const cancelBtn = modal.querySelector('.support-modal-cancel');
+    const proceedBtn = modal.querySelector('.support-modal-proceed');
+    
+    const closeModal = () => {
+      modal.remove();
+      style.remove();
+    };
+    
+    closeBtn.addEventListener('click', closeModal);
+    cancelBtn.addEventListener('click', closeModal);
+    
+    // Handle proceed button
+    proceedBtn.addEventListener('click', () => {
+      closeModal();
+      
+      // Open appropriate link based on type
+      let url = '';
+      switch(type) {
+        case 'coffee':
+          url = 'https://buymeacoffee.com/'; // Replace with your actual link
+          break;
+        case 'paypal':
+          url = 'https://paypal.me/'; // Replace with your actual link
+          break;
+        case 'github':
+          url = 'https://github.com/RohitPoul'; // Your GitHub profile
+          break;
+        case 'star':
+          url = 'https://github.com/RohitPoul?tab=repositories'; // Your repositories
+          break;
+      }
+      
+      if (url) {
+        window.open(url, '_blank');
+        this.showToast('success', 'Link Opened', 'Opening support page in your browser...');
+      }
+    });
+    
+    // Close on outside click
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeModal();
+    });
+  }
+
+  initializeNavigation() {
+    const navItems = document.querySelectorAll(".nav-item");
+    console.log('Navigation items:', navItems);
+
+    navItems.forEach((item) => {
+      item.addEventListener("click", () => {
+        // Remove active class from all nav items
+        navItems.forEach((navItem) => navItem.classList.remove("active"));
+        
+        // Add active class to clicked nav item
+        item.classList.add("active");
+        
+        const tabId = item.getAttribute("data-tab");
+        console.log('Clicked tab:', tabId);
+        
+        this.handleTabSwitch(tabId);
+      });
+    });
+
+    // Ensure initial tab is set correctly
+    const initialActiveTab = document.querySelector(".nav-item.active");
+    if (initialActiveTab) {
+      const initialTabId = initialActiveTab.getAttribute("data-tab");
+      console.log('Initial active tab:', initialTabId);
+      this.handleTabSwitch(initialTabId);
+    } else {
+      console.warn('No initial active tab found');
+    }
+  }
+
+  // Virtual Scrolling Utility
+  createVirtualList(containerSelector, itemTemplate, dataSource, renderFunction) {
+    const container = document.querySelector(containerSelector);
+    if (!container) return;
+
+    // Viewport and item sizing
+    const viewportHeight = container.clientHeight;
+    const itemHeight = 50; // Estimated item height
+    const visibleItemCount = Math.ceil(viewportHeight / itemHeight) + 2;
+
+    // Scrolling state
+    let startIndex = 0;
+    let endIndex = visibleItemCount;
+
+    // Render function
+    const render = () => {
+      // Clear existing content
+      container.innerHTML = '';
+
+      // Slice the visible portion of data
+      const visibleData = dataSource.slice(startIndex, endIndex);
+
+      // Render visible items
+      visibleData.forEach((item, index) => {
+        const itemElement = document.createElement('div');
+        itemElement.classList.add('virtual-list-item');
+        renderFunction(itemElement, item, startIndex + index);
+        container.appendChild(itemElement);
+      });
+
+      // Add padding to simulate full list height
+      const topPadding = document.createElement('div');
+      topPadding.style.height = `${startIndex * itemHeight}px`;
+      container.insertBefore(topPadding, container.firstChild);
+
+      const bottomPadding = document.createElement('div');
+      bottomPadding.style.height = `${Math.max(0, (dataSource.length - endIndex) * itemHeight)}px`;
+      container.appendChild(bottomPadding);
+    };
+
+    // Scroll event handler
+    const handleScroll = () => {
+      const scrollTop = container.scrollTop;
+      startIndex = Math.floor(scrollTop / itemHeight);
+      endIndex = startIndex + visibleItemCount;
+
+      // Throttle rendering to reduce performance impact
+      requestAnimationFrame(render);
+    };
+
+    // Initial render
+    render();
+
+    // Attach scroll event
+    container.addEventListener('scroll', handleScroll);
+
+    // Return methods for external control
+    return {
+      update: (newDataSource) => {
+        dataSource = newDataSource;
+        render();
+      },
+      destroy: () => {
+        container.removeEventListener('scroll', handleScroll);
+      }
+    };
+  }
+
+  // Example usage for file lists
+  initializeVirtualLists() {
+    // Virtual scrolling for video file list
+    this.videoFileList = this.createVirtualList(
+      '#video-file-list', 
+      '.file-item', 
+      this.videoFiles, 
+      (element, file, index) => {
+        element.innerHTML = `
+          <div class="file-info">
+            <i class="fas fa-file-video file-icon"></i>
+            <div class="file-details">
+              <div class="file-name">${file.name}</div>
+              <div class="file-path">${file.path}</div>
+            </div>
+          </div>
+          <div class="file-actions">
+            <button class="btn btn-sm btn-secondary">Remove</button>
+          </div>
+        `;
+      }
+    );
+
+    // Similar implementation for sticker media list
+    this.stickerMediaList = this.createVirtualList(
+      '#sticker-media-list', 
+      '.media-item', 
+      this.stickerFiles, 
+      (element, file, index) => {
+        element.innerHTML = `
+          <div class="media-info">
+            <i class="fas fa-image media-icon"></i>
+            <div class="media-details">
+              <div class="media-name">${file.name}</div>
+              <div class="media-type">${file.type}</div>
+            </div>
+          </div>
+          <div class="media-actions">
+            <button class="btn btn-sm btn-secondary">Remove</button>
+          </div>
+        `;
+      }
+    );
+  }
 }
 
 // Initialize the application when DOM is ready
