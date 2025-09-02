@@ -9,7 +9,8 @@ import time
 import uuid
 import signal
 import atexit
-import platform  # Add this import
+import platform
+import shutil  # Add this import
 from pathlib import Path
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -248,51 +249,61 @@ def system_info():
         return jsonify({"success": False, "error": str(e)}), 500
 
 # GPU detection route
-@app.route('/api/gpu-detect', methods=['GET', 'OPTIONS'], strict_slashes=False)
+@app.route('/api/gpu-detect', methods=['GET'])
 def detect_gpus():
-    if request.method == 'OPTIONS':
-        return '', 200
     try:
         if not GPU_MANAGER_AVAILABLE:
-            return jsonify({"success": False, "error": "GPU manager not available"}), 500
+            return jsonify({
+                "success": False, 
+                "error": "GPU manager not available", 
+                "details": "Failed to initialize GPU detection capabilities",
+                "diagnostics": {
+                    "system": platform.system(),
+                    "python_version": platform.python_version(),
+                    "required_commands": {
+                        "nvidia-smi": shutil.which("nvidia-smi") is not None,
+                        "rocm-smi": shutil.which("rocm-smi") is not None,
+                    }
+                }
+            }), 500
+    
+        # Detect GPUs
+        gpus = gpu_manager.gpus
         
-        gpus = gpu_manager.detect_all_gpus()
-        gpu_list = []
+        # Prepare detailed GPU information
+        gpu_info = []
         for gpu in gpus:
-            gpu_list.append({
-                'index': gpu.index,
-                'name': gpu.name,
-                'type': gpu.type.value,
-                'memory_total': gpu.memory_total,
-                'memory_used': gpu.memory_used,
-                'memory_free': gpu.memory_free,
-                'driver_version': gpu.driver_version,
-                'cuda_version': gpu.cuda_version,
-                'utilization': gpu.utilization,
-                'temperature': gpu.temperature
-            })
+            gpu_details = {
+                "index": gpu.index,
+                "name": gpu.name,
+                "type": gpu.type.value,
+                "memory_total": gpu.memory_total,
+                "memory_used": gpu.memory_used,
+                "memory_free": gpu.memory_free,
+                "cuda_version": gpu.cuda_version
+            }
+            gpu_info.append(gpu_details)
         
-        # Check for CUDA availability
+        # Check CUDA availability
         cuda_info = {
-            'cuda_available': gpu_manager.cuda_available,
-            'cuda_version': gpu_manager.cuda_version,
-            'cudnn_available': gpu_manager.cudnn_available
+            "available": gpu_manager.cuda_available,
+            "version": gpu_manager.cuda_version
         }
-        
-        # Check if NVIDIA GPU exists but CUDA not installed
-        has_nvidia = any(gpu.type.value == 'nvidia' for gpu in gpus)
-        needs_cuda = has_nvidia and not gpu_manager.cuda_available
         
         return jsonify({
             "success": True,
-            "gpus": gpu_list,
-            "count": len(gpu_list),
+            "gpus": gpu_info,
             "cuda_info": cuda_info,
-            "needs_cuda_install": needs_cuda
+            "needs_cuda_install": len(gpus) > 0 and any(gpu.type == GPUType.NVIDIA for gpu in gpus) and not gpu_manager.cuda_available
         })
+    
     except Exception as e:
-        logger.error(f"Error detecting GPUs: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
+        logger.error(f"GPU detection failed: {e}", exc_info=True)
+        return jsonify({
+            "success": False, 
+            "error": "Failed to detect GPUs", 
+            "details": str(e)
+        }), 500
 
 # CUDA installation info route
 @app.route('/api/cuda-install-info', methods=['GET', 'OPTIONS'], strict_slashes=False)
