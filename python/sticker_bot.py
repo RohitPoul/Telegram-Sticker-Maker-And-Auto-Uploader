@@ -17,6 +17,108 @@ try:
 except ImportError:
     TELETHON_AVAILABLE = False
 
+import os
+import json
+import logging
+import threading
+import time
+from typing import Dict, Optional
+
+try:
+    from cryptography.fernet import Fernet
+    ENCRYPTION_AVAILABLE = True
+except ImportError:
+    ENCRYPTION_AVAILABLE = False
+    logging.warning("[SECURITY] Cryptography library not available. Credentials will be stored in plain text.")
+
+class SecureCredentialManager:
+    """Secure management of Telegram credentials with optional encryption"""
+    
+    def __init__(self, credentials_path='telegram_credentials.json'):
+        self.credentials_path = credentials_path
+        self._encryption_key = None
+        self._cipher_suite = None
+        
+        # Ensure credentials file exists
+        if not os.path.exists(credentials_path):
+            with open(credentials_path, 'w') as f:
+                json.dump({}, f)
+        
+        # Initialize encryption if available
+        if ENCRYPTION_AVAILABLE:
+            self._initialize_encryption()
+    
+    def _initialize_encryption(self):
+        """Initialize encryption key and cipher suite"""
+        key_path = self.credentials_path + '.key'
+        
+        # Generate or load encryption key
+        if not os.path.exists(key_path):
+            self._encryption_key = Fernet.generate_key()
+            with open(key_path, 'wb') as key_file:
+                key_file.write(self._encryption_key)
+        else:
+            with open(key_path, 'rb') as key_file:
+                self._encryption_key = key_file.read()
+        
+        self._cipher_suite = Fernet(self._encryption_key)
+    
+    def _encrypt(self, data: str) -> str:
+        """Encrypt data if encryption is available"""
+        if not ENCRYPTION_AVAILABLE or not self._cipher_suite:
+            return data
+        return self._cipher_suite.encrypt(data.encode()).decode()
+    
+    def _decrypt(self, encrypted_data: str) -> str:
+        """Decrypt data if encryption is available"""
+        if not ENCRYPTION_AVAILABLE or not self._cipher_suite:
+            return encrypted_data
+        return self._cipher_suite.decrypt(encrypted_data.encode()).decode()
+    
+    def save_credentials(self, phone_number: str, api_id: str, api_hash: str):
+        """Save Telegram credentials securely"""
+        try:
+            credentials = {
+                'phone_number': self._encrypt(phone_number),
+                'api_id': self._encrypt(api_id),
+                'api_hash': self._encrypt(api_hash),
+                'last_updated': time.time()
+            }
+            
+            with open(self.credentials_path, 'w') as f:
+                json.dump(credentials, f)
+            
+            logging.info("[CREDENTIALS] Credentials saved successfully")
+        except Exception as e:
+            logging.error(f"[CREDENTIALS] Error saving credentials: {e}")
+    
+    def get_credentials(self) -> Optional[Dict[str, str]]:
+        """Retrieve Telegram credentials"""
+        try:
+            with open(self.credentials_path, 'r') as f:
+                credentials = json.load(f)
+            
+            if not credentials:
+                return None
+            
+            return {
+                'phone_number': self._decrypt(credentials['phone_number']),
+                'api_id': self._decrypt(credentials['api_id']),
+                'api_hash': self._decrypt(credentials['api_hash'])
+            }
+        except Exception as e:
+            logging.error(f"[CREDENTIALS] Error retrieving credentials: {e}")
+            return None
+    
+    def clear_credentials(self):
+        """Clear saved credentials"""
+        try:
+            with open(self.credentials_path, 'w') as f:
+                json.dump({}, f)
+            logging.info("[CREDENTIALS] Credentials cleared")
+        except Exception as e:
+            logging.error(f"[CREDENTIALS] Error clearing credentials: {e}")
+
 class BotResponseType(Enum):
     NEW_PACK_CREATED = "new_pack_created"
     PACK_NAME_ACCEPTED = "pack_name_accepted"
@@ -254,14 +356,18 @@ class StickerBotCore:
         self.phone_number = ""
         self.asyncio_thread = AsyncioEventLoopThread()
         self.asyncio_thread.start()
+        self.credential_manager = SecureCredentialManager()
         self.logger.info("[INIT] Sticker Bot Core initialized")
-
+    
     def connect_telegram(self, api_id: str, api_hash: str, phone_number: str, process_id: str) -> Dict:
         """REAL Telegram connection with EXACT logic from Python version"""
         try:
             if not TELETHON_AVAILABLE:
                 raise RuntimeError("Telethon library not available")
 
+            # Save credentials securely
+            self.credential_manager.save_credentials(phone_number, api_id, api_hash)
+            
             self.phone_number = phone_number
 
             # Run connection in asyncio thread
@@ -275,11 +381,23 @@ class StickerBotCore:
         except Exception as e:
             self.logger.error(f"[TELEGRAM] Connection error: {e}")
             return {"success": False, "error": str(e)}
-
+    
     async def _connect_telegram_async(self, api_id: str, api_hash: str, phone_number: str):
         """EXACT CONNECTION LOGIC FROM PYTHON VERSION"""
         try:
             session_name = f'session_{phone_number.replace("+", "").replace(" ", "")}'
+            
+            # Attempt to delete existing session files if they exist
+            try:
+                for ext in ['.session', '.session-journal']:
+                    session_file = f'{session_name}{ext}'
+                    if os.path.exists(session_file):
+                        os.remove(session_file)
+                        self.logger.info(f"[TELEGRAM] Removed existing session file: {session_file}")
+            except Exception as e:
+                self.logger.warning(f"[TELEGRAM] Error removing session files: {e}")
+            
+            # Create new client with fresh session
             self.client = TelegramClient(session_name, int(api_id), api_hash)
             
             await self.client.connect()
@@ -297,9 +415,17 @@ class StickerBotCore:
                 await self.client.send_code_request(phone_number)
                 self.code_pending = True
                 return {"success": True, "needs_code": True, "needs_password": False}
-
+            
         except Exception as e:
             self.logger.error(f"[TELEGRAM] Async connection error: {e}")
+            
+            # Attempt to close any existing client
+            try:
+                if self.client:
+                    await self.client.disconnect()
+            except Exception:
+                pass
+            
             return {"success": False, "error": str(e)}
 
     def verify_code(self, code: str) -> Dict:
