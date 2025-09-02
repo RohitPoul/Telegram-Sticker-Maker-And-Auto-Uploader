@@ -182,81 +182,128 @@ class TelegramUtilities {
       // Detect available GPUs
       const response = await this.apiRequest("GET", "/api/gpu-detect");
       
-      if (response.success && response.gpus && response.gpus.length > 0) {
-        // GPU available - check for CUDA
-        const bestGPU = response.gpus[0];
-        const cudaInfo = response.cuda_info || {};
-        
-        // Check if NVIDIA GPU needs CUDA
-        if (response.needs_cuda_install && bestGPU.type === 'nvidia') {
-          // Show CUDA installation prompt
-          this.showCudaInstallPrompt(bestGPU);
-        }
+      // Handle different response scenarios
+      if (!response.success) {
+        const errorMessage = response.details || response.error || "Unknown GPU detection error";
         
         if (modeBadge) {
-          if (cudaInfo.cuda_available && bestGPU.type === 'nvidia') {
-            modeBadge.textContent = `CUDA Acceleration`;
-            modeBadge.className = "mode-badge cuda-active";
-          } else {
-            modeBadge.textContent = `GPU Acceleration`;
-            modeBadge.className = "mode-badge gpu-active";
-          }
+          modeBadge.textContent = "Detection Failed";
+          modeBadge.className = "mode-badge error";
         }
         
         if (modeDetails) {
-          let details = `${bestGPU.name}`;
-          if (cudaInfo.cuda_available && bestGPU.type === 'nvidia') {
-            details += ` | CUDA ${cudaInfo.cuda_version}`;
-          }
-          if (bestGPU.memory_total > 0) {
-            details += ` | ${bestGPU.memory_total}MB VRAM`;
-          }
-          modeDetails.textContent = details;
+          modeDetails.innerHTML = `
+            <div class="error-details">
+              <p><strong>Error:</strong> ${errorMessage}</p>
+              <p>Possible reasons:
+                <ul>
+                  <li>No compatible GPU detected</li>
+                  <li>Missing GPU drivers</li>
+                  <li>System configuration issue</li>
+                </ul>
+              </p>
+              <div class="troubleshooting-steps">
+                <h4>Troubleshooting Steps:</h4>
+                <ol>
+                  <li>Restart the application</li>
+                  <li>Check your system's GPU drivers</li>
+                  <li>Verify backend server is running</li>
+                  <li>Ensure required dependencies are installed</li>
+                </ol>
+              </div>
+            </div>
+          `;
         }
         
-        // Store the detected mode
-        this.accelerationMode = cudaInfo.cuda_available ? "cuda" : "gpu";
-        this.selectedGPU = bestGPU;
-        this.cudaAvailable = cudaInfo.cuda_available;
-        
-      } else {
-        // No GPU - fallback to CPU
-        if (modeBadge) {
-          modeBadge.textContent = "CPU Mode";
-          modeBadge.className = "mode-badge cpu-active";
-        }
-        
-        if (modeDetails) {
-          const cpuInfo = await this.apiRequest("GET", "/api/system-info");
-          const processor = cpuInfo?.data?.processor || "Multi-core processor";
-          modeDetails.textContent = processor;
-        }
-        
-        // Store the detected mode
-        this.accelerationMode = "cpu";
-        this.selectedGPU = null;
-        this.cudaAvailable = false;
+        return false;
       }
       
-    } catch (error) {
-      console.debug("Failed to detect acceleration mode:", error);
+      // Successful GPU detection
+      if (response.gpus && response.gpus.length > 0) {
+        const bestGPU = response.gpus[0];
+        
+        // Update mode badge
+        if (modeBadge) {
+          modeBadge.textContent = bestGPU.type.toUpperCase();
+          modeBadge.className = `mode-badge ${bestGPU.type.toLowerCase()}`;
+        }
+        
+        // Update mode details
+        if (modeDetails) {
+          let message = `
+            <strong>GPU Detected:</strong> ${bestGPU.name}<br>
+            <strong>Type:</strong> ${bestGPU.type.toUpperCase()}<br>
+            <strong>Memory:</strong> ${bestGPU.memory_total ? (bestGPU.memory_total / 1024).toFixed(1) + ' GB' : 'Unknown'}<br>
+          `;
+          
+          // Add CUDA information if available
+          if (response.cuda_info && response.cuda_info.available) {
+            message += `<strong>CUDA:</strong> ${response.cuda_info.version}<br>`;
+          }
+          
+          // Check if CUDA installation is needed
+          if (response.needs_cuda_install) {
+            message += `
+              <div class="cuda-warning">
+                <strong>Note:</strong> CUDA installation recommended for optimal performance.
+                <button id="install-cuda-btn" class="btn btn-warning">Install CUDA</button>
+              </div>
+            `;
+          }
+          
+          modeDetails.innerHTML = message;
+          
+          // Add event listener for CUDA installation
+          const installCudaBtn = document.getElementById('install-cuda-btn');
+          if (installCudaBtn) {
+            installCudaBtn.addEventListener('click', () => this.installCUDA());
+          }
+        }
+        
+        return true;
+      }
       
-      // Default to CPU on error
+      // No GPUs detected
+      if (modeBadge) {
+        modeBadge.textContent = "CPU Fallback";
+        modeBadge.className = "mode-badge cpu";
+      }
+      
+      if (modeDetails) {
+        modeDetails.innerHTML = `
+          <p>No GPU detected. Falling back to CPU processing.</p>
+          <p>Performance may be slower compared to GPU acceleration.</p>
+        `;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error("GPU detection error:", error);
+      
       const modeBadge = document.getElementById("mode-badge");
       const modeDetails = document.getElementById("mode-details");
       
       if (modeBadge) {
-        modeBadge.textContent = "CPU Mode";
-        modeBadge.className = "mode-badge cpu-active";
+        modeBadge.textContent = "Detection Failed";
+        modeBadge.className = "mode-badge error";
       }
       
       if (modeDetails) {
-        modeDetails.textContent = "Default mode";
+        modeDetails.innerHTML = `
+          <div class="error-details">
+            <p><strong>Error:</strong> Unable to detect GPU capabilities</p>
+            <p>Possible reasons:
+              <ul>
+                <li>Network connectivity issue</li>
+                <li>Backend server not responding</li>
+                <li>Unexpected system configuration</li>
+              </ul>
+            </p>
+          </div>
+        `;
       }
       
-      this.accelerationMode = "cpu";
-      this.selectedGPU = null;
-      this.cudaAvailable = false;
+      return false;
     }
   }
   
