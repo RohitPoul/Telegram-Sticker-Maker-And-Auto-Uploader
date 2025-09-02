@@ -263,11 +263,26 @@ def detect_gpus():
                     "required_commands": {
                         "nvidia-smi": shutil.which("nvidia-smi") is not None,
                         "rocm-smi": shutil.which("rocm-smi") is not None,
+                        "nvcc": shutil.which("nvcc") is not None
                     }
                 }
             }), 500
     
-        # Detect GPUs
+        # Check if GPU manager is healthy
+        if not gpu_manager.is_healthy():
+            return jsonify({
+                "success": False,
+                "error": "GPU manager initialization failed",
+                "details": gpu_manager.initialization_error or "Unknown initialization error",
+                "diagnostics": {
+                    "system": platform.system(),
+                    "python_version": platform.python_version(),
+                    "gpu_manager_healthy": False,
+                    "initialization_error": gpu_manager.initialization_error
+                }
+            }), 500
+    
+        # Get detected GPUs
         gpus = gpu_manager.gpus
         
         # Prepare detailed GPU information
@@ -284,25 +299,58 @@ def detect_gpus():
             }
             gpu_info.append(gpu_details)
         
-        # Check CUDA availability
+        # Check CUDA availability and toolkit installation
         cuda_info = {
             "available": gpu_manager.cuda_available,
             "version": gpu_manager.cuda_version
         }
         
-        return jsonify({
+        # Determine if CUDA toolkit is fully installed
+        cuda_toolkit_installed = False
+        try:
+            # Check for CUDA toolkit binaries and libraries
+            cuda_paths = [
+                os.environ.get("CUDA_PATH"),
+                "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v*",
+                "C:\\CUDA\\bin"
+            ]
+            
+            cuda_toolkit_installed = any(
+                os.path.exists(path.replace('*', gpu_manager.cuda_version)) 
+                for path in cuda_paths if path
+            )
+        except Exception as e:
+            logger.warning(f"CUDA toolkit installation check failed: {e}")
+        
+        # Success response
+        response_data = {
             "success": True,
             "gpus": gpu_info,
             "cuda_info": cuda_info,
-            "needs_cuda_install": len(gpus) > 0 and any(gpu.type == GPUType.NVIDIA for gpu in gpus) and not gpu_manager.cuda_available
-        })
+            "needs_cuda_install": len(gpus) > 0 and any(gpu.type.value == 'nvidia' for gpu in gpus) and not cuda_toolkit_installed,
+            "cuda_toolkit_installed": cuda_toolkit_installed,
+            "diagnostics": {
+                "gpu_count": len(gpus),
+                "gpu_manager_healthy": gpu_manager.is_healthy(),
+                "cuda_available": gpu_manager.cuda_available
+            }
+        }
+        
+        logger.info(f"GPU detection successful: {len(gpus)} GPU(s) detected, CUDA: {gpu_manager.cuda_available}, Toolkit Installed: {cuda_toolkit_installed}")
+        return jsonify(response_data)
     
     except Exception as e:
         logger.error(f"GPU detection failed: {e}", exc_info=True)
         return jsonify({
             "success": False, 
             "error": "Failed to detect GPUs", 
-            "details": str(e)
+            "details": str(e),
+            "diagnostics": {
+                "system": platform.system(),
+                "python_version": platform.python_version(),
+                "exception_type": type(e).__name__,
+                "gpu_manager_available": GPU_MANAGER_AVAILABLE
+            }
         }), 500
 
 # CUDA installation info route
