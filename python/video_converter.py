@@ -159,7 +159,7 @@ class VideoConverterCore:
         """Automatic GPU detection - selects best GPU, falls back to CPU"""
         try:
             # Get available GPUs
-            gpus = self.gpu_manager.detect_all_gpus()
+            gpus = self.gpu_manager.gpus
             
             if not gpus:
                 self.logger.info("[GPU] No GPU detected, using CPU")
@@ -167,7 +167,7 @@ class VideoConverterCore:
                 return 'cpu'
             
             # Select the best available GPU automatically
-            self.selected_gpu = self.gpu_manager.select_best_gpu()
+            self.selected_gpu = self.gpu_manager.get_best_gpu()
             
             if self.selected_gpu:
                 self.logger.info(f"[GPU] Auto-selected: {self.selected_gpu.name} ({self.selected_gpu.type.value})")
