@@ -98,19 +98,21 @@ class GPUManager:
         gpus = []
         try:
             self.logger.info("Detecting NVIDIA GPUs...")
-            
-                        result = subprocess.run(
-                ["nvidia-smi", "--query-gpu=index,name,memory.total,memory.used,memory.free", 
-                 "--format=csv,noheader,nounits"],
-                            capture_output=True,
-                            text=True,
-                            timeout=5
-                        )
-                        
-                        if result.returncode == 0:
+            result = subprocess.run(
+                [
+                    "nvidia-smi",
+                    "--query-gpu=index,name,memory.total,memory.used,memory.free",
+                    "--format=csv,noheader,nounits",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+
+            if result.returncode == 0:
                 lines = result.stdout.strip().split('\n')
                 for line in lines:
-                    if line.strip():  # Skip empty lines
+                    if line.strip():
                         parts = [p.strip() for p in line.split(',')]
                         if len(parts) >= 5:
                             try:
@@ -121,12 +123,14 @@ class GPUManager:
                                     memory_total=int(float(parts[2])) if parts[2] else 0,
                                     memory_used=int(float(parts[3])) if parts[3] else 0,
                                     memory_free=int(float(parts[4])) if parts[4] else 0,
-                                    cuda_version=self.cuda_version if self.cuda_available else None
+                                    cuda_version=self.cuda_version if self.cuda_available else None,
                                 )
                                 gpus.append(gpu)
                                 self.logger.info(f"Successfully detected NVIDIA GPU: {gpu.name}")
                             except (ValueError, IndexError) as parse_error:
-                                self.logger.warning(f"Failed to parse GPU info: {parse_error} for line: {line}")
+                                self.logger.warning(
+                                    f"Failed to parse GPU info: {parse_error} for line: {line}"
+                                )
                 self.logger.info(f"Detected {len(gpus)} NVIDIA GPU(s)")
             else:
                 self.logger.info("nvidia-smi command failed - no NVIDIA GPUs detected")
@@ -239,31 +243,31 @@ class GPUManager:
             import time
 
             def monitor_gpu():
-            while self.monitoring_active:
-                try:
-                        # Collect and log GPU stats
+                while self.monitoring_active:
+                    try:
                         if self.gpus:
-                    for gpu in self.gpus:
+                            for gpu in self.gpus:
                                 gpu_stats = self._get_gpu_stats(gpu)
-                                self.logger.info(f"GPU Monitoring: {gpu.name} - {gpu_stats}")
+                                self.logger.info(
+                                    f"GPU Monitoring: {gpu.name} - {gpu_stats}"
+                                )
                     except Exception as e:
                         self.logger.warning(f"GPU monitoring error: {e}")
-                                
                     time.sleep(interval)
-            
+
             self.monitoring_active = True
             self.monitoring_thread = threading.Thread(target=monitor_gpu, daemon=True)
             self.monitoring_thread.start()
             self.logger.info("GPU monitoring started")
-                    
-                except Exception as e:
+
+        except Exception as e:
             self.logger.error(f"Failed to start GPU monitoring: {e}")
             self.monitoring_active = False
         
     def stop_monitoring(self):
         """Stop GPU monitoring thread"""
         try:
-        self.monitoring_active = False
+            self.monitoring_active = False
             if hasattr(self, 'monitoring_thread') and self.monitoring_thread:
                 self.monitoring_thread.join(timeout=3)
                 self.logger.info("GPU monitoring stopped")
