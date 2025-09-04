@@ -208,15 +208,15 @@
                   <div class="input-group with-toggle">
                     <input
                       type="password"
-                      id="api-id"
+                      id="telegram-api-id"
                       class="form-control"
                       placeholder="Your Telegram API ID"
                     />
                     <div class="input-buttons">
-                      <button class="btn-input-action btn-paste" data-target="api-id" title="Paste from clipboard">
+                      <button class="btn-input-action btn-paste" data-target="telegram-api-id" title="Paste from clipboard">
                         <i class="fas fa-paste"></i>
                       </button>
-                      <button class="btn-input-action btn-toggle-visibility" data-target="api-id" title="Toggle visibility">
+                      <button class="btn-input-action btn-toggle-visibility" data-target="telegram-api-id" title="Toggle visibility">
                         <i class="fas fa-eye-slash"></i>
                       </button>
                     </div>
@@ -233,41 +233,40 @@
                   <div class="input-group with-toggle">
                     <input
                       type="password"
-                      id="api-hash"
+                      id="telegram-api-hash"
                       class="form-control"
                       placeholder="Your Telegram API Hash"
                     />
                     <div class="input-buttons">
-                      <button class="btn-input-action btn-paste" data-target="api-hash" title="Paste from clipboard">
+                      <button class="btn-input-action btn-paste" data-target="telegram-api-hash" title="Paste from clipboard">
                         <i class="fas fa-paste"></i>
                       </button>
-                      <button class="btn-input-action btn-toggle-visibility" data-target="api-hash" title="Toggle visibility">
+                      <button class="btn-input-action btn-toggle-visibility" data-target="telegram-api-hash" title="Toggle visibility">
                         <i class="fas fa-eye-slash"></i>
                       </button>
                     </div>
                   </div>
                 </div>
                 <div class="form-group">
-                  <label>Phone Number</label>
+                  <label for="telegram-phone">Phone Number</label>
                   <div class="input-group with-toggle">
                     <input
                       type="password"
-                      id="phone-number"
+                      id="telegram-phone"
                       class="form-control"
                       placeholder="+1234567890"
+                      required
                     />
                     <div class="input-buttons">
-                      <button class="btn-input-action btn-paste" data-target="phone-number" title="Paste from clipboard">
+                      <button class="btn-input-action btn-paste" data-target="telegram-phone" title="Paste from clipboard">
                         <i class="fas fa-paste"></i>
                       </button>
-                      <button class="btn-input-action btn-toggle-visibility" data-target="phone-number" title="Toggle visibility">
+                      <button class="btn-input-action btn-toggle-visibility" data-target="telegram-phone" title="Toggle visibility">
                         <i class="fas fa-eye-slash"></i>
                       </button>
                     </div>
                   </div>
-                  <small class="help-text"
-                    >Include country code (e.g. +1, +44, +91)</small
-                  >
+                  <small class="help-text">Include country code (e.g. +1, +44, +91)</small>
                 </div>
                 <button class="btn btn-primary btn-large" id="connect-telegram">
                   <i class="fas fa-plug"></i> Connect to Telegram
