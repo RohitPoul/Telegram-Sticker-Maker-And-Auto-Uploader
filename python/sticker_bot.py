@@ -1,13 +1,24 @@
 import asyncio
 import logging
 import os
+import sys
 import time
 import re
 import threading
+import json
+import glob
+import traceback
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 from enum import Enum
 from concurrent.futures import Future
+import queue
+
+# Note: avoid importing fcntl on Windows to prevent portability issues
+try:
+    import fcntl  # noqa: F401
+except Exception:
+    fcntl = None
 
 try:
     from telethon import TelegramClient, events
@@ -17,13 +28,6 @@ try:
 except ImportError:
     TELETHON_AVAILABLE = False
 
-import os
-import json
-import logging
-import threading
-import time
-from typing import Dict, Optional
-
 try:
     from cryptography.fernet import Fernet
     ENCRYPTION_AVAILABLE = True
@@ -31,13 +35,70 @@ except ImportError:
     ENCRYPTION_AVAILABLE = False
     logging.warning("[SECURITY] Cryptography library not available. Credentials will be stored in plain text.")
 
+class FileLock:
+    """Cross-platform file locking mechanism"""
+    def __init__(self, file_path, timeout=10, poll_interval=0.1):
+        self.file_path = file_path
+        self.lock_file = file_path + '.lock'
+        self.timeout = timeout
+        self.poll_interval = poll_interval
+        self._lock_handle = None
+
+    def acquire(self):
+        """Acquire an exclusive file lock"""
+        start_time = time.time()
+        while True:
+            try:
+                # Create lock file with exclusive write mode
+                # On Windows, this will fail if the file exists
+                fd = os.open(self.lock_file, os.O_CREAT | os.O_EXCL | os.O_RDWR)
+                os.close(fd)
+                return True
+            except FileExistsError:
+                # Check if lock is stale (older than timeout)
+                if os.path.exists(self.lock_file):
+                    lock_age = time.time() - os.path.getctime(self.lock_file)
+                    if lock_age > self.timeout:
+                        try:
+                            os.unlink(self.lock_file)
+                            continue
+                        except Exception:
+                            pass
+
+                # Wait before retrying
+                time.sleep(self.poll_interval)
+
+            # Check for overall timeout
+            if time.time() - start_time > self.timeout:
+                return False
+
+    def release(self):
+        """Release the file lock"""
+        try:
+            os.unlink(self.lock_file)
+        except Exception:
+            pass
+
+    def __enter__(self):
+        if not self.acquire():
+            raise TimeoutError(f"Could not acquire lock for {self.file_path}")
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.release()
+
 class SecureCredentialManager:
-    """Secure management of Telegram credentials with optional encryption"""
+    """Secure management of Telegram credentials with cross-platform file locking"""
     
     def __init__(self, credentials_path='telegram_credentials.json'):
+        # Always resolve credentials path relative to this file to avoid CWD issues
+        if not os.path.isabs(credentials_path):
+            base_dir = os.path.dirname(__file__)
+            credentials_path = os.path.join(base_dir, credentials_path)
         self.credentials_path = credentials_path
         self._encryption_key = None
         self._cipher_suite = None
+        self._lock = threading.Lock()
         
         # Ensure credentials file exists
         if not os.path.exists(credentials_path):
@@ -76,48 +137,53 @@ class SecureCredentialManager:
         return self._cipher_suite.decrypt(encrypted_data.encode()).decode()
     
     def save_credentials(self, phone_number: str, api_id: str, api_hash: str):
-        """Save Telegram credentials securely"""
-        try:
-            credentials = {
-                'phone_number': self._encrypt(phone_number),
-                'api_id': self._encrypt(api_id),
-                'api_hash': self._encrypt(api_hash),
-                'last_updated': time.time()
-            }
-            
-            with open(self.credentials_path, 'w') as f:
-                json.dump(credentials, f)
-            
-            logging.info("[CREDENTIALS] Credentials saved successfully")
-        except Exception as e:
-            logging.error(f"[CREDENTIALS] Error saving credentials: {e}")
+        """Save Telegram credentials securely with file locking"""
+        with self._lock:
+            try:
+                # Use cross-platform file locking
+                with FileLock(self.credentials_path):
+                    credentials = {
+                        'phone_number': self._encrypt(phone_number),
+                        'api_id': self._encrypt(api_id),
+                        'api_hash': self._encrypt(api_hash),
+                        'last_updated': time.time()
+                    }
+                    with open(self.credentials_path, 'w') as f:
+                        json.dump(credentials, f)
+                logging.info("[CREDENTIALS] Credentials saved successfully")
+            except Exception as e:
+                logging.error(f"[CREDENTIALS] Error saving credentials: {e}")
     
     def get_credentials(self) -> Optional[Dict[str, str]]:
-        """Retrieve Telegram credentials"""
-        try:
-            with open(self.credentials_path, 'r') as f:
-                credentials = json.load(f)
-            
-            if not credentials:
+        """Retrieves Telegram credentials with file locking"""
+        with self._lock:
+            try:
+                # Use cross-platform file locking
+                with FileLock(self.credentials_path):
+                    with open(self.credentials_path, 'r') as f:
+                        credentials = json.load(f)
+                if not credentials:
+                    return None
+                return {
+                    'phone_number': self._decrypt(credentials['phone_number']),
+                    'api_id': self._decrypt(credentials['api_id']),
+                    'api_hash': self._decrypt(credentials['api_hash'])
+                }
+            except Exception as e:
+                logging.error(f"[CREDENTIALS] Error retrieving credentials: {e}")
                 return None
-            
-            return {
-                'phone_number': self._decrypt(credentials['phone_number']),
-                'api_id': self._decrypt(credentials['api_id']),
-                'api_hash': self._decrypt(credentials['api_hash'])
-            }
-        except Exception as e:
-            logging.error(f"[CREDENTIALS] Error retrieving credentials: {e}")
-            return None
     
     def clear_credentials(self):
-        """Clear saved credentials"""
-        try:
-            with open(self.credentials_path, 'w') as f:
-                json.dump({}, f)
-            logging.info("[CREDENTIALS] Credentials cleared")
-        except Exception as e:
-            logging.error(f"[CREDENTIALS] Error clearing credentials: {e}")
+        """Clear saved credentials with file locking"""
+        with self._lock:
+            try:
+                # Use cross-platform file locking
+                with FileLock(self.credentials_path):
+                    with open(self.credentials_path, 'w') as f:
+                        json.dump({}, f)
+                logging.info("[CREDENTIALS] Credentials cleared")
+            except Exception as e:
+                logging.error(f"[CREDENTIALS] Error clearing credentials: {e}")
 
 class BotResponseType(Enum):
     NEW_PACK_CREATED = "new_pack_created"
@@ -224,11 +290,15 @@ class SimpleConversationManager:
         self.message_handler = None
 
     async def start_listening(self):
+        thread_name = threading.current_thread().name
+        self.logger.info(f"[DEBUG] start_listening called from thread: {thread_name}")
+        
         if self.listening:
+            self.logger.info(f"[DEBUG] Already listening, returning")
             return
         
         self.listening = True
-        self.logger.info("[LISTEN] Started listening for bot messages")
+        self.logger.info(f"[DEBUG] Started listening for bot messages in thread: {thread_name}")
 
         @self.client.on(events.NewMessage(from_users=self.bot_peer.id))
         async def message_handler(event):
@@ -239,18 +309,23 @@ class SimpleConversationManager:
             response = self.matcher.match_response(message)
             response.raw_message = event.message
             
-            self.logger.info(f"[DETECT] Bot response: {message[:100]}...")
-            self.logger.info(f"[DETECT] Detected type: {response.response_type.value}")
+            self.logger.info(f"[DEBUG] Bot response: {message[:100]}...")
+            self.logger.info(f"[DEBUG] Detected type: {response.response_type.value}")
             
             await self.response_queue.put(response)
 
         self.message_handler = message_handler
+        self.logger.info(f"[DEBUG] Message handler registered successfully in thread: {thread_name}")
 
     async def stop_listening(self):
+        thread_name = threading.current_thread().name
+        self.logger.info(f"[DEBUG] stop_listening called from thread: {thread_name}")
+        
         self.listening = False
         if self.message_handler:
+            self.logger.info(f"[DEBUG] Removing message handler in thread: {thread_name}")
             self.client.remove_event_handler(self.message_handler)
-        self.logger.info("[STOP] Stopped listening for bot messages")
+        self.logger.info(f"[DEBUG] Stopped listening for bot messages in thread: {thread_name}")
 
     async def wait_for_response(self, expected_type: BotResponseType, timeout: float = 30.0):
         self.logger.info(f"[WAIT] Waiting for {expected_type.value}")
@@ -306,12 +381,18 @@ class AsyncioEventLoopThread:
         self.logger = logging.getLogger(__name__)
 
     def start(self):
+        thread_name = threading.current_thread().name
+        self.logger.info(f"[DEBUG] AsyncioEventLoopThread.start called from thread: {thread_name}")
+        
         if self.thread is not None:
+            self.logger.info(f"[DEBUG] Thread already exists, returning")
             return
         
+        self.logger.info(f"[DEBUG] Creating new event loop in thread: {thread_name}")
         self.loop = asyncio.new_event_loop()
         self.thread = threading.Thread(target=self._run_event_loop, daemon=True)
         self.thread.start()
+        self.logger.info(f"[DEBUG] Event loop thread started: {self.thread.name}")
         time.sleep(0.1)
 
     def _run_event_loop(self):
@@ -321,7 +402,11 @@ class AsyncioEventLoopThread:
         except Exception as e:
             self.logger.error(f"[LOOP] Event loop error: {e}")
         finally:
-            self.loop.close()
+            try:
+                if not self.loop.is_closed():
+                    self.loop.close()
+            except Exception:
+                pass
 
     def stop(self):
         self._stopping = True
@@ -331,10 +416,23 @@ class AsyncioEventLoopThread:
             self.thread.join(timeout=10.0)
 
     def run_coroutine(self, coro) -> Future:
+        thread_name = threading.current_thread().name
+        self.logger.info(f"[DEBUG] run_coroutine called from thread: {thread_name}")
+        
         if not self.loop or self.loop.is_closed():
+            self.logger.error(f"[DEBUG] Event loop not running in thread: {thread_name}")
             raise RuntimeError("Event loop is not running")
-        future = asyncio.run_coroutine_threadsafe(coro, self.loop)
-        return future
+        
+        try:
+            self.logger.info(f"[DEBUG] Running coroutine in event loop thread: {self.thread.name}")
+            future = asyncio.run_coroutine_threadsafe(coro, self.loop)
+            self.logger.info(f"[DEBUG] Coroutine submitted successfully to event loop thread")
+            return future
+        except Exception as e:
+            self.logger.error(f"[DEBUG] Error running coroutine in thread {thread_name}: {e}")
+            self.logger.error(f"[DEBUG] Error type: {type(e)}")
+            self.logger.error(f"[DEBUG] Full traceback: {traceback.format_exc()}")
+            raise
 
 class MediaItem:
     def __init__(self, file_path: str, media_type: str, emoji: str = "😀"):
@@ -346,151 +444,333 @@ class MediaItem:
         self.processing_stage = "pending"
 
 class StickerBotCore:
-    def __init__(self):
-        self.logger = logging.getLogger(__name__)
+    def __init__(self, logger=None):
+        """
+        Initialize StickerBotCore with enhanced connection management
+        """
+        thread_name = threading.current_thread().name
+        telegram_logger.info(f"[DEBUG] StickerBotCore.__init__ called from thread: {thread_name}")
+        
+        # Existing initialization
+        self.logger = logger or logging.getLogger(__name__)
         self.client = None
         self.bot_peer = None
         self.conversation_manager = None
-        self.code_pending = False
-        self.password_pending = False
-        self.phone_number = ""
-        self.asyncio_thread = AsyncioEventLoopThread()
-        self.asyncio_thread.start()
-        self.credential_manager = SecureCredentialManager()
-        self.logger.info("[INIT] Sticker Bot Core initialized")
+        
+        # Connection state tracking
+        self._connection_lock = threading.Lock()
+        self._last_connection_attempt = None
+        
+        telegram_logger.info(f"[DEBUG] StickerBotCore initialized successfully in thread: {thread_name}")
     
-    def connect_telegram(self, api_id: str, api_hash: str, phone_number: str, process_id: str) -> Dict:
-        """REAL Telegram connection with EXACT logic from Python version"""
-        try:
-            if not TELETHON_AVAILABLE:
-                raise RuntimeError("Telethon library not available")
-
-            # Save credentials securely
-            self.credential_manager.save_credentials(phone_number, api_id, api_hash)
-            
-            self.phone_number = phone_number
-
-            # Run connection in asyncio thread
-            future = self.asyncio_thread.run_coroutine(
-                self._connect_telegram_async(api_id, api_hash, phone_number)
-            )
-
-            result = future.result(timeout=30.0)
-            return result
-
-        except Exception as e:
-            self.logger.error(f"[TELEGRAM] Connection error: {e}")
-            return {"success": False, "error": str(e)}
-    
-    async def _connect_telegram_async(self, api_id: str, api_hash: str, phone_number: str):
-        """EXACT CONNECTION LOGIC FROM PYTHON VERSION"""
-        try:
-            session_name = f'session_{phone_number.replace("+", "").replace(" ", "")}'
-            
-            # Attempt to delete existing session files if they exist
+    def cleanup_connection(self):
+        """
+        Comprehensive method to clean up Telegram connection
+        Ensures all resources are properly released
+        """
+        thread_name = threading.current_thread().name
+        telegram_logger.info(f"[DEBUG] cleanup_connection called from thread: {thread_name}")
+        
+        with self._connection_lock:
+            telegram_logger.info(f"[DEBUG] Connection lock acquired in thread: {thread_name}")
             try:
-                for ext in ['.session', '.session-journal']:
-                    session_file = f'{session_name}{ext}'
-                    if os.path.exists(session_file):
-                        os.remove(session_file)
-                        self.logger.info(f"[TELEGRAM] Removed existing session file: {session_file}")
-            except Exception as e:
-                self.logger.warning(f"[TELEGRAM] Error removing session files: {e}")
-            
-            # Create new client with fresh session
-            self.client = TelegramClient(session_name, int(api_id), api_hash)
-            
-            await self.client.connect()
-
-            if await self.client.is_user_authorized():
-                self.logger.info("[TELEGRAM] Already authorized")
-                
-                # Setup bot connection
-                self.bot_peer = await self.client.get_entity('@stickers')
-                self.conversation_manager = SimpleConversationManager(self.client, self.bot_peer, self.logger)
-                await self.conversation_manager.start_listening()
-                
-                return {"success": True, "needs_code": False, "needs_password": False}
-            else:
-                await self.client.send_code_request(phone_number)
-                self.code_pending = True
-                return {"success": True, "needs_code": True, "needs_password": False}
-            
-        except Exception as e:
-            self.logger.error(f"[TELEGRAM] Async connection error: {e}")
-            
-            # Attempt to close any existing client
-            try:
+                # Disconnect and log out if client exists
                 if self.client:
-                    await self.client.disconnect()
-            except Exception:
-                pass
+                    telegram_logger.info(f"[DEBUG] Cleaning up client in thread: {thread_name}")
+                    # Use run_telegram_coroutine to ensure thread-safety
+                    try:
+                        telegram_logger.info(f"[DEBUG] Logging out client in thread: {thread_name}")
+                        run_telegram_coroutine(self.client.log_out())
+                        telegram_logger.info(f"[DEBUG] Client logged out successfully in thread: {thread_name}")
+                    except Exception as e:
+                        telegram_logger.warning(f"[DEBUG] Error logging out client in thread {thread_name}: {e}")
+                    try:
+                        telegram_logger.info(f"[DEBUG] Disconnecting client in thread: {thread_name}")
+                        run_telegram_coroutine(self.client.disconnect())
+                        telegram_logger.info(f"[DEBUG] Client disconnected successfully in thread: {thread_name}")
+                    except Exception as e:
+                        telegram_logger.warning(f"[DEBUG] Error disconnecting client in thread {thread_name}: {e}")
+                    
+                    # Clear client reference
+                    self.client = None
+                    telegram_logger.info(f"[DEBUG] Client reference cleared in thread: {thread_name}")
+                
+                # Reset conversation manager
+                if self.conversation_manager:
+                    telegram_logger.info(f"[DEBUG] Cleaning up conversation manager in thread: {thread_name}")
+                    try:
+                        run_telegram_coroutine(self.conversation_manager.stop_listening())
+                        telegram_logger.info(f"[DEBUG] Conversation manager stopped successfully in thread: {thread_name}")
+                    except Exception as e:
+                        telegram_logger.warning(f"[DEBUG] Error stopping conversation manager in thread {thread_name}: {e}")
+                    self.conversation_manager = None
+                    telegram_logger.info(f"[DEBUG] Conversation manager reference cleared in thread: {thread_name}")
+                
+                # Reset bot peer
+                self.bot_peer = None
+                telegram_logger.info(f"[DEBUG] Bot peer reference cleared in thread: {thread_name}")
+                
+                # Clean up session files to prevent database locks
+                try:
+                    telegram_logger.info(f"[DEBUG] Cleaning up session files in thread: {thread_name}")
+                    session_pattern = f'session_*.session*'
+                    for session_file in glob.glob(session_pattern):
+                        try:
+                            os.remove(session_file)
+                            telegram_logger.info(f"[DEBUG] Removed session file: {session_file}")
+                        except Exception as e:
+                            telegram_logger.warning(f"[DEBUG] Could not remove session file {session_file}: {e}")
+                            
+                    # Force garbage collection to release any lingering connections
+                    import gc
+                    gc.collect()
+                    telegram_logger.info(f"[DEBUG] Forced garbage collection in thread: {thread_name}")
+                    
+                except Exception as e:
+                    telegram_logger.error(f"[DEBUG] Error during session cleanup in thread {thread_name}: {e}")
+                
+                telegram_logger.info(f"[DEBUG] Connection cleaned up successfully in thread: {thread_name}")
+            except Exception as e:
+                telegram_logger.error(f"[DEBUG] Error during connection cleanup in thread {thread_name}: {e}")
+                telegram_logger.error(f"[DEBUG] Error type: {type(e)}")
+                telegram_logger.error(f"[DEBUG] Full traceback: {traceback.format_exc()}")
+
+    def __del__(self):
+        # Best-effort cleanup on interpreter shutdown
+        try:
+            self.cleanup_connection()
+        except Exception:
+            pass
+    
+    def connect_telegram(self, api_id: str, api_hash: str, phone_number: str, process_id: str, retry_count: int = 0) -> Dict:
+        """
+        Simplified Telegram connection method with robust error handling
+        
+        :param api_id: Telegram API ID
+        :param api_hash: Telegram API Hash
+        :param phone_number: User's phone number
+        :param process_id: Unique process identifier
+        :param retry_count: Current retry attempt
+        :return: Connection result dictionary
+        """
+        thread_name = threading.current_thread().name
+        telegram_logger.info(f"[DEBUG] connect_telegram called from thread: {thread_name}")
+        telegram_logger.info(f"[DEBUG] API ID: {api_id}, API Hash: {api_hash[:10]}..., Phone: {phone_number}")
+        
+        # Validate inputs
+        if not all([api_id, api_hash, phone_number]):
+            telegram_logger.warning(f"[DEBUG] Missing required fields in thread: {thread_name}")
+            return {
+                "success": False, 
+                "error": "Missing required connection details",
+                "needs_code": False,
+                "needs_password": False
+            }
+        
+        try:
+            telegram_logger.info(f"[DEBUG] Starting connection process in thread: {thread_name}")
             
-            return {"success": False, "error": str(e)}
+            # Clean up any existing session files before starting
+            try:
+                telegram_logger.info(f"[DEBUG] Cleaning up existing session files in thread: {thread_name}")
+                session_pattern = f'session_*.session*'
+                for session_file in glob.glob(session_pattern):
+                    try:
+                        os.remove(session_file)
+                        telegram_logger.info(f"[DEBUG] Removed existing session file: {session_file}")
+                    except Exception as e:
+                        telegram_logger.warning(f"[DEBUG] Could not remove existing session file {session_file}: {e}")
+            except Exception as e:
+                telegram_logger.warning(f"[DEBUG] Error during initial session cleanup: {e}")
+            
+            # Normalize phone number
+            phone_number = phone_number.strip()
+            if not phone_number.startswith('+'):
+                phone_number = f'+{phone_number}'
+            
+            # Validate API ID
+            try:
+                api_id = int(str(api_id).strip())
+                telegram_logger.info(f"[DEBUG] API ID validated: {api_id}")
+            except ValueError:
+                telegram_logger.error(f"[DEBUG] Invalid API ID: {api_id}")
+                return {
+                    "success": False, 
+                    "error": "Invalid API ID: Must be numeric",
+                    "needs_code": False,
+                    "needs_password": False
+                }
+            
+            # Create in-memory session to avoid database locks
+            telegram_logger.info(f"[DEBUG] Creating in-memory TelegramClient in thread: {thread_name}")
+            self.client = TelegramClient(None, api_id, api_hash)  # None = in-memory session
+            telegram_logger.info(f"[DEBUG] In-memory TelegramClient created successfully")
+            
+            # Connect to Telegram
+            telegram_logger.info(f"[DEBUG] Attempting to connect to Telegram in thread: {thread_name}")
+            try:
+                run_telegram_coroutine(self.client.connect())
+                telegram_logger.info(f"[DEBUG] Connected to Telegram successfully in thread: {thread_name}")
+            except Exception as e:
+                telegram_logger.error(f"[DEBUG] Connection error in thread {thread_name}: {e}")
+                telegram_logger.error(f"[DEBUG] Connection error type: {type(e)}")
+                telegram_logger.error(f"[DEBUG] Connection error traceback: {traceback.format_exc()}")
+                raise
+            
+            # Check authorization status
+            telegram_logger.info(f"[DEBUG] Checking authorization status in thread: {thread_name}")
+            try:
+                is_authorized = run_telegram_coroutine(self.client.is_user_authorized())
+                telegram_logger.info(f"[DEBUG] Authorization status: {is_authorized}")
+            except Exception as e:
+                telegram_logger.error(f"[DEBUG] Authorization check error in thread {thread_name}: {e}")
+                telegram_logger.error(f"[DEBUG] Authorization error type: {type(e)}")
+                telegram_logger.error(f"[DEBUG] Authorization error traceback: {traceback.format_exc()}")
+                raise
+            
+            if not is_authorized:
+                # Send code request if not authorized
+                telegram_logger.info(f"[DEBUG] Sending code request in thread: {thread_name}")
+                run_telegram_coroutine(self.client.send_code_request(phone_number))
+                telegram_logger.info(f"[DEBUG] Code request sent successfully")
+                
+                return {
+                    'success': True,
+                    'needs_code': True,
+                    'needs_password': False,
+                    'phone_number': phone_number
+                }
+            
+            # If already authorized, set up bot interaction
+            telegram_logger.info(f"[DEBUG] Getting bot peer in thread: {thread_name}")
+            self.bot_peer = run_telegram_coroutine(self.client.get_entity('@stickers'))
+            telegram_logger.info(f"[DEBUG] Bot peer obtained: {self.bot_peer}")
+            
+            telegram_logger.info(f"[DEBUG] Creating conversation manager in thread: {thread_name}")
+            self.conversation_manager = SimpleConversationManager(
+                self.client, 
+                self.bot_peer, 
+                self.logger
+            )
+            
+            telegram_logger.info(f"[DEBUG] Starting conversation manager in thread: {thread_name}")
+            run_telegram_coroutine(self.conversation_manager.start_listening())
+            telegram_logger.info(f"[DEBUG] Conversation manager started successfully")
+            
+            telegram_logger.info(f"[DEBUG] Connection completed successfully in thread: {thread_name}")
+            return {
+                'success': True,
+                'needs_code': False,
+                'needs_password': False,
+                'phone_number': phone_number
+            }
+        
+        except Exception as e:
+            # Log the error
+            telegram_logger.error(f"[DEBUG] Telegram connection error in thread {thread_name}: {e}")
+            telegram_logger.error(f"[DEBUG] Error type: {type(e)}")
+            telegram_logger.error(f"[DEBUG] Full traceback: {traceback.format_exc()}")
+            
+            # Handle database lock errors specifically
+            if "database is locked" in str(e).lower() or "database is locked" in str(e):
+                handle_database_lock_error(e, "telegram connection")
+            
+            return {
+                "success": False, 
+                "error": str(e),
+                "needs_code": False,
+                "needs_password": False
+            }
 
     def verify_code(self, code: str) -> Dict:
-        """REAL code verification"""
+        """
+        Verify the Telegram verification code with enhanced error handling
+        
+        :param code: Verification code from user
+        :return: Verification result
+        """
         try:
-            if not self.client or not self.code_pending:
-                return {"success": False, "error": "No code verification pending"}
-
-            future = self.asyncio_thread.run_coroutine(self._verify_code_async(code))
-            result = future.result(timeout=15.0)
-            return result
-
+            # Verify code using the current client
+            if not self.client:
+                return {"success": False, "error": "No active Telegram client"}
+            
+            # Use run_telegram_coroutine for thread-safe execution
+            result = run_telegram_coroutine(self.client.sign_in(code=code))
+            
+            # Check if 2FA is required
+            if isinstance(result, bool) and result:
+                # Setup bot interaction after successful sign-in
+                self.bot_peer = run_telegram_coroutine(self.client.get_entity('@stickers'))
+                self.conversation_manager = SimpleConversationManager(
+                    self.client, 
+                    self.bot_peer, 
+                    self.logger
+                )
+                run_telegram_coroutine(self.conversation_manager.start_listening())
+                
+                return {
+                    "success": True,
+                    "needs_password": False
+                }
+            
+            # If 2FA is needed
+            return {
+                "success": True,
+                "needs_password": True
+            }
+                
         except Exception as e:
             self.logger.error(f"[TELEGRAM] Code verification error: {e}")
-            return {"success": False, "error": str(e)}
-
-    async def _verify_code_async(self, code: str):
-        try:
-            try:
-                await self.client.sign_in(self.phone_number, code)
-                self.code_pending = False
-                
-                # Setup bot connection
-                self.bot_peer = await self.client.get_entity('@stickers')
-                self.conversation_manager = SimpleConversationManager(self.client, self.bot_peer, self.logger)
-                await self.conversation_manager.start_listening()
-                
-                return {"success": True, "needs_password": False}
-                
-            except SessionPasswordNeededError:
-                self.password_pending = True
-                self.code_pending = False
-                return {"success": True, "needs_password": True}
-                
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+            
+            return {
+                "success": False,
+                "error": str(e),
+                "needs_password": False
+            }
 
     def verify_password(self, password: str) -> Dict:
-        """REAL password verification"""
+        """
+        Verify two-factor authentication password
+        
+        :param password: User's 2FA password
+        :return: Password verification result
+        """
         try:
-            if not self.client or not self.password_pending:
-                return {"success": False, "error": "No password verification pending"}
-
-            future = self.asyncio_thread.run_coroutine(self._verify_password_async(password))
-            result = future.result(timeout=15.0)
-            return result
-
+            if not self.client:
+                return {"success": False, "error": "No active Telegram client"}
+            
+            # Use run_telegram_coroutine for thread-safe execution
+            result = run_telegram_coroutine(self.client.sign_in(password=password))
+            
+            if result:
+                # Setup bot interaction after successful 2FA
+                self.bot_peer = run_telegram_coroutine(self.client.get_entity('@stickers'))
+                self.conversation_manager = SimpleConversationManager(
+                    self.client, 
+                    self.bot_peer, 
+                    self.logger
+                )
+                run_telegram_coroutine(self.conversation_manager.start_listening())
+                
+                return {
+                    "success": True,
+                    "needs_password": False
+                }
+            
+            return {
+                "success": False,
+                "error": "Invalid password",
+                "needs_password": True
+            }
+            
         except Exception as e:
             self.logger.error(f"[TELEGRAM] Password verification error: {e}")
-            return {"success": False, "error": str(e)}
-
-    async def _verify_password_async(self, password: str):
-        try:
-            await self.client.sign_in(password=password)
-            self.password_pending = False
             
-            # Setup bot connection
-            self.bot_peer = await self.client.get_entity('@stickers')
-            self.conversation_manager = SimpleConversationManager(self.client, self.bot_peer, self.logger)
-            await self.conversation_manager.start_listening()
-            
-            return {"success": True}
-            
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+            return {
+                "success": False,
+                "error": str(e),
+                "needs_password": False
+            }
 
     def create_sticker_pack(self, pack_name: str, sticker_type: str, media_files: List[Dict], process_id: str):
         """REAL sticker pack creation with EXACT advanced logic from Python version"""
@@ -623,34 +903,183 @@ class StickerBotCore:
             self.logger.error(f"[STICKER] Pack creation error: {e}")
             raise
 
+# Removed duplicate TelegramSessionManager class - using EnhancedTelegramSessionManager instead
+
+def run_telegram_coroutine(coro):
+    """
+    Safely run a Telegram coroutine with global locking.
+    Ensures an event loop is available in any thread.
+    
+    :param coro: Coroutine to run
+    :return: Result of the coroutine
+    """
+    thread_name = threading.current_thread().name
+    telegram_logger.info(f"[DEBUG] run_telegram_coroutine called from thread: {thread_name}")
+    telegram_logger.info(f"[DEBUG] Coroutine type: {type(coro)}")
+    
+    # Use both locks to prevent concurrent database access
+    telegram_logger.info(f"[DEBUG] Acquiring locks from thread: {thread_name}")
+    with telegram_global_lock, database_global_lock:
+        telegram_logger.info(f"[DEBUG] Locks acquired, creating new event loop in thread: {thread_name}")
+        
+        # Always create a new event loop for the current thread to avoid conflicts
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        telegram_logger.info(f"[DEBUG] Event loop created and set in thread: {thread_name}")
+        
+        try:
+            telegram_logger.info(f"[DEBUG] Running coroutine in thread: {thread_name}")
+            # Run the coroutine and return its result
+            result = loop.run_until_complete(coro)
+            telegram_logger.info(f"[DEBUG] Coroutine completed successfully in thread: {thread_name}")
+            return result
+        except Exception as e:
+            # Log any coroutine execution errors
+            telegram_logger.error(f"[DEBUG] Coroutine execution error in thread {thread_name}: {e}")
+            telegram_logger.error(f"[DEBUG] Error type: {type(e)}")
+            telegram_logger.error(f"[DEBUG] Full traceback: {traceback.format_exc()}")
+            
+            # Handle database lock errors specifically
+            if "database is locked" in str(e).lower() or "database is locked" in str(e):
+                handle_database_lock_error(e, "coroutine execution")
+            
+            raise
+        finally:
+            # Clean up the event loop
+            telegram_logger.info(f"[DEBUG] Cleaning up event loop in thread: {thread_name}")
+            try:
+                if not loop.is_closed():
+                    loop.close()
+                    telegram_logger.info(f"[DEBUG] Event loop closed in thread: {thread_name}")
+            except Exception as cleanup_error:
+                telegram_logger.error(f"[DEBUG] Error closing event loop in thread {thread_name}: {cleanup_error}")
+
 # Flask routes for sticker bot
 from flask import request, jsonify
 
 # Create global sticker bot instance
-sticker_bot = StickerBotCore()
+# Defer global sticker_bot creation to avoid initialization issues
+sticker_bot = None
+
+# Global queue for sticker pack creation tasks
+sticker_pack_queue = queue.Queue()
+sticker_pack_thread = None
+
+# Global locks to ensure thread-safe operations
+telegram_global_lock = threading.Lock()
+database_global_lock = threading.RLock()  # Reentrant lock for database operations
+
+# Create a dedicated logger for Telegram operations
+telegram_logger = logging.getLogger('TelegramOperations')
+telegram_logger.setLevel(logging.INFO)
+
+def handle_database_lock_error(e, operation_name):
+    """Handle database lock errors with recovery attempts"""
+    thread_name = threading.current_thread().name
+    telegram_logger.error(f"[DATABASE] Lock error during {operation_name} in thread {thread_name}: {e}")
+  
+    # Try to clean up any lingering connections
+    try:
+        import gc
+        gc.collect()
+        telegram_logger.info(f"[DATABASE] Forced garbage collection in thread: {thread_name}")
+        
+        # Log active threads for debugging
+        active_threads = [t.name for t in threading.enumerate()]
+        telegram_logger.info(f"[DATABASE] Active threads during lock: {active_threads}")
+        
+        # Try to remove lock files
+        for pattern in ['*.session-journal', '*.session-wal', 'session_*.session*']:
+            for lock_file in glob.glob(pattern):
+                try:
+                    os.remove(lock_file)
+                    telegram_logger.info(f"[DATABASE] Removed lock file: {lock_file}")
+                except Exception as le:
+                    telegram_logger.warning(f"[DATABASE] Could not remove lock file {lock_file}: {le}")
+    except Exception as cleanup_error:
+        telegram_logger.error(f"[DATABASE] Error during lock recovery in thread {thread_name}: {cleanup_error}")
+
+def sticker_pack_worker():
+    """Background worker to process sticker pack creation tasks"""
+    while True:
+        try:
+            # Block and wait for a task
+            task = sticker_pack_queue.get()
+            
+            # Unpack task parameters
+            pack_name, sticker_type, media_files, process_id = task
+            
+            try:
+                # Perform sticker pack creation
+                result = sticker_bot.create_sticker_pack(pack_name, sticker_type, media_files, process_id)
+                
+                # Optional: You could update a result tracking mechanism here
+                from backend import active_processes
+                if process_id in active_processes:
+                    active_processes[process_id]['result'] = result
+                    active_processes[process_id]['status'] = 'completed'
+            
+            except Exception as e:
+                # Log error and update process status
+                from backend import active_processes
+                if process_id in active_processes:
+                    active_processes[process_id]['status'] = 'error'
+                    active_processes[process_id]['error'] = str(e)
+                
+                sticker_bot.logger.error(f"Background sticker pack creation error: {e}")
+            
+            finally:
+                # Mark task as done
+                sticker_pack_queue.task_done()
+        
+        except Exception as e:
+            sticker_bot.logger.error(f"Sticker pack worker error: {e}")
+
+def start_sticker_pack_worker():
+    """Start the background worker thread"""
+    global sticker_pack_thread
+    if sticker_pack_thread is None or not sticker_pack_thread.is_alive():
+        sticker_pack_thread = threading.Thread(target=sticker_pack_worker, daemon=True)
+        sticker_pack_thread.start()
 
 def register_sticker_routes(app):
     """Register sticker bot routes with the Flask app"""
+    thread_name = threading.current_thread().name
+    telegram_logger.info(f"[DEBUG] register_sticker_routes called from thread: {thread_name}")
+    telegram_logger.info(f"[DEBUG] Registering routes with Flask app: {app}")
     
     @app.route('/api/sticker/connect', methods=['POST', 'OPTIONS'], strict_slashes=False)
     def connect_sticker_bot():
+        thread_name = threading.current_thread().name
+        telegram_logger.info(f"[DEBUG] Flask route /api/sticker/connect called from thread: {thread_name}")
+        
         if request.method == 'OPTIONS':
+            telegram_logger.info(f"[DEBUG] OPTIONS request, returning 200")
             return '', 200
             
         try:
+            telegram_logger.info(f"[DEBUG] Processing POST request in thread: {thread_name}")
             data = request.get_json()
             api_id = data.get('api_id', '')
             api_hash = data.get('api_hash', '')
             phone_number = data.get('phone_number', '')
             process_id = data.get('process_id', '')
+            
+            telegram_logger.info(f"[DEBUG] Request data - API ID: {api_id}, Phone: {phone_number}, Process ID: {process_id}")
 
             if not all([api_id, api_hash, phone_number]):
+                telegram_logger.warning(f"[DEBUG] Missing required fields in thread: {thread_name}")
                 return jsonify({"success": False, "error": "Missing required fields"}), 400
 
+            telegram_logger.info(f"[DEBUG] Calling sticker_bot.connect_telegram in thread: {thread_name}")
             result = sticker_bot.connect_telegram(api_id, api_hash, phone_number, process_id)
+            telegram_logger.info(f"[DEBUG] connect_telegram result: {result}")
             return jsonify(result)
 
         except Exception as e:
+            telegram_logger.error(f"[DEBUG] Flask route error in thread {thread_name}: {e}")
+            telegram_logger.error(f"[DEBUG] Error type: {type(e)}")
+            telegram_logger.error(f"[DEBUG] Full traceback: {traceback.format_exc()}")
             return jsonify({"success": False, "error": str(e)}), 500
 
     @app.route('/api/sticker/verify-code', methods=['POST', 'OPTIONS'], strict_slashes=False)
@@ -703,7 +1132,6 @@ def register_sticker_routes(app):
 
             # Import active_processes from backend
             from backend import active_processes, process_lock
-            import queue
 
             # Check for existing process
             with process_lock:
@@ -722,37 +1150,264 @@ def register_sticker_routes(app):
             if not media_files:
                 return jsonify({"success": False, "error": "No media files provided"}), 400
 
-            # Create a queue to communicate results
-            result_queue = queue.Queue()
+            # Start background worker if not already running
+            start_sticker_pack_worker()
 
-            def creation_thread():
-                try:
-                    result = sticker_bot.create_sticker_pack(pack_name, sticker_type, media_files, process_id)
-                    result_queue.put(result)
-                except Exception as e:
-                    result_queue.put({"success": False, "error": str(e)})
+            # Add task to queue
+            sticker_pack_queue.put((pack_name, sticker_type, media_files, process_id))
 
-            thread = threading.Thread(target=creation_thread, daemon=True)
-            thread.start()
-
-            # Wait for thread to complete with a timeout
-            try:
-                thread.join(timeout=10)  # 10-second timeout
-                if thread.is_alive():
-                    return jsonify({
-                        "success": False, 
-                        "error": "Sticker pack creation timed out"
-                    }), 500
-
-                # Get result from queue
-                result = result_queue.get(block=False)
-                return jsonify(result)
-
-            except queue.Empty:
-                return jsonify({
-                    "success": False, 
-                    "error": "No result received from sticker pack creation"
-                }), 500
+            # Immediately return process ID for tracking
+            return jsonify({
+                "success": True, 
+                "process_id": process_id,
+                "message": "Sticker pack creation queued"
+            })
 
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route('/api/sticker/reset-connection', methods=['POST', 'OPTIONS'], strict_slashes=False)
+    def reset_sticker_connection():
+        """
+        API endpoint to reset Telegram connection
+        Provides a way to manually clear and reset the connection
+        """
+        if request.method == 'OPTIONS':
+            return '', 200
+            
+        try:
+            # Clean up existing connection
+            sticker_bot.cleanup_connection()
+            return jsonify({"success": True, "message": "Connection reset successfully"})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+import os
+import sys
+import traceback
+import logging
+import sqlite3
+import threading
+import time
+import re
+import glob
+import json
+
+# Enhanced logging configuration
+import logging
+import os
+
+# Ensure logs directory exists with absolute path
+import os
+import sys
+
+# Get the absolute path to the project root
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+LOGS_DIR = os.path.join(PROJECT_ROOT, 'logs')
+
+# Create logs directory if it doesn't exist
+os.makedirs(LOGS_DIR, exist_ok=True)
+
+# Detailed logging configuration with multiple handlers
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        # Log to file with comprehensive details (UTF-8)
+        logging.FileHandler(os.path.join(LOGS_DIR, 'telegram_connection_debug.log'), mode='w', encoding='utf-8')
+    ]
+)
+
+# Create a dedicated logger for Telegram connection with file and console logging
+telegram_logger = logging.getLogger('TelegramConnection')
+telegram_logger.setLevel(logging.DEBUG)
+
+# Create file handler
+file_handler = logging.FileHandler(os.path.join(LOGS_DIR, 'telegram_connection_debug.log'), mode='w', encoding='utf-8')
+file_handler.setLevel(logging.DEBUG)
+
+# Create console handler
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setLevel(logging.DEBUG)
+
+# Create formatter
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+console_handler.setFormatter(formatter)
+
+# Add handlers to the logger (file only to avoid Windows console encoding issues)
+telegram_logger.addHandler(file_handler)
+
+# Log the log file location for easy reference
+print(f"Telegram Connection Logs will be written to: {os.path.join(LOGS_DIR, 'telegram_connection_debug.log')}")
+
+class EnhancedTelegramSessionManager:
+    """
+    Advanced Telegram session manager with comprehensive logging
+    """
+    def __init__(self, api_id=None, api_hash=None):
+        """
+        Initialize session manager with advanced logging
+        """
+        self._api_id = api_id
+        self._api_hash = api_hash
+        self._client = None
+        self._lock = threading.Lock()
+        
+        # Log initialization details
+        telegram_logger.critical(f"Initializing TelegramSessionManager with API ID: {api_id}")
+        
+        # Ensure no lingering session files
+        self._cleanup_old_sessions()
+    
+    def _cleanup_old_sessions(self):
+        """
+        Proactively remove any existing session files with detailed logging
+        """
+        try:
+            # Remove all session files matching the pattern
+            for ext in ['.session', '.session-journal']:
+                session_pattern = f'session_*{ext}'
+                for filename in glob.glob(session_pattern):
+                    try:
+                        telegram_logger.info(f"Attempting to remove old session file: {filename}")
+                        os.unlink(filename)
+                        telegram_logger.info(f"Successfully removed old session file: {filename}")
+                    except Exception as e:
+                        telegram_logger.warning(f"Could not remove {filename}: {e}")
+        except Exception as e:
+            telegram_logger.error(f"Session cleanup error: {e}")
+    
+    def get_client(self):
+        """
+        Creates a new in-memory TelegramClient.
+        Disconnects any existing client to ensure a clean state.
+        """
+        thread_name = threading.current_thread().name
+        telegram_logger.info(f"[DEBUG] get_client called from thread: {thread_name}")
+        
+        with self._lock:
+            # Disconnect any existing client with logging
+            if self._client and self._client.is_connected():
+                try:
+                    telegram_logger.info(f"[DEBUG] Disconnecting existing Telegram client in thread: {thread_name}")
+                    run_telegram_coroutine(self._client.disconnect())
+                    telegram_logger.info(f"[DEBUG] Existing client disconnected successfully in thread: {thread_name}")
+                except Exception as e:
+                    telegram_logger.error(f"[DEBUG] Error disconnecting existing client in thread {thread_name}: {e}")
+                finally:
+                    self._client = None
+
+            # Create a new client instance
+            # The event loop is managed by run_telegram_coroutine
+            telegram_logger.info(f"[DEBUG] Creating new in-memory TelegramClient in thread: {thread_name}")
+            self._client = TelegramClient(
+                None,  # Explicitly in-memory session
+                self._api_id, 
+                self._api_hash,
+                base_logger=telegram_logger,
+                device_model="StickerBot",
+                system_version="1.0"
+            )
+            telegram_logger.info(f"[DEBUG] New TelegramClient created in-memory in thread: {thread_name}")
+            return self._client
+
+    def close_session(self):
+        """
+        Safely close the Telegram session with comprehensive logging
+        """
+        with self._lock:
+            if self._client:
+                try:
+                    telegram_logger.info("Attempting to close Telegram session")
+                    # Explicit logout and disconnect
+                    run_telegram_coroutine(self._client.log_out())
+                    run_telegram_coroutine(self._client.disconnect())
+                    telegram_logger.info("Telegram session closed successfully")
+                except Exception as e:
+                    telegram_logger.error(f"Session close error: {e}")
+                
+                # Clear client reference
+                self._client = None
+
+def debug_sqlite_locks():
+    """
+    Comprehensive SQLite lock debugging utility
+    Checks for potential lock sources and provides detailed diagnostics
+    """
+    def get_sqlite_connections():
+        """Find all active SQLite connections in the process"""
+        connections = []
+        for obj in gc.get_objects():
+            if isinstance(obj, sqlite3.Connection):
+                connections.append(obj)
+        return connections
+
+    def check_file_locks(file_path):
+        """Check file system locks on a given file"""
+        try:
+            # Try to open the file with exclusive access
+            with open(file_path, 'r+b') as f:
+                try:
+                    # Use fcntl for POSIX systems
+                    import fcntl
+                    try:
+                        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        fcntl.flock(f, fcntl.LOCK_UN)
+                        return "No lock detected"
+                    except (IOError, OSError) as e:
+                        return f"File locked: {e}"
+                except ImportError:
+                    # Fallback for Windows
+                    try:
+                        import msvcrt
+                        try:
+                            msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+                            msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+                            return "No lock detected"
+                        except OSError as e:
+                            return f"File locked: {e}"
+                    except ImportError:
+                        return "Unable to check file lock"
+        except Exception as e:
+            return f"Error checking file lock: {e}"
+
+    # Collect comprehensive debug information
+    debug_info = {
+        "active_threads": [],
+        "sqlite_connections": [],
+        "file_locks": {}
+    }
+
+    # Collect active threads
+    debug_info['active_threads'] = [
+        t.name for t in threading.enumerate()
+    ]
+
+    # Check SQLite connections
+    try:
+        import gc
+        gc.collect()  # Force garbage collection to get accurate connection list
+        sqlite_conns = get_sqlite_connections()
+        debug_info['sqlite_connections'] = [
+            str(conn) for conn in sqlite_conns
+        ]
+    except Exception as e:
+        telegram_logger.error(f"Error collecting SQLite connections: {e}")
+
+    # Check potential session files
+    session_files = [
+        'session_*.session',
+        'session_*.session-journal'
+    ]
+    for pattern in session_files:
+        for filename in glob.glob(pattern):
+            debug_info['file_locks'][filename] = check_file_locks(filename)
+
+    # Log comprehensive debug information
+    telegram_logger.critical("SQLite and File Lock Debug Information")
+    telegram_logger.critical(json.dumps(debug_info, indent=2))
+
+    return debug_info
+
+# Removed duplicate connect_telegram_with_debug method and monkey patch

@@ -155,10 +155,41 @@ def cleanup_processes():
     
     logger.info("[CLEANUP] Process cleanup completed")
 
+def cleanup_telegram_and_sessions():
+    """Ensure Telegram disconnect and session files are released on exit."""
+    try:
+        from sticker_bot import sticker_bot
+        try:
+            sticker_bot.cleanup_connection()
+            logger.info("[CLEANUP] Telegram connection cleaned up")
+        except Exception as e:
+            logger.warning(f"[CLEANUP] Telegram cleanup error: {e}")
+    except Exception:
+        # sticker_bot may not be imported
+        pass
+
+    # Remove any leftover session files
+    try:
+        for p in Path('.').glob('session_*.session*'):
+            try:
+                p.unlink()
+                logger.info(f"[CLEANUP] Deleted session file: {p}")
+            except Exception as e:
+                logger.warning(f"[CLEANUP] Could not delete session file {p}: {e}")
+    except Exception as e:
+        logger.warning(f"[CLEANUP] Session file sweep failed: {e}")
+
 # Register cleanup handlers
 atexit.register(cleanup_processes)
-signal.signal(signal.SIGINT, lambda s, f: cleanup_processes())
-signal.signal(signal.SIGTERM, lambda s, f: cleanup_processes())
+atexit.register(cleanup_telegram_and_sessions)
+def _sig_handler(sig, frame):
+    try:
+        cleanup_telegram_and_sessions()
+    finally:
+        cleanup_processes()
+
+signal.signal(signal.SIGINT, _sig_handler)
+signal.signal(signal.SIGTERM, _sig_handler)
 
 def validate_file_access(file_paths):
     """Validate that files exist and are accessible"""
