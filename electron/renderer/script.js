@@ -34,6 +34,7 @@ class TelegramUtilities {
     };
     this.init();
     this.initializeNavigation(); // Add this line to initialize navigation
+    this.initializeTelegramForm(); // Add this to load saved Telegram credentials
   }
   
   async init() {
@@ -43,6 +44,7 @@ class TelegramUtilities {
     this.loadSettings();
     await this.detectAccelerationMode();
     this.startSystemStatsMonitoring();
+    this.initializeTelegramConnection();
     // Wire GPU utility buttons
     const checkBtn = document.getElementById('check-gpu');
     if (checkBtn) {
@@ -184,36 +186,31 @@ class TelegramUtilities {
       
       // Handle different response scenarios
       if (!response.success) {
-        const errorMessage = response.details || response.error || "Unknown GPU detection error";
+        console.warn("GPU detection failed, falling back to CPU mode:", response.error);
         
+        // Set CPU fallback mode
         if (modeBadge) {
-          modeBadge.textContent = "Detection Failed";
-          modeBadge.className = "mode-badge error";
+          modeBadge.textContent = "CPU";
+          modeBadge.className = "mode-badge cpu mode-badge-tooltip";
+          modeBadge.innerHTML = `
+            CPU
+            <span class="tooltip-content">CPU Processing Mode</span>
+          `;
         }
         
         if (modeDetails) {
           modeDetails.innerHTML = `
-            <div class="error-details">
-              <p><strong>Error:</strong> ${errorMessage}</p>
-              <p>Possible reasons:
-                <ul>
-                  <li>No compatible GPU detected</li>
-                  <li>Missing GPU drivers</li>
-                  <li>System configuration issue</li>
-                </ul>
-              </p>
-              <div class="troubleshooting-steps">
-                <h4>Troubleshooting Steps:</h4>
-                <ol>
-                  <li>Restart the application</li>
-                  <li>Check your system's GPU drivers</li>
-                  <li>Verify backend server is running</li>
-                  <li>Ensure required dependencies are installed</li>
-                </ol>
-              </div>
+            <div class="acceleration-details">
+              <div class="detail-icon cpu-icon"></div>
+              <div class="detail-text">CPU Processing</div>
             </div>
           `;
         }
+        
+        // Store CPU mode
+        this.accelerationMode = "cpu";
+        this.selectedGPU = null;
+        this.cudaAvailable = false;
         
         return false;
       }
@@ -224,34 +221,40 @@ class TelegramUtilities {
         
         // Update mode badge
         if (modeBadge) {
-          modeBadge.textContent = bestGPU.type.toUpperCase();
-          modeBadge.className = `mode-badge ${bestGPU.type.toLowerCase()}`;
+          const cudaAvailable = response.cuda_info && response.cuda_info.available;
+          const cudaToolkitInstalled = response.cuda_toolkit_installed;
+          
+          modeBadge.textContent = cudaAvailable ? "CUDA" : "GPU";
+          modeBadge.className = `mode-badge gpu mode-badge-tooltip ${!cudaToolkitInstalled ? 'warning' : ''}`;
+          modeBadge.innerHTML = `
+            ${cudaAvailable ? 'CUDA' : 'GPU'}
+            <span class="tooltip-content">
+              ${bestGPU.name}
+              ${!cudaToolkitInstalled ? '<br><strong>Toolkit Not Fully Installed</strong>' : ''}
+            </span>
+          `;
         }
         
         // Update mode details
         if (modeDetails) {
-          let message = `
-            <strong>GPU Detected:</strong> ${bestGPU.name}<br>
-            <strong>Type:</strong> ${bestGPU.type.toUpperCase()}<br>
-            <strong>Memory:</strong> ${bestGPU.memory_total ? (bestGPU.memory_total / 1024).toFixed(1) + ' GB' : 'Unknown'}<br>
+          let detailsHtml = `
+            <div class="acceleration-details">
+              <div class="detail-icon gpu-icon"></div>
+              <div class="detail-text">${bestGPU.name}</div>
+            </div>
           `;
           
-          // Add CUDA information if available
-          if (response.cuda_info && response.cuda_info.available) {
-            message += `<strong>CUDA:</strong> ${response.cuda_info.version}<br>`;
-          }
-          
-          // Check if CUDA installation is needed
-          if (response.needs_cuda_install) {
-            message += `
+          // Add CUDA toolkit warning if not fully installed
+          if (!response.cuda_toolkit_installed) {
+            detailsHtml += `
               <div class="cuda-warning">
-                <strong>Note:</strong> CUDA installation recommended for optimal performance.
+                <strong>Note:</strong> CUDA toolkit not fully installed
                 <button id="install-cuda-btn" class="btn btn-warning">Install CUDA</button>
               </div>
             `;
           }
           
-          modeDetails.innerHTML = message;
+          modeDetails.innerHTML = detailsHtml;
           
           // Add event listener for CUDA installation
           const installCudaBtn = document.getElementById('install-cuda-btn');
@@ -260,48 +263,70 @@ class TelegramUtilities {
           }
         }
         
+        // Store GPU mode
+        this.accelerationMode = response.cuda_info && response.cuda_info.available ? "cuda" : "gpu";
+        this.selectedGPU = bestGPU;
+        this.cudaAvailable = response.cuda_info && response.cuda_info.available;
+        
         return true;
       }
       
-      // No GPUs detected
+      // No GPUs detected - CPU fallback
+      console.info("No GPUs detected, using CPU fallback mode");
+      
       if (modeBadge) {
-        modeBadge.textContent = "CPU Fallback";
-        modeBadge.className = "mode-badge cpu";
+        modeBadge.textContent = "CPU";
+        modeBadge.className = "mode-badge cpu mode-badge-tooltip";
+        modeBadge.innerHTML = `
+          CPU
+          <span class="tooltip-content">CPU Processing Mode</span>
+        `;
       }
       
       if (modeDetails) {
         modeDetails.innerHTML = `
-          <p>No GPU detected. Falling back to CPU processing.</p>
-          <p>Performance may be slower compared to GPU acceleration.</p>
+          <div class="acceleration-details">
+            <div class="detail-icon cpu-icon"></div>
+            <div class="detail-text">CPU Processing</div>
+          </div>
         `;
       }
       
+      // Store CPU mode
+      this.accelerationMode = "cpu";
+      this.selectedGPU = null;
+      this.cudaAvailable = false;
+      
       return false;
     } catch (error) {
-      console.error("GPU detection error:", error);
+      console.error("GPU detection error, falling back to CPU mode:", error);
       
       const modeBadge = document.getElementById("mode-badge");
       const modeDetails = document.getElementById("mode-details");
       
+      // Set CPU fallback mode on error
       if (modeBadge) {
-        modeBadge.textContent = "Detection Failed";
-        modeBadge.className = "mode-badge error";
+        modeBadge.textContent = "CPU";
+        modeBadge.className = "mode-badge cpu mode-badge-tooltip";
+        modeBadge.innerHTML = `
+          CPU
+          <span class="tooltip-content">CPU Processing Mode</span>
+        `;
       }
       
       if (modeDetails) {
         modeDetails.innerHTML = `
-          <div class="error-details">
-            <p><strong>Error:</strong> Unable to detect GPU capabilities</p>
-            <p>Possible reasons:
-              <ul>
-                <li>Network connectivity issue</li>
-                <li>Backend server not responding</li>
-                <li>Unexpected system configuration</li>
-              </ul>
-            </p>
+          <div class="acceleration-details">
+            <div class="detail-icon cpu-icon"></div>
+            <div class="detail-text">CPU Processing</div>
           </div>
         `;
       }
+      
+      // Store CPU mode
+      this.accelerationMode = "cpu";
+      this.selectedGPU = null;
+      this.cudaAvailable = false;
       
       return false;
     }
@@ -601,19 +626,44 @@ class TelegramUtilities {
     return;
   }
 
-  // Unified API request wrapper with better error handling
-  async apiRequest(method, endpoint, data = null) {
+  // ---- Lightweight debug logger for Telegram flows ----
+  logDebug(label, payload = undefined) {
     try {
-      // Use electronAPI.apiRequest which is handled in the main process
-      const response = await window.electronAPI.apiRequest({ method, endpoint, data });
-      
-      if (!response.success) {
-        throw new Error(response.error || "API request failed");
+      const ts = new Date().toISOString();
+      if (payload !== undefined) {
+        console.debug(`[TG ${ts}] ${label}`, payload);
+      } else {
+        console.debug(`[TG ${ts}] ${label}`);
       }
-      
-      return response.data;
+    } catch (_) {
+      // no-op
+    }
+  }
+
+  // Wrap apiRequest with tracing
+  async apiRequest(method, path, body = null, opts = {}) {
+    const id = Math.random().toString(36).slice(2, 8);
+    this.logDebug(`apiRequest#${id} → ${method} ${path}`);
+    const started = performance.now();
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      const res = await fetch(`http://127.0.0.1:5000${path}`, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : null,
+      });
+      const text = await res.text();
+      let json;
+      try { json = text ? JSON.parse(text) : {}; } catch { json = { raw: text }; }
+      this.logDebug(`apiRequest#${id} ← ${res.status} ${method} ${path} (${Math.round(performance.now()-started)}ms)`, json);
+      if (!res.ok) {
+        const err = new Error(json?.error || `${res.status} ${res.statusText}`);
+        err.status = res.status;
+        throw err;
+      }
+      return json;
     } catch (error) {
-      console.error(`API Request Error (${method} ${endpoint}):`, error);
+      this.logDebug(`apiRequest#${id} ✖ ${method} ${path}`, { error: String(error) });
       throw error;
     }
   }
@@ -1030,14 +1080,15 @@ class TelegramUtilities {
     });
   }
 
-  handleDroppedVideoFiles(files) {
+  async handleDroppedVideoFiles(files) {
     console.log("=== DRAG & DROP DEBUG ===");
     console.log("Raw dropped files:", files);
     
     const videoExtensions = ["mp4", "avi", "mov", "mkv", "flv", "webm"];
     let addedCount = 0;
     
-    files.forEach((file, index) => {
+    for (let index = 0; index < files.length; index++) {
+      const file = files[index];
       console.log(`🗂️ Processing dropped file ${index + 1}:`, {
         name: file.name,
         size: file.size,
@@ -1054,17 +1105,23 @@ class TelegramUtilities {
         const filePath = file.path || file.name;
         
         if (!this.videoFiles.some((f) => f.path === filePath)) {
+          // Get file metadata first
+          const metadata = await this.getFileMetadata(filePath);
+          
           this.videoFiles.push({
             path: filePath,
             name: file.name,
             status: "pending",
             progress: 0,
             stage: "Ready to convert",
-            size: file.size ? `${(file.size / 1048576).toFixed(1)}MB` : "Unknown",
+            size: metadata.size,
+            duration: metadata.duration,
+            width: metadata.width,
+            height: metadata.height,
             fileObject: file // Store the actual file object for later use
           });
           addedCount++;
-          console.log(`✅ Added dropped file: ${file.name}`);
+          console.log(`✅ Added dropped file: ${file.name} with metadata:`, metadata);
           
           // IMMEDIATE UI UPDATE - Update file count instantly
           const counter = document.getElementById("video-file-count");
@@ -1077,7 +1134,7 @@ class TelegramUtilities {
       } else {
         console.log(`❌ Invalid extension for: ${file.name}`);
       }
-    });
+    }
     
     console.log(`📊 Dropped files added: ${addedCount}`);
     
@@ -1325,12 +1382,23 @@ class TelegramUtilities {
           }
           const createBtn = document.getElementById("create-sticker-pack");
           if (createBtn) createBtn.disabled = false;
+          // Update Connect button to Connected state
+          const connectBtnOk = document.getElementById("connect-telegram");
+          if (connectBtnOk) {
+            connectBtnOk.disabled = true;
+            connectBtnOk.innerHTML = '<i class="fas fa-plug"></i> Connected';
+          }
           this.telegramConnected = true;
           break;
         case "connecting":
           statusElement.classList.add("connecting");
           if (connectionStatus) {
             connectionStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
+          }
+          const connectBtnBusy = document.getElementById("connect-telegram");
+          if (connectBtnBusy) {
+            connectBtnBusy.disabled = true;
+            connectBtnBusy.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
           }
           break;
         default:
@@ -1340,7 +1408,13 @@ class TelegramUtilities {
           }
           const createBtnDisco = document.getElementById("create-sticker-pack");
           if (createBtnDisco) createBtnDisco.disabled = true;
+          const connectBtnIdle = document.getElementById("connect-telegram");
+          if (connectBtnIdle) {
+            connectBtnIdle.disabled = false;
+            connectBtnIdle.innerHTML = '<i class="fas fa-plug"></i> Connect';
+          }
           this.telegramConnected = false;
+          break;
       }
     }
   }
@@ -1425,24 +1499,30 @@ class TelegramUtilities {
       }
       
       let addedCount = 0;
-      files.forEach((file, index) => {
+      for (let index = 0; index < files.length; index++) {
+        const file = files[index];
         console.log(`📄 Processing file ${index + 1}:`, {
           path: file,
           exists: file ? "checking..." : "NO PATH"
         });
         
         if (!this.videoFiles.some((f) => f.path === file)) {
+          // Get file metadata first
+          const metadata = await this.getFileMetadata(file);
+          
           this.videoFiles.push({
             path: file,
             name: file.split(/[\\/]/).pop(),
             status: "pending",
             progress: 0,
             stage: "Ready to convert",
-            size: "Unknown",
-            duration: "Unknown",
+            size: metadata.size,
+            duration: metadata.duration,
+            width: metadata.width,
+            height: metadata.height
           });
           addedCount++;
-          console.log(`✅ Added file: ${file.split(/[\\/]/).pop()}`);
+          console.log(`✅ Added file: ${file.split(/[\\/]/).pop()} with metadata:`, metadata);
           
           // IMMEDIATE UI UPDATE - Update file count instantly
           const counter = document.getElementById("video-file-count");
@@ -1452,7 +1532,7 @@ class TelegramUtilities {
         } else {
           console.log(`⚠️ File already exists: ${file.split(/[\\/]/).pop()}`);
         }
-      });
+      }
       
       console.log(`📊 Total files added: ${addedCount}`);
       console.log(`📊 Total files in list: ${this.videoFiles.length}`);
@@ -1620,7 +1700,10 @@ class TelegramUtilities {
           </div>
           <div class="file-details">
             <div class="file-name" title="${file.path}">${file.name}</div>
-            <div class="file-status">${statusText}</div>
+            <div class="file-status">
+              ${statusText}
+              ${file.hexEdited ? '<span class="hex-edited-badge" title="Hex edited">🔧</span>' : ''}
+            </div>
             <div class="file-progress-container">
               <div class="file-progress-bar">
                 <div class="file-progress-fill" style="width: ${progressWidth}%"></div>
@@ -2407,6 +2490,9 @@ class TelegramUtilities {
     const startTs = Date.now();
     console.log(`[HEX] monitor:start`, { processId, files: this.videoFiles.length });
     
+    // For hex edit, check progress immediately since it's very fast
+    this.checkHexProgressImmediately(processId);
+    
     this.progressInterval = setInterval(async () => {
       // Timeout guard
       if (Date.now() - startTs > LONG_OPERATION_TIMEOUT) {
@@ -2446,7 +2532,32 @@ class TelegramUtilities {
           await new Promise(r => setTimeout(r, RETRY_DELAY));
         }
       }
-    }, 750);
+    }, 250); // Faster polling for hex edit (250ms instead of 750ms)
+  }
+  
+  // Immediate progress check for hex edit since it's very fast
+  async checkHexProgressImmediately(processId) {
+    try {
+      console.log(`[HEX] immediate:check`, { processId });
+      const progress = await this.getHexEditProgress(processId);
+      
+      // If hex edit is already completed (very fast operation)
+      if (progress.status === 'completed') {
+        console.log(`[HEX] immediate:completed`, progress);
+        clearInterval(this.progressInterval);
+        this.progressInterval = null;
+        this.handleConversionComplete(progress);
+        return;
+      }
+      
+      // Update UI immediately
+      this.updateHexOverallProgress(progress);
+      this.updateVideoFileList();
+      
+    } catch (err) {
+      console.warn(`[HEX] immediate:error`, err?.message);
+      // Continue with normal polling if immediate check fails
+    }
   }
   
   async getHexEditProgress(processId) {
@@ -2470,17 +2581,30 @@ class TelegramUtilities {
       file.status = fs.status || file.status || 'processing';
       file.progress = typeof fs.progress === 'number' ? fs.progress : (file.progress || 0);
       file.stage = fs.stage || file.stage || 'Processing hex edit...';
-      if (file.status === 'completed') file.progress = 100;
+      // For hex edit, ensure completed files show 100% progress
+      if (file.status === 'completed') {
+        file.progress = 100;
+        // Check if this is a hex edit completion
+        if (file.stage && file.stage.includes('Hex edit completed')) {
+          file.hexEdited = true; // Mark as hex edited
+        }
+      }
       
       if (before.s !== file.status || before.p !== file.progress || before.st !== file.stage) {
         console.log(`[HEX] file:update`, { idx, before, after: { s: file.status, p: file.progress, st: file.stage } });
       }
     });
     
+    // Enhanced completion detection for hex edit
+    const allCompleted = keys.every(k => {
+      const fs = fileStatuses[k] || {};
+      return fs.status === 'completed';
+    });
+    
     // Return normalized progress shape
     return {
-      status: data.status || 'running',
-      progress: data.progress || 0,
+      status: allCompleted ? 'completed' : (data.status || 'running'),
+      progress: allCompleted ? 100 : (data.progress || 0),
       currentStage: data.current_stage || '',
       totalFiles: data.total_files || this.videoFiles.length,
       completedFiles: data.completed_files || 0,
@@ -2913,16 +3037,12 @@ class TelegramUtilities {
   // TELEGRAM STICKER BOT METHODS
   // =============================================
   async connectTelegram() {
-    const apiIdInput = document.getElementById("api-id");
-    const apiHashInput = document.getElementById("api-hash");
-    const phoneInput = document.getElementById("phone-number");
+    const apiIdInput = document.getElementById("telegram-api-id");
+    const apiHashInput = document.getElementById("telegram-api-hash");
+    const phoneInput = document.getElementById("telegram-phone");
     
     if (!apiIdInput || !apiHashInput || !phoneInput) {
-      this.showToast(
-        "error",
-        "Elements Missing",
-        "Required form elements not found"
-      );
+      this.showToast('error', 'Input Error', 'Telegram connection inputs not found');
       return;
     }
     
@@ -2930,41 +3050,24 @@ class TelegramUtilities {
     const apiHash = apiHashInput.value.trim();
     const phoneNumber = phoneInput.value.trim();
     
+    // Validate inputs
     if (!apiId || !apiHash || !phoneNumber) {
-      this.showToast(
-        "error",
-        "Missing Information",
-        "Please fill in all required fields"
-      );
-      this.highlightEmptyFields([apiIdInput, apiHashInput, phoneInput]);
-      return;
-    }
-    
-    // Validate API ID (should be numeric)
-    if (!/^\d+$/.test(apiId)) {
-      this.showToast("error", "Invalid API ID", "API ID should be numeric");
-      apiIdInput.focus();
-      return;
-    }
-    
-    // Validate phone number format
-    if (!/^\+?\d{10,15}$/.test(phoneNumber.replace(/\s/g, ""))) {
-      this.showToast(
-        "error",
-        "Invalid Phone Number",
-        "Please enter a valid phone number with country code"
-      );
-      phoneInput.focus();
+      this.showToast('error', 'Invalid Input', 'Please fill in all Telegram connection details');
       return;
     }
     
     try {
-      this.updateTelegramStatus("connecting");
+      // Save credentials securely
+      this.saveCredentials();
+      
+      // Save phone number for future use
+      this.savePhoneNumber(phoneNumber);
+      
+      // Proceed with Telegram connection
       const connectBtn = document.getElementById("connect-telegram");
       if (connectBtn) {
         connectBtn.disabled = true;
-        connectBtn.innerHTML =
-          '<i class="fas fa-spinner fa-spin"></i> Connecting...';
+        connectBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
       }
       
       this.showLoadingOverlay("Connecting to Telegram...");
@@ -2978,9 +3081,13 @@ class TelegramUtilities {
       
       this.hideLoadingOverlay();
       
-      if (response.success) {
-        const result = response.data;
-        if (result.needs_code) {
+      const resOk = response && typeof response === 'object' && response.success === true;
+      if (resOk) {
+        const result = (response.data !== undefined && response.data !== null) ? response.data : response;
+        const needsCode = !!(result && result.needs_code);
+        const needsPassword = !!(result && result.needs_password);
+        
+        if (needsCode) {
           this.pendingCode = true;
           this.showModal("code-modal");
           this.showToast(
@@ -2992,7 +3099,7 @@ class TelegramUtilities {
             const codeInput = document.getElementById("verification-code");
             if (codeInput) codeInput.focus();
           }, 500);
-        } else if (result.needs_password) {
+        } else if (needsPassword) {
           this.pendingPassword = true;
           this.showModal("password-modal");
           this.showToast(
@@ -3001,43 +3108,25 @@ class TelegramUtilities {
             "Please enter your 2FA password"
           );
           setTimeout(() => {
-            const passwordInput = document.getElementById(
-              "two-factor-password"
-            );
+            const passwordInput = document.getElementById("two-factor-password");
             if (passwordInput) passwordInput.focus();
           }, 500);
         } else {
+          // Successful connection
+          this.showToast('success', 'Connected', 'Successfully connected to Telegram');
           this.updateTelegramStatus("connected");
-          this.saveSettings();
-          this.showToast(
-            "success",
-            "Connected",
-            "Successfully connected to Telegram"
-          );
         }
       } else {
-        this.updateTelegramStatus("disconnected");
-        this.showToast(
-          "error",
-          "Connection Failed",
-          response.error || "Failed to connect to Telegram"
-        );
+        this.showToast('error', 'Connection Failed', (response && response.error) || 'Unknown error');
       }
     } catch (error) {
       this.hideLoadingOverlay();
-      console.error("Error connecting to Telegram:", error);
-      this.updateTelegramStatus("disconnected");
-      this.showToast(
-        "error",
-        "Connection Error",
-        "Failed to connect to Telegram: " + error.message
-      );
+      this.showToast('error', 'Connection Error', error.message || 'Failed to connect');
     } finally {
       const connectBtn = document.getElementById("connect-telegram");
       if (connectBtn) {
         connectBtn.disabled = false;
-        connectBtn.innerHTML =
-          '<i class="fas fa-telegram"></i> Connect to Telegram';
+        connectBtn.innerHTML = '<i class="fas fa-telegram"></i> Connect';
       }
     }
   }
@@ -3086,9 +3175,15 @@ class TelegramUtilities {
       
       const response = await this.apiRequest("POST", "/api/sticker/verify-code", { code });
       
-      if (response.success) {
-        const result = response.data;
-        if (result.needs_password) {
+      const resOk = response && typeof response === 'object' && response.success === true;
+      if (resOk) {
+        const result = (response.data !== undefined && response.data !== null) ? response.data : response;
+        // If backend omits needs_password, default to true to complete login
+        const needsPassword = (result && typeof result.needs_password !== 'undefined')
+          ? !!result.needs_password
+          : true;
+        console.debug('[verify-code] response:', response, 'computed needsPassword=', needsPassword);
+        if (needsPassword) {
           this.pendingCode = false;
           this.pendingPassword = true;
           this.hideModal();
@@ -3119,7 +3214,7 @@ class TelegramUtilities {
         this.showToast(
           "error",
           "Verification Failed",
-          response.error || "Invalid verification code"
+          (response && response.error) || "Invalid verification code"
         );
         codeInput.select();
       }
@@ -3164,7 +3259,9 @@ class TelegramUtilities {
       
       const response = await this.apiRequest("POST", "/api/sticker/verify-password", { password });
       
-      if (response.success) {
+      const resOk = response && typeof response === 'object' && response.success === true;
+      if (resOk) {
+        const result = (response.data !== undefined && response.data !== null) ? response.data : response;
         this.pendingPassword = false;
         this.hideModal();
         this.updateTelegramStatus("connected");
@@ -3178,7 +3275,7 @@ class TelegramUtilities {
         this.showToast(
           "error",
           "Authentication Failed",
-          response.error || "Invalid password"
+          (response && response.error) || "Invalid password"
         );
         passwordInput.select();
       }
@@ -3584,67 +3681,16 @@ class TelegramUtilities {
   }
 
   async createStickerPack() {
-    if (!this.telegramConnected) {
-      this.showToast(
-        "error",
-        "Not Connected",
-        "Please connect to Telegram first"
-      );
-      return;
-    }
-    
-    if (this.mediaFiles.length === 0) {
-      this.showToast("error", "No Media", "Please add media files first");
-      return;
-    }
-    
-    const packNameInput = document.getElementById("pack-name");
-    if (!packNameInput) {
-      this.showToast("error", "Missing Input", "Pack name input not found");
-      return;
-    }
-    
-    const packName = packNameInput.value.trim();
+    const packNameEl = document.getElementById("pack-name");
+    const packName = (packNameEl && typeof packNameEl.value === 'string') ? packNameEl.value.trim() : "";
+    const stickerTypeEl = document.querySelector('input[name="sticker-type"]:checked');
+    const stickerType = stickerTypeEl ? stickerTypeEl.value : 'image';
+
     if (!packName) {
-      this.showToast("error", "Missing Pack Name", "Please enter a pack name");
-      packNameInput.focus();
+      this.showToast("error", "Invalid Input", "Please enter a pack name");
       return;
     }
     
-    // Validate pack name
-    if (packName.length < 3) {
-      this.showToast(
-        "error",
-        "Pack Name Too Short",
-        "Pack name must be at least 3 characters"
-      );
-      packNameInput.focus();
-      return;
-    }
-    
-    if (packName.length > 64) {
-      this.showToast(
-        "error",
-        "Pack Name Too Long",
-        "Pack name must be less than 64 characters"
-      );
-      packNameInput.focus();
-      return;
-    }
-    
-    const stickerTypeInputs = document.querySelectorAll(
-      'input[name="sticker-type"]'
-    );
-    let stickerType = "video";
-    
-    for (const input of stickerTypeInputs) {
-      if (input.checked) {
-        stickerType = input.value;
-        break;
-      }
-    }
-    
-    // Validate media files match sticker type
     const incompatibleFiles = this.mediaFiles.filter((f) => {
       if (stickerType === "video" && f.type !== "video") return true;
       if (stickerType === "image" && f.type !== "image") return true;
@@ -3678,8 +3724,8 @@ class TelegramUtilities {
       if (response.success) {
         this.showToast(
           "success",
-          "Creation Started",
-          "Sticker pack creation started"
+          "Creation Queued",
+          "Sticker pack creation started in background"
         );
         
         const createBtn = document.getElementById("create-sticker-pack");
@@ -3690,7 +3736,7 @@ class TelegramUtilities {
         }
         
         // Start monitoring progress
-        this.startStickerProgressMonitoring(processId);
+        this.startStickerProgressMonitoring(response.process_id || processId);
       } else {
         this.showToast(
           "error",
@@ -5277,6 +5323,424 @@ This action cannot be undone. Are you sure?
         `;
       }
     );
+  }
+
+  async getFileMetadata(filePath) {
+    try {
+      const response = await this.apiRequest('POST', '/api/get-file-info', {
+        path: filePath
+      });
+      
+      if (response.success && response.data) {
+        const data = response.data;
+        return {
+          size: data.size ? this.formatFileSize(data.size) : "Unknown",
+          duration: data.duration ? this.formatDuration(data.duration) : "Unknown",
+          width: data.width || "Unknown",
+          height: data.height || "Unknown"
+        };
+      }
+    } catch (error) {
+      console.warn(`Failed to get metadata for ${filePath}:`, error);
+    }
+    
+    // Fallback: try to get basic file size
+    try {
+      const response = await this.apiRequest('POST', '/api/analyze-video', {
+        file_path: filePath
+      });
+      
+      if (response.success && response.data) {
+        const data = response.data;
+        return {
+          size: data.size || "Unknown",
+          duration: data.duration || "Unknown",
+          width: data.width || "Unknown",
+          height: data.height || "Unknown"
+        };
+      }
+    } catch (error) {
+      console.warn(`Failed to analyze video ${filePath}:`, error);
+    }
+    
+    return {
+      size: "Unknown",
+      duration: "Unknown",
+      width: "Unknown",
+      height: "Unknown"
+    };
+  }
+
+  formatFileSize(bytes) {
+    if (bytes === "Unknown" || !bytes) return "Unknown";
+    
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    if (bytes === 0) return '0 B';
+    
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+  }
+
+  formatDuration(seconds) {
+    if (seconds === "Unknown" || !seconds) return "Unknown";
+    
+    if (typeof seconds === 'string' && seconds.includes('s')) {
+      return seconds; // Already formatted
+    }
+    
+    const secs = parseFloat(seconds);
+    if (isNaN(secs)) return "Unknown";
+    
+    const minutes = Math.floor(secs / 60);
+    const remainingSeconds = Math.floor(secs % 60);
+    
+    if (minutes > 0) {
+      return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    } else {
+      return `${remainingSeconds}s`;
+    }
+  }
+
+  // Secure Credential Management
+  secureStoreCredentials(key, value) {
+    try {
+      // Encrypt sensitive data before storing
+      const encryptedValue = this.encryptData(value);
+      localStorage.setItem(key, encryptedValue);
+      console.log(`[SECURE] Stored ${key} securely`);
+    } catch (error) {
+      console.error(`[SECURE] Error storing ${key}:`, error);
+      this.showToast('error', 'Credential Storage Error', 'Failed to securely store credentials');
+    }
+  }
+
+  secureRetrieveCredentials(key) {
+    try {
+      const encryptedValue = localStorage.getItem(key);
+      if (!encryptedValue) return null;
+      
+      const decryptedValue = this.decryptData(encryptedValue);
+      return decryptedValue;
+    } catch (error) {
+      console.error(`[SECURE] Error retrieving ${key}:`, error);
+      this.showToast('error', 'Credential Retrieval Error', 'Failed to retrieve stored credentials');
+      return null;
+    }
+  }
+
+  // Simple XOR encryption for localStorage (basic obfuscation)
+  encryptData(data) {
+    if (!data) return '';
+    const key = 'TELEGRAM_SECURE_KEY';
+    return btoa(data.split('').map((char, index) => 
+      String.fromCharCode(char.charCodeAt(0) ^ key.charCodeAt(index % key.length))
+    ).join(''));
+  }
+
+  decryptData(encryptedData) {
+    if (!encryptedData) return '';
+    const key = 'TELEGRAM_SECURE_KEY';
+    return atob(encryptedData).split('').map((char, index) => 
+      String.fromCharCode(char.charCodeAt(0) ^ key.charCodeAt(index % key.length))
+    ).join('');
+  }
+
+  // Modify existing credential storage methods
+  saveCredentials() {
+    const apiIdInput = document.getElementById("telegram-api-id");
+    const apiHashInput = document.getElementById("telegram-api-hash");
+    const phoneInput = document.getElementById("telegram-phone");
+    
+    if (apiIdInput && apiHashInput && phoneInput) {
+      const credentials = {
+        apiId: apiIdInput.value.trim(),
+        apiHash: apiHashInput.value.trim(),
+        phoneNumber: phoneInput.value.trim()
+      };
+
+      try {
+        localStorage.setItem('telegramCredentials', JSON.stringify(credentials));
+        this.showToast('success', 'Saved', 'Telegram credentials saved securely');
+      } catch (error) {
+        this.showToast('warning', 'Save Failed', 'Could not save credentials');
+      }
+    }
+  }
+
+  loadCredentials() {
+    try {
+      const savedCredentials = localStorage.getItem('telegramCredentials');
+      if (savedCredentials) {
+        const { apiId, apiHash, phoneNumber } = JSON.parse(savedCredentials);
+        
+    const apiIdInput = document.getElementById("telegram-api-id");
+    const apiHashInput = document.getElementById("telegram-api-hash");
+    const phoneInput = document.getElementById("telegram-phone");
+    
+    if (apiIdInput && apiHashInput && phoneInput) {
+          apiIdInput.value = apiId || '';
+          apiHashInput.value = apiHash || '';
+          phoneInput.value = phoneNumber || '';
+        }
+      }
+    } catch (error) {
+      console.error('Error loading credentials:', error);
+    }
+  }
+
+  // Call this in the constructor or init method
+  initializeTelegramForm() {
+    this.loadCredentials();
+    this.setupInputActionListeners(); // Add this line
+    
+    // Add event listeners to save credentials when changed
+    const apiIdInput = document.getElementById("telegram-api-id");
+    const apiHashInput = document.getElementById("telegram-api-hash");
+    const phoneInput = document.getElementById("telegram-phone");
+
+    if (apiIdInput) {
+      apiIdInput.addEventListener('change', () => this.saveCredentials());
+    }
+    if (apiHashInput) {
+      apiHashInput.addEventListener('change', () => this.saveCredentials());
+    }
+    if (phoneInput) {
+      phoneInput.addEventListener('change', () => this.saveCredentials());
+    }
+  }
+
+  // Add method to clear credentials
+  clearStoredCredentials() {
+    try {
+      localStorage.removeItem('telegram_api_id');
+      localStorage.removeItem('telegram_api_hash');
+      localStorage.removeItem('telegram_phone');
+      
+      // Clear input fields
+      const apiIdInput = document.getElementById("telegram-api-id");
+      const apiHashInput = document.getElementById("telegram-api-hash");
+      const phoneInput = document.getElementById("telegram-phone");
+      
+      if (apiIdInput) apiIdInput.value = '';
+      if (apiHashInput) apiHashInput.value = '';
+      if (phoneInput) phoneInput.value = '';
+      
+      this.showToast('success', 'Credentials Cleared', 'Telegram credentials have been removed');
+    } catch (error) {
+      console.error('[SECURE] Error clearing credentials:', error);
+      this.showToast('error', 'Clearing Error', 'Failed to clear stored credentials');
+    }
+  }
+
+  // Enhanced phone number management
+  savePhoneNumber(phoneNumber) {
+    try {
+      // Securely store phone number
+      this.secureStoreCredentials('telegram_last_phone', phoneNumber);
+      
+      // Optional: Store recent phone numbers (up to 5)
+      const recentPhones = this.getRecentPhoneNumbers();
+      if (!recentPhones.includes(phoneNumber)) {
+        recentPhones.unshift(phoneNumber);
+        // Keep only the last 5 unique phone numbers
+        const uniqueRecentPhones = [...new Set(recentPhones)].slice(0, 5);
+        localStorage.setItem('telegram_recent_phones', JSON.stringify(uniqueRecentPhones));
+      }
+      
+      console.log('[PHONE] Phone number saved successfully');
+    } catch (error) {
+      console.error('[PHONE] Error saving phone number:', error);
+    }
+  }
+
+  getRecentPhoneNumbers() {
+    try {
+      const storedPhones = localStorage.getItem('telegram_recent_phones');
+      return storedPhones ? JSON.parse(storedPhones) : [];
+    } catch (error) {
+      console.error('[PHONE] Error retrieving recent phone numbers:', error);
+      return [];
+    }
+  }
+
+  populatePhoneInputWithRecent() {
+    const phoneInput = document.getElementById("telegram-phone");
+    const recentPhonesContainer = document.getElementById("recent-phones-container");
+    
+    if (!phoneInput || !recentPhonesContainer) return;
+
+    // Clear existing recent phones
+    recentPhonesContainer.innerHTML = '';
+
+    const recentPhones = this.getRecentPhoneNumbers();
+    
+    // Populate recent phones dropdown
+    if (recentPhones.length > 0) {
+      recentPhones.forEach(phone => {
+        const phoneOption = document.createElement('button');
+        phoneOption.textContent = phone;
+        phoneOption.className = 'recent-phone-option';
+        phoneOption.addEventListener('click', () => {
+          phoneInput.value = phone;
+          // Optional: hide dropdown after selection
+          recentPhonesContainer.style.display = 'none';
+        });
+        recentPhonesContainer.appendChild(phoneOption);
+      });
+      
+      // Show dropdown if there are recent phones
+      recentPhonesContainer.style.display = recentPhones.length > 0 ? 'flex' : 'none';
+    }
+  }
+
+  // Input handling methods
+  setupInputHandlers() {
+    // Clipboard paste functionality
+    const pasteButtons = document.querySelectorAll('.btn-paste');
+    pasteButtons.forEach(button => {
+      button.addEventListener('click', async () => {
+        const targetId = button.getAttribute('data-target');
+        const targetInput = document.getElementById(targetId);
+        
+        try {
+          const clipboardText = await navigator.clipboard.readText();
+          if (clipboardText) {
+            targetInput.value = clipboardText.trim();
+            this.showToast('success', 'Clipboard', 'Text pasted successfully');
+          }
+        } catch (error) {
+          console.error('Clipboard paste error:', error);
+          this.showToast('error', 'Clipboard Error', 'Failed to paste from clipboard');
+        }
+      });
+    });
+
+    // Input visibility toggle
+    const visibilityButtons = document.querySelectorAll('.btn-toggle-visibility');
+    visibilityButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        const targetId = button.getAttribute('data-target');
+        const targetInput = document.getElementById(targetId);
+        const icon = button.querySelector('i');
+        
+        if (targetInput.type === 'tel' || targetInput.type === 'password') {
+          targetInput.type = 'text';
+          icon.classList.remove('fa-eye-slash');
+          icon.classList.add('fa-eye');
+        } else {
+          targetInput.type = 'tel';
+          icon.classList.remove('fa-eye');
+          icon.classList.add('fa-eye-slash');
+        }
+      });
+    });
+  }
+
+  // Modify initialization to include input handlers
+  initializeTelegramConnection() {
+    this.logDebug('initializeTelegramConnection()');
+    // Setup improved input handlers
+    this.setupInputActionListeners?.();
+    // Load saved credentials if available
+    if (typeof this.loadCredentials === 'function') {
+      try { this.loadCredentials(); } catch (_) {}
+    }
+    // Sync visibility icons
+    this.syncVisibilityIcons?.();
+  }
+
+  syncVisibilityIcons() {
+    const visibilityButtons = document.querySelectorAll('.btn-input-action.btn-toggle-visibility');
+    visibilityButtons.forEach(button => {
+      const targetId = button.getAttribute('data-target');
+      const targetInput = document.getElementById(targetId);
+      const icon = button.querySelector('i');
+      if (!targetInput || !icon) return;
+      if (targetInput.type === 'password') {
+        icon.classList.remove('fa-eye');
+        icon.classList.add('fa-eye-slash');
+      } else {
+        icon.classList.remove('fa-eye-slash');
+        icon.classList.add('fa-eye');
+      }
+    });
+  }
+
+  // Clipboard and Visibility Handling for Sensitive Inputs
+  setupInputActionListeners() {
+    // Visibility Toggle Functionality with Enhanced Logic
+    const visibilityButtons = document.querySelectorAll('.btn-input-action.btn-toggle-visibility');
+    visibilityButtons.forEach(button => {
+      button.addEventListener('click', (e) => {
+        // Prevent default button actions
+        e.preventDefault();
+        e.stopPropagation();
+
+        const targetId = button.getAttribute('data-target');
+        const targetInput = document.getElementById(targetId);
+        const visibilityIcon = button.querySelector('i');
+        
+        if (!targetInput || !visibilityIcon) return;
+
+        // Explicitly set focus to input before toggling
+        targetInput.focus();
+
+        // Comprehensive toggle logic
+        const isCurrentlyPassword = targetInput.type === 'password';
+        
+        // Toggle input type
+        targetInput.type = isCurrentlyPassword ? 'text' : 'password';
+        
+        // Toggle icon classes
+        if (isCurrentlyPassword) {
+          visibilityIcon.classList.remove('fa-eye-slash');
+          visibilityIcon.classList.add('fa-eye');
+        } else {
+          visibilityIcon.classList.remove('fa-eye');
+          visibilityIcon.classList.add('fa-eye-slash');
+        }
+
+        // Maintain focus and cursor position
+        const currentPosition = targetInput.selectionStart;
+        targetInput.setSelectionRange(currentPosition, currentPosition);
+      });
+
+      // Prevent default form submission or other unwanted behaviors
+      button.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
+    });
+
+    // Clipboard Paste Functionality (unchanged from previous implementation)
+    const pasteButtons = document.querySelectorAll('.btn-input-action.btn-paste');
+    pasteButtons.forEach(button => {
+      button.addEventListener('click', async (e) => {
+        const targetId = button.getAttribute('data-target');
+        const targetInput = document.getElementById(targetId);
+        
+        if (!targetInput) return;
+
+        try {
+          const clipboardText = await navigator.clipboard.readText();
+          targetInput.value = clipboardText.trim();
+          
+          // Trigger change event for saving
+          targetInput.dispatchEvent(new Event('change'));
+          
+          this.showToast('success', 'Pasted', 'Text copied from clipboard');
+          
+          // Highlight input briefly
+          targetInput.classList.add('paste-highlight');
+          setTimeout(() => {
+            targetInput.classList.remove('paste-highlight');
+          }, 1000);
+        } catch (err) {
+          this.showToast('error', 'Paste Failed', 'Could not read clipboard');
+          console.error('Clipboard paste error:', err);
+        }
+      });
+    });
   }
 }
 
