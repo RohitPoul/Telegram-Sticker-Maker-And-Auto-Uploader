@@ -57,7 +57,10 @@ function createWindow() {
 
     mainWindow.on('close', async () => {
         try {
+            // Orderly shutdown: release Telegram, stop processes, clear sessions
+            await axios.post(`${BACKEND_URL}/api/sticker/reset-connection`).catch(() => {});
             await axios.post(`${BACKEND_URL}/api/stop-process`, { process_id: 'ALL' }).catch(() => {});
+            await axios.post(`${BACKEND_URL}/api/clear-session`).catch(() => {});
             await new Promise(r => setTimeout(r, 1000));
         } finally {
             cleanupPythonProcess();
@@ -367,13 +370,22 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", () => {
-    cleanupPythonProcess();
+    // Best-effort backend cleanup as well
+    (async () => {
+        try { await axios.post(`${BACKEND_URL}/api/sticker/reset-connection`).catch(() => {}); } catch {}
+        try { await axios.post(`${BACKEND_URL}/api/stop-process`, { process_id: 'ALL' }).catch(() => {}); } catch {}
+        try { await axios.post(`${BACKEND_URL}/api/clear-session`).catch(() => {}); } catch {}
+    })().finally(() => cleanupPythonProcess());
     if (process.platform !== "darwin") {
         app.quit();
     }
 });
 
 app.on("before-quit", () => {
+    // Attempt graceful backend teardown
+    try { exec(`curl -s -X POST ${BACKEND_URL}/api/sticker/reset-connection`); } catch {}
+    try { exec(`curl -s -X POST -H \"Content-Type: application/json\" -d '{\\"process_id\\":\\"ALL\\"}' ${BACKEND_URL}/api/stop-process`); } catch {}
+    try { exec(`curl -s -X POST ${BACKEND_URL}/api/clear-session`); } catch {}
     cleanupPythonProcess();
 });
 
