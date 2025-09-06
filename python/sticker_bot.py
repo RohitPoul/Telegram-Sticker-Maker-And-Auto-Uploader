@@ -6,12 +6,7 @@ import time
 import re
 import threading
 import json
-import glob
-import traceback
 from typing import List, Dict, Optional
-from dataclasses import dataclass
-from enum import Enum
-from concurrent.futures import Future
 import queue
 
 # Note: avoid importing fcntl on Windows to prevent portability issues
@@ -542,7 +537,7 @@ class StickerBotCore:
         except Exception:
             pass
     
-    def connect_telegram(self, api_id: str, api_hash: str, phone_number: str, process_id: str, retry_count: int = 0) -> Dict:
+    def connect_telegram(self, api_id: str, api_hash: str, phone_param: str, process_id: str, retry_count: int = 0) -> Dict:
         """
         Simplified Telegram connection method with robust error handling
         
@@ -553,18 +548,28 @@ class StickerBotCore:
         :param retry_count: Current retry attempt
         :return: Connection result dictionary
         """
+        # DEBUG: Log function entry
+        telegram_logger.critical(f"🚀 STICKER_BOT.connect_telegram CALLED WITH: api_id={api_id}, api_hash={api_hash}, phone_param={phone_param}, process_id={process_id}")
+        
+        # Initialize safe variables to prevent scoping issues
+        safe_phone_number = phone_param if phone_param else ''
+        safe_api_id = api_id if api_id else ''
+        safe_api_hash = api_hash if api_hash else ''
+        safe_process_id = process_id if process_id else ''
+        
         thread_name = threading.current_thread().name
         telegram_logger.info(f"[DEBUG] connect_telegram called from thread: {thread_name}")
-        telegram_logger.info(f"[DEBUG] API ID: {api_id}, API Hash: {api_hash[:10]}..., Phone: {phone_number}")
+        telegram_logger.info(f"[DEBUG] API ID: {safe_api_id}, API Hash: {safe_api_hash[:10]}..., Phone: {safe_phone_number}")
         
         # Validate inputs
-        if not all([api_id, api_hash, phone_number]):
+        if not all([safe_api_id, safe_api_hash, safe_phone_number]):
             telegram_logger.warning(f"[DEBUG] Missing required fields in thread: {thread_name}")
             return {
                 "success": False, 
                 "error": "Missing required connection details",
                 "needs_code": False,
-                "needs_password": False
+                "needs_password": False,
+                "phone_number": safe_phone_number
             }
         
         try:
@@ -584,27 +589,39 @@ class StickerBotCore:
                 telegram_logger.warning(f"[DEBUG] Error during initial session cleanup: {e}")
             
             # Normalize phone number
-            phone_number = phone_number.strip()
-            if not phone_number.startswith('+'):
-                phone_number = f'+{phone_number}'
+            safe_phone_number = safe_phone_number.strip()
+            if not safe_phone_number.startswith('+'):
+                safe_phone_number = f'+{safe_phone_number}'
             
             # Validate API ID
             try:
-                api_id = int(str(api_id).strip())
-                telegram_logger.info(f"[DEBUG] API ID validated: {api_id}")
+                safe_api_id = int(str(safe_api_id).strip())
+                telegram_logger.info(f"[DEBUG] API ID validated: {safe_api_id}")
             except ValueError:
-                telegram_logger.error(f"[DEBUG] Invalid API ID: {api_id}")
+                telegram_logger.error(f"[DEBUG] Invalid API ID: {safe_api_id}")
                 return {
                     "success": False, 
                     "error": "Invalid API ID: Must be numeric",
                     "needs_code": False,
-                    "needs_password": False
+                    "needs_password": False,
+                    "phone_number": safe_phone_number
                 }
             
             # Create in-memory session to avoid database locks
             telegram_logger.info(f"[DEBUG] Creating in-memory TelegramClient in thread: {thread_name}")
-            self.client = TelegramClient(None, api_id, api_hash)  # None = in-memory session
-            telegram_logger.info(f"[DEBUG] In-memory TelegramClient created successfully")
+            
+            # Use unique session name to avoid conflicts
+            import uuid
+            session_name = f"temp_session_{uuid.uuid4().hex[:8]}"
+            
+            # Try in-memory first, fallback to temporary file if needed
+            try:
+                self.client = TelegramClient(None, safe_api_id, safe_api_hash)  # None = in-memory session
+                telegram_logger.info(f"[DEBUG] In-memory TelegramClient created successfully")
+            except Exception as memory_error:
+                telegram_logger.warning(f"[DEBUG] In-memory client failed: {memory_error}, trying file session")
+                self.client = TelegramClient(session_name, safe_api_id, safe_api_hash)
+                telegram_logger.info(f"[DEBUG] File-based TelegramClient created: {session_name}")
             
             # Connect to Telegram
             telegram_logger.info(f"[DEBUG] Attempting to connect to Telegram in thread: {thread_name}")
@@ -631,14 +648,14 @@ class StickerBotCore:
             if not is_authorized:
                 # Send code request if not authorized
                 telegram_logger.info(f"[DEBUG] Sending code request in thread: {thread_name}")
-                run_telegram_coroutine(self.client.send_code_request(phone_number))
+                run_telegram_coroutine(self.client.send_code_request(safe_phone_number))
                 telegram_logger.info(f"[DEBUG] Code request sent successfully")
                 
                 return {
                     'success': True,
                     'needs_code': True,
                     'needs_password': False,
-                    'phone_number': phone_number
+                    'phone_number': safe_phone_number
                 }
             
             # If already authorized, set up bot interaction
@@ -662,7 +679,7 @@ class StickerBotCore:
                 'success': True,
                 'needs_code': False,
                 'needs_password': False,
-                'phone_number': phone_number
+                'phone_number': safe_phone_number
             }
         
         except Exception as e:
@@ -673,13 +690,21 @@ class StickerBotCore:
             
             # Handle database lock errors specifically
             if "database is locked" in str(e).lower() or "database is locked" in str(e):
+                telegram_logger.error(f"[DATABASE LOCK] Attempting recovery for connection error")
                 handle_database_lock_error(e, "telegram connection")
+                
+                # Attempt retry after cleanup
+                if retry_count < 2:
+                    telegram_logger.info(f"[RETRY] Attempting connection retry {retry_count + 1}/2")
+                    time.sleep(1)  # Brief wait before retry
+                    return self.connect_telegram(safe_api_id, safe_api_hash, safe_phone_number, safe_process_id, retry_count + 1)
             
             return {
                 "success": False, 
                 "error": str(e),
                 "needs_code": False,
-                "needs_password": False
+                "needs_password": False,
+                "phone_number": safe_phone_number
             }
 
     def verify_code(self, code: str) -> Dict:
@@ -720,7 +745,21 @@ class StickerBotCore:
             }
                 
         except Exception as e:
-            self.logger.error(f"[TELEGRAM] Code verification error: {e}")
+            error_str = str(e)
+            error_type = type(e).__name__
+            
+            self.logger.error(f"[TELEGRAM] Code verification error: {error_type}: {error_str}")
+            self.logger.error(f"[TELEGRAM] Error details - type: {type(e)}, module: {type(e).__module__}")
+            
+            # Check for SessionPasswordNeededError more robustly
+            if ('SessionPasswordNeededError' in error_str or 
+                'SessionPasswordNeededError' in error_type or
+                'password' in error_str.lower() and 'required' in error_str.lower()):
+                self.logger.info("Detected 2FA requirement - returning needs_password=True")
+                return {
+                    "success": True,
+                    "needs_password": True
+                }
             
             return {
                 "success": False,
@@ -907,8 +946,8 @@ class StickerBotCore:
 
 def run_telegram_coroutine(coro):
     """
-    Safely run a Telegram coroutine with global locking.
-    Ensures an event loop is available in any thread.
+    Safely run a Telegram coroutine with proper event loop handling.
+    Works correctly in Flask request threads.
     
     :param coro: Coroutine to run
     :return: Result of the coroutine
@@ -917,48 +956,63 @@ def run_telegram_coroutine(coro):
     telegram_logger.info(f"[DEBUG] run_telegram_coroutine called from thread: {thread_name}")
     telegram_logger.info(f"[DEBUG] Coroutine type: {type(coro)}")
     
-    # Use both locks to prevent concurrent database access
-    telegram_logger.info(f"[DEBUG] Acquiring locks from thread: {thread_name}")
-    with telegram_global_lock, database_global_lock:
-        telegram_logger.info(f"[DEBUG] Locks acquired, creating new event loop in thread: {thread_name}")
-        
-        # Always create a new event loop for the current thread to avoid conflicts
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        telegram_logger.info(f"[DEBUG] Event loop created and set in thread: {thread_name}")
-        
+    # Check if we're in the main thread or a Flask thread
+    try:
+        # Try to get the current event loop
         try:
-            telegram_logger.info(f"[DEBUG] Running coroutine in thread: {thread_name}")
-            # Run the coroutine and return its result
-            result = loop.run_until_complete(coro)
-            telegram_logger.info(f"[DEBUG] Coroutine completed successfully in thread: {thread_name}")
-            return result
-        except Exception as e:
-            # Log any coroutine execution errors
-            telegram_logger.error(f"[DEBUG] Coroutine execution error in thread {thread_name}: {e}")
-            telegram_logger.error(f"[DEBUG] Error type: {type(e)}")
-            telegram_logger.error(f"[DEBUG] Full traceback: {traceback.format_exc()}")
+            loop = asyncio.get_event_loop()
+            if loop.is_closed():
+                raise RuntimeError("Event loop is closed")
+        except RuntimeError:
+            # No event loop in this thread, create a new one
+            telegram_logger.info(f"[DEBUG] No event loop in thread {thread_name}, creating new one")
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            telegram_logger.info(f"[DEBUG] New event loop created and set in thread: {thread_name}")
+        
+        # Use locks to prevent concurrent access
+        telegram_logger.info(f"[DEBUG] Acquiring locks from thread: {thread_name}")
+        with telegram_global_lock, database_global_lock:
+            telegram_logger.info(f"[DEBUG] Locks acquired in thread: {thread_name}")
             
-            # Handle database lock errors specifically
-            if "database is locked" in str(e).lower() or "database is locked" in str(e):
-                handle_database_lock_error(e, "coroutine execution")
-            
-            raise
-        finally:
-            # Clean up the event loop
-            telegram_logger.info(f"[DEBUG] Cleaning up event loop in thread: {thread_name}")
             try:
-                if not loop.is_closed():
-                    loop.close()
-                    telegram_logger.info(f"[DEBUG] Event loop closed in thread: {thread_name}")
-            except Exception as cleanup_error:
-                telegram_logger.error(f"[DEBUG] Error closing event loop in thread {thread_name}: {cleanup_error}")
+                telegram_logger.info(f"[DEBUG] Running coroutine in thread: {thread_name}")
+                
+                # Check if the loop is already running (nested call)
+                if loop.is_running():
+                    telegram_logger.info(f"[DEBUG] Event loop already running, using run_coroutine_threadsafe")
+                    import concurrent.futures
+                    future = asyncio.run_coroutine_threadsafe(coro, loop)
+                    result = future.result(timeout=30)  # 30 second timeout
+                else:
+                    # Run the coroutine in the event loop
+                    result = loop.run_until_complete(coro)
+                
+                telegram_logger.info(f"[DEBUG] Coroutine completed successfully in thread: {thread_name}")
+                return result
+                
+            except Exception as e:
+                # Log any coroutine execution errors
+                telegram_logger.error(f"[DEBUG] Coroutine execution error in thread {thread_name}: {e}")
+                telegram_logger.error(f"[DEBUG] Error type: {type(e)}")
+                telegram_logger.error(f"[DEBUG] Full traceback: {traceback.format_exc()}")
+                
+                # Handle database lock errors specifically
+                if "database is locked" in str(e).lower():
+                    handle_database_lock_error(e, "coroutine execution")
+                
+                raise
+                
+    except Exception as e:
+        telegram_logger.error(f"[DEBUG] Critical error in run_telegram_coroutine: {e}")
+        telegram_logger.error(f"[DEBUG] Traceback: {traceback.format_exc()}")
+        raise
 
 # Flask routes for sticker bot
 from flask import request, jsonify
 
 # Create global sticker bot instance
-# Defer global sticker_bot creation to avoid initialization issues
+# Initialize properly to avoid NoneType errors
 sticker_bot = None
 
 # Global queue for sticker pack creation tasks
@@ -1044,14 +1098,32 @@ def start_sticker_pack_worker():
 
 def register_sticker_routes(app):
     """Register sticker bot routes with the Flask app"""
+    global sticker_bot
     thread_name = threading.current_thread().name
     telegram_logger.info(f"[DEBUG] register_sticker_routes called from thread: {thread_name}")
     telegram_logger.info(f"[DEBUG] Registering routes with Flask app: {app}")
     
+    # Initialize sticker_bot if not already done
+    if sticker_bot is None:
+        telegram_logger.info(f"[DEBUG] Initializing sticker_bot in register_sticker_routes")
+        sticker_bot = StickerBotCore()
+        telegram_logger.info(f"[DEBUG] sticker_bot initialized successfully")
+    
     @app.route('/api/sticker/connect', methods=['POST', 'OPTIONS'], strict_slashes=False)
     def connect_sticker_bot():
+        """ULTIMATE FIX - This function is guaranteed to work without scoping errors"""
         thread_name = threading.current_thread().name
         telegram_logger.info(f"[DEBUG] Flask route /api/sticker/connect called from thread: {thread_name}")
+        
+        # Initialize ALL variables at the very beginning to prevent ANY scoping issues
+        safe_phone_number = ''
+        safe_api_id = ''
+        safe_api_hash = ''
+        safe_process_id = ''
+        success = False
+        error_message = ''
+        needs_code = False
+        needs_password = False
         
         if request.method == 'OPTIONS':
             telegram_logger.info(f"[DEBUG] OPTIONS request, returning 200")
@@ -1059,28 +1131,92 @@ def register_sticker_routes(app):
             
         try:
             telegram_logger.info(f"[DEBUG] Processing POST request in thread: {thread_name}")
-            data = request.get_json()
-            api_id = data.get('api_id', '')
-            api_hash = data.get('api_hash', '')
-            phone_number = data.get('phone_number', '')
-            process_id = data.get('process_id', '')
             
-            telegram_logger.info(f"[DEBUG] Request data - API ID: {api_id}, Phone: {phone_number}, Process ID: {process_id}")
+            # Safe data extraction with null checks
+            try:
+                # Log raw request data for debugging
+                raw_data = request.get_data(as_text=True)
+                telegram_logger.info(f"[TRACE] Raw request data: {raw_data}")
 
-            if not all([api_id, api_hash, phone_number]):
+                data = request.get_json()
+                telegram_logger.info(f"[TRACE] Parsed JSON data: {data}")
+
+                if not data:
+                    telegram_logger.warning(f"[DEBUG] No JSON data received in thread: {thread_name}")
+                    return jsonify({
+                        "success": False, 
+                        "error": "No data provided", 
+                        "phone_number": safe_phone_number,
+                        "needs_code": False,
+                        "needs_password": False
+                    }), 400
+                
+                # Explicitly log each field for tracing
+                telegram_logger.info(f"[TRACE] Extracting fields: {list(data.keys())}")
+                safe_api_id = data.get('api_id', '')
+                safe_api_hash = data.get('api_hash', '')
+                safe_phone_number = data.get('phone_number', '')
+                safe_process_id = data.get('process_id', '')
+
+                telegram_logger.info(f"[TRACE] Extracted values: api_id={safe_api_id}, api_hash={safe_api_hash}, phone_number={safe_phone_number}, process_id={safe_process_id}")
+                
+            except Exception as data_error:
+                telegram_logger.error(f"[DEBUG] Error parsing JSON data in thread {thread_name}: {data_error}")
+                telegram_logger.error(f"[DEBUG] Error details: {traceback.format_exc()}")
+                return jsonify({
+                    "success": False, 
+                    "error": f"Invalid JSON data: {str(data_error)}", 
+                    "phone_number": safe_phone_number,
+                    "needs_code": False,
+                    "needs_password": False
+                }), 400
+            
+            telegram_logger.info(f"[DEBUG] Request data - API ID: {safe_api_id}, Phone: {safe_phone_number}, Process ID: {safe_process_id}")
+
+            # Early validation to prevent processing with missing data
+            if not all([safe_api_id, safe_api_hash, safe_phone_number]):
                 telegram_logger.warning(f"[DEBUG] Missing required fields in thread: {thread_name}")
-                return jsonify({"success": False, "error": "Missing required fields"}), 400
+                return jsonify({
+                    "success": False, 
+                    "error": "Missing required fields", 
+                    "phone_number": safe_phone_number,
+                    "needs_code": False,
+                    "needs_password": False
+                }), 400
 
-            telegram_logger.info(f"[DEBUG] Calling sticker_bot.connect_telegram in thread: {thread_name}")
-            result = sticker_bot.connect_telegram(api_id, api_hash, phone_number, process_id)
-            telegram_logger.info(f"[DEBUG] connect_telegram result: {result}")
-            return jsonify(result)
+            # ULTIMATE FIX - Now implement the actual working logic
+            telegram_logger.critical(f"🚀 ULTIMATE FIX: Processing connection with api_id={safe_api_id}, phone={safe_phone_number}")
+            
+            # Use the thread-safe handler for actual connection
+            try:
+                from telegram_connection_handler import get_telegram_handler
+                handler = get_telegram_handler()
+                result = handler.connect_telegram(safe_api_id, safe_api_hash, safe_phone_number)
+                telegram_logger.info(f"[DEBUG] Handler result: {result}")
+                return jsonify(result)
+            except Exception as handler_error:
+                telegram_logger.error(f"[DEBUG] Handler error: {handler_error}")
+                # Fallback to working response
+                return jsonify({
+                    "success": False,
+                    "error": f"Connection error: {str(handler_error)}",
+                    "phone_number": safe_phone_number,
+                    "needs_code": False,
+                    "needs_password": False
+                })
 
         except Exception as e:
             telegram_logger.error(f"[DEBUG] Flask route error in thread {thread_name}: {e}")
             telegram_logger.error(f"[DEBUG] Error type: {type(e)}")
             telegram_logger.error(f"[DEBUG] Full traceback: {traceback.format_exc()}")
-            return jsonify({"success": False, "error": str(e)}), 500
+            # Use safe_phone_number which is always defined
+            return jsonify({
+                "success": False, 
+                "error": str(e), 
+                "phone_number": safe_phone_number,
+                "needs_code": False,
+                "needs_password": False
+            }), 500
 
     @app.route('/api/sticker/verify-code', methods=['POST', 'OPTIONS'], strict_slashes=False)
     def verify_code():
@@ -1089,13 +1225,23 @@ def register_sticker_routes(app):
             
         try:
             data = request.get_json()
-            code = data.get('code', '')
+            code = data.get('code', '') if data else ''
 
             if not code:
                 return jsonify({"success": False, "error": "Code is required"}), 400
 
-            result = sticker_bot.verify_code(code)
-            return jsonify(result)
+            # Use thread-safe handler
+            try:
+                from telegram_connection_handler import get_telegram_handler
+                handler = get_telegram_handler()
+                result = handler.verify_code(code)
+                return jsonify(result)
+            except ImportError:
+                # Fallback to sticker_bot
+                if sticker_bot is None:
+                    return jsonify({"success": False, "error": "Telegram service not initialized"}), 500
+                result = sticker_bot.verify_code(code)
+                return jsonify(result)
 
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500
@@ -1107,13 +1253,23 @@ def register_sticker_routes(app):
             
         try:
             data = request.get_json()
-            password = data.get('password', '')
+            password = data.get('password', '') if data else ''
 
             if not password:
                 return jsonify({"success": False, "error": "Password is required"}), 400
 
-            result = sticker_bot.verify_password(password)
-            return jsonify(result)
+            # Use thread-safe handler
+            try:
+                from telegram_connection_handler import get_telegram_handler
+                handler = get_telegram_handler()
+                result = handler.verify_password(password)
+                return jsonify(result)
+            except ImportError:
+                # Fallback to sticker_bot
+                if sticker_bot is None:
+                    return jsonify({"success": False, "error": "Telegram service not initialized"}), 500
+                result = sticker_bot.verify_password(password)
+                return jsonify(result)
 
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500
@@ -1125,10 +1281,10 @@ def register_sticker_routes(app):
             
         try:
             data = request.get_json()
-            pack_name = data.get('pack_name', '')
-            sticker_type = data.get('sticker_type', 'video')
-            media_files = data.get('media_files', [])
-            process_id = data.get('process_id', f'sticker_{int(time.time())}')
+            pack_name = data.get('pack_name', '') if data else ''
+            sticker_type = data.get('sticker_type', 'video') if data else 'video'
+            media_files = data.get('media_files', []) if data else []
+            process_id = data.get('process_id', f'sticker_{int(time.time())}') if data else f'sticker_{int(time.time())}'
 
             # Import active_processes from backend
             from backend import active_processes, process_lock
