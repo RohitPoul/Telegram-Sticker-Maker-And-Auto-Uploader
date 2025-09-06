@@ -1,16 +1,11 @@
 import os
 import sys
 import json
-import tempfile
 import logging
 import subprocess
 import threading
 import time
 import uuid
-import signal
-import atexit
-import platform
-import shutil  # Add this import
 from pathlib import Path
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -456,7 +451,7 @@ def get_file_info():
     
     try:
         data = request.get_json()
-        file_path = data.get('path', '')
+        file_path = data.get('path', '') if data else ''
         
         if not file_path or not os.path.exists(file_path):
             return jsonify({"success": False, "error": "File not found"}), 404
@@ -925,7 +920,7 @@ def stop_process():
         return '', 200
 
     data = request.get_json(force=True)
-    pid  = data.get('process_id')
+    pid  = data.get('process_id', '') if data else ''
     if not pid:
         return jsonify({"success":False,"error":"process_id required"}),400
 
@@ -960,7 +955,7 @@ def pause_operation():
 
     try:
         data = request.get_json()
-        process_id = data.get('process_id')
+        process_id = data.get('process_id', '') if data else ''
 
         with process_lock:
             if process_id not in active_processes:
@@ -984,7 +979,7 @@ def resume_operation():
 
     try:
         data = request.get_json()
-        process_id = data.get('process_id')
+        process_id = data.get('process_id', '') if data else ''
 
         with process_lock:
             if process_id not in active_processes:
@@ -1217,86 +1212,6 @@ def get_active_processes():
         "count": len(processes_info)
     })
 
-@app.route('/api/test-conversion', methods=['POST'])
-def test_conversion():
-    """Test endpoint to verify conversion works"""
-    try:
-        # Simple test without FFmpeg dependency
-        test_file = os.path.join(Config.TEMP_DIR, "test.txt")
-        
-        # Create a simple test file
-        with open(test_file, 'w') as f:
-            f.write("Test conversion endpoint working")
-        
-        return jsonify({
-            "success": True,
-            "message": "Test conversion completed",
-            "file": test_file,
-            "ffmpeg_available": True  # We'll check this separately
-        })
-        
-    except Exception as e:
-        logger.error(f"Test conversion failed: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
-
-@app.route('/api/debug/video-converter', methods=['GET'])
-def debug_video_converter():
-    """Debug endpoint to check video converter status"""
-    try:
-        status = {
-            "video_converter_available": VIDEO_CONVERTER_AVAILABLE,
-            "video_converter_object": video_converter is not None,
-            "current_directory": os.getcwd(),
-            "python_path": sys.path,
-            "temp_dir": Config.TEMP_DIR,
-            "temp_dir_exists": os.path.exists(Config.TEMP_DIR)
-        }
-        
-        # Test FFmpeg availability
-        try:
-            subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True)
-            status["ffmpeg_available"] = True
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            status["ffmpeg_available"] = False
-            
-        # Test video converter methods if available
-        if VIDEO_CONVERTER_AVAILABLE and video_converter:
-            status["has_batch_convert"] = hasattr(video_converter, 'batch_convert')
-            status["has_active_processes"] = hasattr(video_converter, 'active_processes')
-            status["has_process_lock"] = hasattr(video_converter, 'process_lock')
-        
-        return jsonify({
-            "success": True,
-            "status": status
-        })
-        
-    except Exception as e:
-        logger.error(f"Debug video converter failed: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
-
-@app.route('/api/test', methods=['GET'])
-def test_basic():
-    """Basic test endpoint"""
-    return jsonify({
-        "success": True,
-        "message": "Basic test endpoint working",
-        "timestamp": time.time()
-    })
-
-@app.route('/api/debug/simple', methods=['GET'])
-def debug_simple():
-    """Simple debug endpoint to test route registration"""
-    return jsonify({
-        "success": True,
-        "message": "Simple debug endpoint working",
-        "timestamp": time.time()
-    })
 
 # Import and register sticker bot routes (if available)
 try:
@@ -1335,49 +1250,6 @@ if __name__ == '__main__':
     Config.ensure_temp_dir()
 
     logger.info("Backend server starting...")
-
-    # Print all registered routes for debugging
-    logger.info("--- REGISTERED ROUTES ---")
-    for rule in app.url_map.iter_rules():
-        logger.info(f"Endpoint: {rule.endpoint}, Methods: {rule.methods}, Route: {rule.rule}")
-    logger.info("--- END OF ROUTES ---")
-    
-    # Test if debug endpoints are accessible
-    logger.info("--- TESTING DEBUG ENDPOINTS ---")
-    try:
-        with app.test_client() as client:
-            # Test health endpoint
-            response = client.get('/api/health')
-            logger.info(f"Health endpoint test: {response.status_code}")
-            
-            # Test debug endpoints
-            response = client.get('/api/debug/video-converter')
-            logger.info(f"Video converter debug test: {response.status_code}")
-            
-            response = client.post('/api/test-conversion')
-            logger.info(f"Test conversion endpoint test: {response.status_code}")
-            
-            # Test basic endpoint
-            response = client.get('/api/test')
-            logger.info(f"Basic test endpoint test: {response.status_code}")
-            
-            # Test simple debug endpoint
-            response = client.get('/api/debug/simple')
-            logger.info(f"Simple debug endpoint test: {response.status_code}")
-            
-    except Exception as e:
-        logger.error(f"Error testing endpoints: {e}")
-    logger.info("--- END TESTING ---")
-
-    # Verify video converter integration
-    logger.info("Verifying video converter integration...")
-    try:
-        test_file = Path(Config.TEMP_DIR) / "test.txt"
-        test_file.write_text("integration test")
-        video_converter.update_file_status("test", 0, {"status": "test"})
-        logger.info("[OK] Video converter integration verified")
-    except Exception as e:
-        logger.error(f"[ERROR] Video converter integration failed: {e}")
 
     # Run Flask with proper configuration
     app.run(
