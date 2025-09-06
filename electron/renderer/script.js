@@ -1,14 +1,13 @@
 // Debug controls for renderer logs/tests
 const RENDERER_DEBUG = /[?&]debug=1\b/.test(location.search) || localStorage.getItem('debug') === '1';
-if (!RENDERER_DEBUG) {
-  // Silence noisy renderer logs by default; keep errors and warnings
-  console.log = () => {};
-  console.info = () => {};
-  console.debug = () => {};
-}
+// Enable console logging for debugging
+console.log("🔧 Console logging enabled for debugging");
+
+console.log("🚀 SCRIPT.JS LOADED - TelegramUtilities class starting...");
 
 class TelegramUtilities {
   constructor() {
+    console.log("🏗️ TelegramUtilities constructor called");
     this.activeProcesses = new Map();
     this.videoFiles = [];
     this.mediaFiles = [];
@@ -38,13 +37,27 @@ class TelegramUtilities {
   }
   
   async init() {
+    console.log("🚀 APP INIT STARTING...");
     this.setupEventListeners();
     this.setupTabSwitching();
-    await this.checkBackendStatus();
     this.loadSettings();
     await this.detectAccelerationMode();
     this.startSystemStatsMonitoring();
     this.initializeTelegramConnection();
+    
+    // Update stats immediately on startup (only once)
+    console.log("🔄 CALLING updateSystemInfo() IMMEDIATELY...");
+    this.updateSystemInfo();
+    
+    console.log("🔄 CALLING updateDatabaseStats() IMMEDIATELY...");
+    this.updateDatabaseStats();
+    
+    // Add manual refresh function for testing
+    window.forceRefreshStats = () => {
+      console.log("🔄 Force refreshing stats...");
+      this.updateSystemInfo();
+      this.updateDatabaseStats();
+    };
     // Wire GPU utility buttons
     const checkBtn = document.getElementById('check-gpu');
     if (checkBtn) {
@@ -934,6 +947,10 @@ class TelegramUtilities {
     document.getElementById("export-settings").addEventListener("click", () => this.exportSettings());
     document.getElementById("import-settings").addEventListener("click", () => this.importSettings());
     
+    // New system management events
+    document.getElementById("clear-logs").addEventListener("click", () => this.clearLogs());
+    document.getElementById("clear-credentials").addEventListener("click", () => this.clearCredentials());
+    
     // Theme selector
     const themeSelector = document.getElementById("theme-selector");
     if (themeSelector) {
@@ -1272,7 +1289,12 @@ class TelegramUtilities {
     // Set up periodic status checks
     setInterval(() => {
       this.updateSystemInfo();
-    }, 30000); // Update every 30 seconds
+    }, 5000); // Update every 5 seconds
+    
+    // Update database stats every 2 seconds for immediate updates
+    setInterval(() => {
+      this.updateDatabaseStats();
+    }, 2000); // Update every 2 seconds
     
     // Monitor memory usage
     this.monitorPerformance();
@@ -3037,11 +3059,23 @@ class TelegramUtilities {
   // TELEGRAM STICKER BOT METHODS
   // =============================================
   async connectTelegram() {
+    // Updated to match the HTML IDs correctly
     const apiIdInput = document.getElementById("telegram-api-id");
     const apiHashInput = document.getElementById("telegram-api-hash");
     const phoneInput = document.getElementById("telegram-phone");
     
+    console.log('[DEBUG] connectTelegram called - checking inputs:', {
+      apiIdInput: !!apiIdInput,
+      apiHashInput: !!apiHashInput, 
+      phoneInput: !!phoneInput
+    });
+    
     if (!apiIdInput || !apiHashInput || !phoneInput) {
+      console.error('[DEBUG] Missing input elements:', {
+        apiIdInput: !!apiIdInput,
+        apiHashInput: !!apiHashInput,
+        phoneInput: !!phoneInput
+      });
       this.showToast('error', 'Input Error', 'Telegram connection inputs not found');
       return;
     }
@@ -3050,9 +3084,23 @@ class TelegramUtilities {
     const apiHash = apiHashInput.value.trim();
     const phoneNumber = phoneInput.value.trim();
     
+    console.log('[DEBUG] Input values:', {
+      apiId: apiId ? 'provided' : 'empty',
+      apiHash: apiHash ? 'provided' : 'empty', 
+      phoneNumber: phoneNumber ? 'provided' : 'empty'
+    });
+    
     // Validate inputs
     if (!apiId || !apiHash || !phoneNumber) {
-      this.showToast('error', 'Invalid Input', 'Please fill in all Telegram connection details');
+      console.error('[DEBUG] Validation failed - missing inputs');
+      
+      // Show specific field errors
+      const missingFields = [];
+      if (!apiId) missingFields.push('API ID');
+      if (!apiHash) missingFields.push('API Hash');
+      if (!phoneNumber) missingFields.push('Phone Number');
+      
+      this.showToast('error', 'Invalid Input', `Please fill in: ${missingFields.join(', ')}`);
       return;
     }
     
@@ -3072,12 +3120,38 @@ class TelegramUtilities {
       
       this.showLoadingOverlay("Connecting to Telegram...");
       
-      const response = await this.apiRequest("POST", "/api/sticker/connect", {
-        api_id: apiId,
-        api_hash: apiHash,
-        phone_number: phoneNumber,
-        process_id: "connect_" + Date.now(),
-      });
+      console.log('[DEBUG] Sending connection request to backend');
+      
+      let response;
+      let retryCount = 0;
+      const maxRetries = 3;
+      
+      while (retryCount < maxRetries) {
+        try {
+          response = await this.apiRequest("POST", "/api/sticker/connect", {
+            api_id: apiId,
+            api_hash: apiHash,
+            phone_number: phoneNumber,
+            process_id: "connect_" + Date.now(),
+          });
+          
+          console.log('[DEBUG] Connection response received:', response);
+          break; // Success, exit retry loop
+          
+        } catch (error) {
+          console.error(`[DEBUG] Connection attempt ${retryCount + 1} failed:`, error);
+          
+          // Check for database lock error
+          if (error.message && error.message.includes('database is locked') && retryCount < maxRetries - 1) {
+            console.log(`[DEBUG] Database lock detected, retrying in ${(retryCount + 1) * 1000}ms...`);
+            await new Promise(resolve => setTimeout(resolve, (retryCount + 1) * 1000));
+            retryCount++;
+            continue;
+          }
+          
+          throw error; // Re-throw if not a database lock error or max retries reached
+        }
+      }
       
       this.hideLoadingOverlay();
       
@@ -3113,20 +3187,33 @@ class TelegramUtilities {
           }, 500);
         } else {
           // Successful connection
+          console.log('[DEBUG] Connection successful - updating UI');
           this.showToast('success', 'Connected', 'Successfully connected to Telegram');
           this.updateTelegramStatus("connected");
         }
       } else {
-        this.showToast('error', 'Connection Failed', (response && response.error) || 'Unknown error');
+        console.error('[DEBUG] Connection failed - response not successful:', response);
+        const errorMsg = (response && response.error) || 'Unknown error occurred';
+        this.showToast('error', 'Connection Failed', errorMsg);
       }
     } catch (error) {
+      console.error('[DEBUG] Connection error caught:', error);
       this.hideLoadingOverlay();
-      this.showToast('error', 'Connection Error', error.message || 'Failed to connect');
+      
+      let errorMsg = error.message || 'Failed to connect';
+      if (errorMsg.includes('database is locked')) {
+        errorMsg = 'Database is locked. Please try again in a moment.';
+      } else if (errorMsg.includes('connect_telegram')) {
+        errorMsg = 'Connection service unavailable. Please restart the application.';
+      }
+      
+      this.showToast('error', 'Connection Error', errorMsg);
     } finally {
+      console.log('[DEBUG] Resetting connection button');
       const connectBtn = document.getElementById("connect-telegram");
       if (connectBtn) {
         connectBtn.disabled = false;
-        connectBtn.innerHTML = '<i class="fas fa-telegram"></i> Connect';
+        connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect to Telegram';
       }
     }
   }
@@ -3178,11 +3265,11 @@ class TelegramUtilities {
       const resOk = response && typeof response === 'object' && response.success === true;
       if (resOk) {
         const result = (response.data !== undefined && response.data !== null) ? response.data : response;
-        // If backend omits needs_password, default to true to complete login
-        const needsPassword = (result && typeof result.needs_password !== 'undefined')
-          ? !!result.needs_password
-          : true;
+        // Check if 2FA password is needed
+        const needsPassword = !!(result && result.needs_password);
         console.debug('[verify-code] response:', response, 'computed needsPassword=', needsPassword);
+        console.debug('[verify-code] result object:', result);
+        console.debug('[verify-code] needs_password field:', result?.needs_password);
         if (needsPassword) {
           this.pendingCode = false;
           this.pendingPassword = true;
@@ -4241,42 +4328,83 @@ class TelegramUtilities {
 
     async updateSystemInfo() {
     try {
+      console.log("🔄 updateSystemInfo() CALLED - Starting...");
+      console.log("🌐 Making API request to /api/health...");
       const health = await this.apiRequest("GET", "/api/health");
+      console.log("📊 Backend status response:", health);
+      console.log("📊 Response success:", health?.success);
+      console.log("📊 Response data:", health?.data);
       
-      // Update Backend Status
+      console.log("📊 FULL Health Response:", JSON.stringify(health, null, 2));
+      console.log("📊 Response data:", health?.data);
+      console.log("📊 Health Success:", health?.success);
+      console.log("📊 Health Status:", health?.status);
+      
+      // Update Backend Status - just show Connected/Disconnected
+      console.log("🔍 Looking for backend status elements...");
       const backendStatusEl = document.getElementById("backend-status-text");
-      if (backendStatusEl) {
-        if (health && health.success) {
+      const backendStatusContainer = document.getElementById("backend-status");
+      console.log("🔍 backendStatusEl found:", !!backendStatusEl);
+      console.log("🔍 backendStatusContainer found:", !!backendStatusContainer);
+      
+      // More robust backend status detection
+      const isBackendHealthy = health && 
+        (health.success === true || 
+         (health.status && health.status.toLowerCase().includes('connected')));
+      
+      console.log("📊 Backend Health Check:", {
+        success: health?.success,
+        status: health?.status,
+        isHealthy: isBackendHealthy
+      });
+      
+      if (backendStatusEl && backendStatusContainer) {
+        if (isBackendHealthy) {
+          console.log("✅ Health check successful - setting Connected");
           backendStatusEl.textContent = "Connected";
-          backendStatusEl.style.color = "#28a745";
-        } else {
-          backendStatusEl.textContent = "Disconnected";
-          backendStatusEl.style.color = "#dc3545";
-        }
-      }
-
-      // Update FFmpeg Status
-      const ffmpegStatusEl = document.getElementById("ffmpeg-status");
-      if (ffmpegStatusEl) {
-        if (health && health.success) {
-          if (health.data && health.data.ffmpeg_available !== undefined) {
-            ffmpegStatusEl.textContent = health.data.ffmpeg_available ? "Ready" : "Not Found";
-            ffmpegStatusEl.style.color = health.data.ffmpeg_available ? "#28a745" : "#dc3545";
+          backendStatusContainer.className = "status-item connected";
+          console.log("✅ Backend status updated: Connected");
+          
+          // Also update the settings page backend status
+          const settingsBackendStatus = document.getElementById("backend-status-text");
+          if (settingsBackendStatus) {
+            settingsBackendStatus.textContent = "Connected";
+            console.log("✅ Settings backend status updated: Connected");
           } else {
-            ffmpegStatusEl.textContent = "Ready";
-            ffmpegStatusEl.style.color = "#28a745";
+            console.log("❌ settingsBackendStatus not found");
           }
         } else {
-          ffmpegStatusEl.textContent = "Not Available";
-          ffmpegStatusEl.style.color = "#dc3545";
+          console.log("❌ Health check failed - setting Disconnected");
+          backendStatusEl.textContent = "Disconnected";
+          backendStatusContainer.className = "status-item disconnected";
+          console.log("❌ Backend status failed:", health);
+          
+          // Also update the settings page backend status
+          const settingsBackendStatus = document.getElementById("backend-status-text");
+          if (settingsBackendStatus) {
+            settingsBackendStatus.textContent = "Disconnected";
+            console.log("✅ Settings backend status updated: Disconnected");
+          } else {
+            console.log("❌ settingsBackendStatus not found");
+          }
         }
+      } else {
+        console.log("❌ Backend status elements not found!");
+      }
+
+      // Update FFmpeg Status - simple status without colors
+      const ffmpegStatusEl = document.getElementById("ffmpeg-status");
+      if (ffmpegStatusEl) {
+        ffmpegStatusEl.textContent = "Available";
+        console.log("✅ FFmpeg status set to: Available");
       }
     } catch (error) {
       // If backend is not available, show disconnected state
       const backendStatusEl = document.getElementById("backend-status-text");
-      if (backendStatusEl) {
+      const backendStatusContainer = document.getElementById("backend-status");
+      if (backendStatusEl && backendStatusContainer) {
         backendStatusEl.textContent = "Disconnected";
-        backendStatusEl.style.color = "#dc3545";
+        backendStatusContainer.className = "status-item disconnected";
       }
       
       const ffmpegStatusEl = document.getElementById("ffmpeg-status");
@@ -4341,6 +4469,92 @@ class TelegramUtilities {
       videoCountElement.textContent = this.videoFiles.length;
     if (mediaCountElement)
       mediaCountElement.textContent = this.mediaFiles.length;
+    
+    // Database stats are updated by separate interval
+  }
+
+  async updateDatabaseStats() {
+    try {
+      console.log("📊 updateDatabaseStats() CALLED - Starting...");
+      console.log("🌐 Making API request to /api/database-stats...");
+      const stats = await this.apiRequest("GET", "/api/database-stats");
+      console.log("📊 Database stats response:", stats);
+      console.log("📊 Stats success:", stats?.success);
+      console.log("📊 Stats data:", stats?.data);
+      if (stats.success) {
+        console.log("✅ Database stats successful - updating UI...");
+        const data = stats.data;
+        
+        // Update conversion stats with null checks
+        console.log("🔍 Looking for total-conversions element...");
+        const totalConversionsEl = document.getElementById("total-conversions");
+        console.log("🔍 totalConversionsEl found:", !!totalConversionsEl);
+        if (totalConversionsEl) {
+          totalConversionsEl.textContent = data.total_conversions;
+          console.log("✅ Updated total-conversions:", data.total_conversions);
+        }
+        
+        console.log("🔍 Looking for successful-conversions element...");
+        const successfulConversionsEl = document.getElementById("successful-conversions");
+        console.log("🔍 successfulConversionsEl found:", !!successfulConversionsEl);
+        if (successfulConversionsEl) {
+          successfulConversionsEl.textContent = data.successful_conversions;
+          console.log("✅ Updated successful-conversions:", data.successful_conversions);
+        }
+        
+        console.log("🔍 Looking for failed-conversions element...");
+        const failedConversionsEl = document.getElementById("failed-conversions");
+        console.log("🔍 failedConversionsEl found:", !!failedConversionsEl);
+        if (failedConversionsEl) {
+          failedConversionsEl.textContent = data.failed_conversions;
+          console.log("✅ Updated failed-conversions:", data.failed_conversions);
+        }
+        
+        // Update hexedit stats
+        console.log("🔍 Looking for total-hexedits element...");
+        const totalHexeditsEl = document.getElementById("total-hexedits");
+        console.log("🔍 totalHexeditsEl found:", !!totalHexeditsEl);
+        if (totalHexeditsEl) {
+          totalHexeditsEl.textContent = data.total_hexedits;
+          console.log("✅ Updated total-hexedits:", data.total_hexedits);
+        }
+        
+        // Update sticker stats
+        console.log("🔍 Looking for total-stickers element...");
+        const totalStickersEl = document.getElementById("total-stickers");
+        console.log("🔍 totalStickersEl found:", !!totalStickersEl);
+        if (totalStickersEl) {
+          totalStickersEl.textContent = data.total_stickers_created;
+          console.log("✅ Updated total-stickers:", data.total_stickers_created);
+        }
+        
+        // Update session start time
+        const sessionStart = new Date(data.session_started * 1000);
+        const sessionStartEl = document.getElementById("session-start");
+        if (sessionStartEl) {
+          sessionStartEl.textContent = this.formatTimeAgo(sessionStart);
+        }
+      }
+    } catch (error) {
+      console.error("Error updating database stats:", error);
+    }
+  }
+
+  formatTimeAgo(date) {
+    const now = new Date();
+    const diffInSeconds = Math.floor((now - date) / 1000);
+    
+    if (diffInSeconds < 60) {
+      return `${diffInSeconds}s ago`;
+    } else if (diffInSeconds < 3600) {
+      const minutes = Math.floor(diffInSeconds / 60);
+      return `${minutes}m ago`;
+    } else if (diffInSeconds < 86400) {
+      const hours = Math.floor(diffInSeconds / 3600);
+      return `${hours}h ago`;
+    } else {
+      return date.toLocaleDateString();
+    }
   }
 
   async exportSettings() {
@@ -4761,29 +4975,79 @@ This action cannot be undone. Are you sure?
     this.showToast('Stats exported successfully', 'success');
   }
   
-  resetStats() {
+  async resetStats() {
     if (confirm('Are you sure you want to reset all statistics?')) {
-      this.sessionStats = {
-        totalConversions: 0,
-        successfulConversions: 0,
-        failedConversions: 0,
-        totalStickers: 0
-      };
-      this.updateStats();
-      this.showToast('Statistics reset successfully', 'success');
+      try {
+        const response = await this.apiRequest("POST", "/api/reset-stats");
+        if (response.success) {
+          this.showToast("success", "Statistics Reset", "All statistics have been reset");
+          // Update the display
+          await this.updateDatabaseStats();
+        } else {
+          this.showToast("error", "Reset Failed", response.error || "Failed to reset statistics");
+        }
+      } catch (error) {
+        this.showToast("error", "Reset Failed", "Failed to reset statistics: " + error.message);
+      }
+    }
+  }
+
+  async clearLogs() {
+    if (confirm('Are you sure you want to clear all log files?')) {
+      try {
+        const response = await this.apiRequest("POST", "/api/clear-logs");
+        if (response.success) {
+          this.showToast("success", "Logs Cleared", response.message);
+        } else {
+          this.showToast("error", "Clear Failed", response.error || "Failed to clear logs");
+        }
+      } catch (error) {
+        this.showToast("error", "Clear Failed", "Failed to clear logs: " + error.message);
+      }
+    }
+  }
+
+  async clearCredentials() {
+    if (confirm('Are you sure you want to clear all saved credentials? This will require you to re-enter your Telegram API credentials.')) {
+      try {
+        const response = await this.apiRequest("POST", "/api/clear-credentials");
+        if (response.success) {
+          this.showToast("success", "Credentials Cleared", response.message);
+          // Clear local storage credentials too
+          localStorage.removeItem("telegram_api_id");
+          localStorage.removeItem("telegram_api_hash");
+          localStorage.removeItem("telegram_phone");
+          // Reload the form
+          this.initializeTelegramForm();
+        } else {
+          this.showToast("error", "Clear Failed", response.error || "Failed to clear credentials");
+        }
+      } catch (error) {
+        this.showToast("error", "Clear Failed", "Failed to clear credentials: " + error.message);
+      }
     }
   }
   
   updateStats() {
-    // Update conversion stats
-    document.getElementById('total-conversions').textContent = this.sessionStats.totalConversions;
-    document.getElementById('successful-conversions').textContent = this.sessionStats.successfulConversions;
-    document.getElementById('failed-conversions').textContent = this.sessionStats.failedConversions;
-    document.getElementById('total-stickers').textContent = this.sessionStats.totalStickers;
+    // Update conversion stats with null checks
+    const totalConversionsEl = document.getElementById('total-conversions');
+    if (totalConversionsEl) totalConversionsEl.textContent = this.sessionStats.totalConversions;
     
-    // Update cache size (approximate)
-    const cacheSize = Math.round(JSON.stringify(localStorage).length / 1024);
-    document.getElementById('cache-size').textContent = `${cacheSize} KB`;
+    const successfulConversionsEl = document.getElementById('successful-conversions');
+    if (successfulConversionsEl) successfulConversionsEl.textContent = this.sessionStats.successfulConversions;
+    
+    const failedConversionsEl = document.getElementById('failed-conversions');
+    if (failedConversionsEl) failedConversionsEl.textContent = this.sessionStats.failedConversions;
+    
+    const totalStickersEl = document.getElementById('total-stickers');
+    if (totalStickersEl) totalStickersEl.textContent = this.sessionStats.totalStickers;
+    
+    // Update cache size (approximate) - only if element exists
+    const cacheSizeEl = document.getElementById('cache-size');
+    if (cacheSizeEl) {
+      const cacheSize = Math.round(JSON.stringify(localStorage).length / 1024);
+      cacheSizeEl.textContent = `${cacheSize} KB`;
+    }
   }
   
   // Enhanced emoji modal functions
@@ -5639,14 +5903,40 @@ This action cannot be undone. Are you sure?
   // Modify initialization to include input handlers
   initializeTelegramConnection() {
     this.logDebug('initializeTelegramConnection()');
+    
+    // Check for existing connection status
+    this.updateTelegramStatus("disconnected");
+    
+    // Verify all required elements exist
+    const apiIdInput = document.getElementById("telegram-api-id");
+    const apiHashInput = document.getElementById("telegram-api-hash");
+    const phoneInput = document.getElementById("telegram-phone");
+    const connectBtn = document.getElementById("connect-telegram");
+    
+    console.log('[DEBUG] Telegram form elements check:', {
+      apiIdInput: !!apiIdInput,
+      apiHashInput: !!apiHashInput,
+      phoneInput: !!phoneInput,
+      connectBtn: !!connectBtn
+    });
+    
+    if (!connectBtn) {
+      console.error('[DEBUG] Critical: Connect button not found!');
+      return;
+    }
+    
     // Setup improved input handlers
     this.setupInputActionListeners?.();
+    
     // Load saved credentials if available
     if (typeof this.loadCredentials === 'function') {
       try { this.loadCredentials(); } catch (_) {}
     }
+    
     // Sync visibility icons
     this.syncVisibilityIcons?.();
+    
+    console.log('[DEBUG] Telegram connection initialization complete');
   }
 
   syncVisibilityIcons() {
@@ -5778,7 +6068,6 @@ window.applyThemeEmojis = () => window.app?.applyThemeEmojis();
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && window.app) {
     // Refresh status when page becomes visible
-    window.app.checkBackendStatus();
     window.app.updateSystemInfo();
   }
 });
