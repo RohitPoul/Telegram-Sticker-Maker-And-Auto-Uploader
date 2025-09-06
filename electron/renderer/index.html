@@ -464,18 +464,13 @@
                 <h3><i class="fas fa-cog"></i> System Management</h3>
               </div>
               <div class="card-body">
-                <div class="info-item">
-                  <label>Cache Size</label>
-                  <span id="cache-size">0 MB</span>
-                </div>
-
                 <div class="button-group" style="margin-top: 15px;">
-                  <button class="btn btn-secondary" onclick="window.app?.clearCache()">
-                    <i class="fas fa-broom"></i> Clear Cache
+                  <button class="btn btn-secondary" id="clear-logs">
+                    <i class="fas fa-file-alt"></i> Clear Logs
                   </button>
 
-                  <button class="btn btn-secondary" onclick="window.app?.restartBackend()">
-                    <i class="fas fa-redo"></i> Restart Backend
+                  <button class="btn btn-secondary" id="clear-credentials">
+                    <i class="fas fa-key"></i> Clear Credentials
                   </button>
                 </div>
               </div>
@@ -488,23 +483,27 @@
               <div class="card-body">
                 <div class="info-item">
                   <label>Total Conversions</label>
-                  <span id="total-conversions">0</span>
+                  <span id="total-conversions">Loading...</span>
                 </div>
                 <div class="info-item">
                   <label>Successful</label>
-                  <span id="successful-conversions" style="color: #28a745;">0</span>
+                  <span id="successful-conversions" style="color: #28a745;">Loading...</span>
                 </div>
                 <div class="info-item">
                   <label>Failed</label>
-                  <span id="failed-conversions" style="color: #dc3545;">0</span>
+                  <span id="failed-conversions" style="color: #dc3545;">Loading...</span>
+                </div>
+                <div class="info-item">
+                  <label>Total Hex Edits</label>
+                  <span id="total-hexedits">Loading...</span>
                 </div>
                 <div class="info-item">
                   <label>Total Stickers Created</label>
-                  <span id="total-stickers">0</span>
+                  <span id="total-stickers">Loading...</span>
                 </div>
                 <div class="info-item">
                   <label>Session Started</label>
-                  <span id="session-start">Just now</span>
+                  <span id="session-start">Loading...</span>
                 </div>
                 <div class="button-group" style="margin-top: 15px;">
                   <button class="btn btn-secondary" onclick="window.app?.exportStats()">

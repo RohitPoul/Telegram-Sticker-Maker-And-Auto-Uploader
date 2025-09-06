@@ -5,13 +5,105 @@ import logging
 import subprocess
 import threading
 import time
-import uuid
+import atexit
+import tempfile
+import signal
 from pathlib import Path
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 # Add the current directory to Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+# Statistics tracking
+class StatisticsTracker:
+    def __init__(self):
+        self.stats_file = Path("python/stats.json")
+        self.lock = threading.Lock()
+        self.stats = self.load_stats()
+        self.start_time = time.time()
+    
+    def load_stats(self):
+        """Load statistics from file"""
+        try:
+            if self.stats_file.exists():
+                with open(self.stats_file, 'r') as f:
+                    return json.load(f)
+        except Exception as e:
+            logger.warning(f"Could not load stats: {e}")
+        
+        # Default stats
+        return {
+            "total_conversions": 0,
+            "successful_conversions": 0,
+            "failed_conversions": 0,
+            "total_hexedits": 0,
+            "successful_hexedits": 0,
+            "failed_hexedits": 0,
+            "total_stickers_created": 0,
+            "session_started": time.time()
+        }
+    
+    def save_stats(self):
+        """Save statistics to file"""
+        try:
+            with self.lock:
+                with open(self.stats_file, 'w') as f:
+                    json.dump(self.stats, f, indent=2)
+        except Exception as e:
+            logger.error(f"Could not save stats: {e}")
+    
+    def increment_conversion(self, success=True):
+        """Increment conversion counter"""
+        with self.lock:
+            self.stats["total_conversions"] += 1
+            if success:
+                self.stats["successful_conversions"] += 1
+            else:
+                self.stats["failed_conversions"] += 1
+            self.save_stats()
+    
+    def increment_hexedit(self, success=True):
+        """Increment hexedit counter"""
+        with self.lock:
+            self.stats["total_hexedits"] += 1
+            if success:
+                self.stats["successful_hexedits"] += 1
+            else:
+                self.stats["failed_hexedits"] += 1
+            self.save_stats()
+    
+    def increment_stickers(self, count=1):
+        """Increment sticker creation counter"""
+        with self.lock:
+            self.stats["total_stickers_created"] += count
+            self.save_stats()
+    
+    def get_stats(self):
+        """Get current statistics"""
+        with self.lock:
+            stats = self.stats.copy()
+            stats["uptime_seconds"] = int(time.time() - self.start_time)
+            return stats
+    
+    def reset_stats(self):
+        """Reset all statistics"""
+        with self.lock:
+            self.stats = {
+                "total_conversions": 0,
+                "successful_conversions": 0,
+                "failed_conversions": 0,
+                "total_hexedits": 0,
+                "successful_hexedits": 0,
+                "failed_hexedits": 0,
+                "total_stickers_created": 0,
+                "session_started": time.time()
+            }
+            self.start_time = time.time()
+            self.save_stats()
+
+# Initialize statistics tracker
+stats_tracker = StatisticsTracker()
 
 # Setup logging (quiet by default: no stdout)
 log_level_name = os.getenv('BACKEND_LOG_LEVEL', 'WARNING').upper()
@@ -803,6 +895,10 @@ def start_video_conversion():
                             "can_pause": False
                         })
                         logger.info(f"[THREAD] Conversion completed: {successful_files}/{len(results)} successful")
+                        
+                        # Update statistics
+                        for result in results:
+                            stats_tracker.increment_conversion(success=result.get("success", False))
 
                 # Clean up thread reference
                 if process_id in conversion_threads:
@@ -1114,6 +1210,10 @@ def hex_edit_files():
                             "results": results,
                             "can_pause": False
                         })
+                        
+                        # Update statistics
+                        for result in results:
+                            stats_tracker.increment_hexedit(success=result.get("success", False))
 
                 # Clean up thread reference
                 if process_id in conversion_threads:
@@ -1225,6 +1325,130 @@ except ImportError as e:
     logger.warning(f"Could not import sticker bot routes: {e}")
 except Exception as e:
     logger.error(f"Error registering sticker bot routes: {e}")
+
+# New endpoints for Application Settings
+@app.route('/api/backend-status', methods=['GET', 'OPTIONS'], strict_slashes=False)
+def backend_status():
+    """Get real backend status"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    try:
+        # Check if backend is responsive
+        status = "Connected"
+        try:
+            # Simple health check
+            import psutil
+            cpu_usage = psutil.cpu_percent()
+            memory_usage = psutil.virtual_memory().percent
+            status = f"Connected (CPU: {cpu_usage:.1f}%, RAM: {memory_usage:.1f}%)"
+        except:
+            status = "Connected"
+        
+        return jsonify({
+            "success": True, 
+            "status": status,
+            "uptime": stats_tracker.get_stats()["uptime_seconds"]
+        })
+    except Exception as e:
+        logger.error(f"Error getting backend status: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/database-stats', methods=['GET', 'OPTIONS'], strict_slashes=False)
+def database_stats():
+    """Get database/statistics information"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    try:
+        stats = stats_tracker.get_stats()
+        return jsonify({
+            "success": True,
+            "data": {
+                "total_conversions": stats["total_conversions"],
+                "successful_conversions": stats["successful_conversions"],
+                "failed_conversions": stats["failed_conversions"],
+                "total_hexedits": stats["total_hexedits"],
+                "successful_hexedits": stats["successful_hexedits"],
+                "failed_hexedits": stats["failed_hexedits"],
+                "total_stickers_created": stats["total_stickers_created"],
+                "session_started": stats["session_started"],
+                "uptime_seconds": stats["uptime_seconds"]
+            }
+        })
+    except Exception as e:
+        logger.error(f"Error getting database stats: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/reset-stats', methods=['POST', 'OPTIONS'], strict_slashes=False)
+def reset_stats():
+    """Reset all statistics"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    try:
+        stats_tracker.reset_stats()
+        return jsonify({"success": True, "message": "Statistics reset successfully"})
+    except Exception as e:
+        logger.error(f"Error resetting stats: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/clear-logs', methods=['POST', 'OPTIONS'], strict_slashes=False)
+def clear_logs():
+    """Clear application logs"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    try:
+        log_files = [
+            "backend.log",
+            "python/backend.log",
+            "logs/telegram_connection_debug.log"
+        ]
+        
+        cleared_files = []
+        for log_file in log_files:
+            if os.path.exists(log_file):
+                try:
+                    with open(log_file, 'w') as f:
+                        f.write("")  # Clear the file
+                    cleared_files.append(log_file)
+                except Exception as e:
+                    logger.warning(f"Could not clear {log_file}: {e}")
+        
+        return jsonify({
+            "success": True, 
+            "message": f"Cleared {len(cleared_files)} log files",
+            "cleared_files": cleared_files
+        })
+    except Exception as e:
+        logger.error(f"Error clearing logs: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/clear-credentials', methods=['POST', 'OPTIONS'], strict_slashes=False)
+def clear_credentials():
+    """Clear saved credentials"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    try:
+        credential_files = [
+            "python/telegram_credentials.json",
+            "telegram_credentials.json"
+        ]
+        
+        cleared_files = []
+        for cred_file in credential_files:
+            if os.path.exists(cred_file):
+                try:
+                    os.remove(cred_file)
+                    cleared_files.append(cred_file)
+                except Exception as e:
+                    logger.warning(f"Could not remove {cred_file}: {e}")
+        
+        return jsonify({
+            "success": True, 
+            "message": f"Cleared {len(cleared_files)} credential files",
+            "cleared_files": cleared_files
+        })
+    except Exception as e:
+        logger.error(f"Error clearing credentials: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 # Error handlers
 @app.errorhandler(404)

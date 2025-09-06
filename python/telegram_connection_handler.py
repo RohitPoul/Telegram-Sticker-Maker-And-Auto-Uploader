@@ -7,9 +7,7 @@ import asyncio
 import threading
 import logging
 import time
-import queue
 import re
-from typing import Optional, Dict, Any
 from concurrent.futures import ThreadPoolExecutor
 
 # Configure logging
