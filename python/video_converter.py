@@ -214,12 +214,70 @@ class VideoConverterCore:
             self.logger.error(f"[CLEANUP] Memory cleanup error: {e}")
 
     def convert_video(self, input_file, output_file, gpu_mode='auto', process_id=None, file_index=None):
-        """
-        Enhanced conversion with multi-GPU support and memory management
-        """
+        import time
+        import os
+        import logging
+        
+        # Configure detailed logging
+        log_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'conversion.log')
+        
+        # Ensure log directory exists
+        os.makedirs(os.path.dirname(log_file), exist_ok=True)
+        
+        # Remove existing handlers to prevent duplicate logging
+        for handler in logging.root.handlers[:]:
+            logging.root.removeHandler(handler)
+        
+        # Configure logging with explicit file handling
+        logging.basicConfig(
+            filename=log_file, 
+            level=logging.DEBUG, 
+            format='%(asctime)s - %(levelname)s: %(message)s',
+            filemode='a',  # Append mode
+            force=True  # Force reconfiguration of root logger
+        )
+        
+        # Create a file handler to ensure file is created
+        file_handler = logging.FileHandler(log_file, mode='a')
+        file_handler.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s: %(message)s')
+        file_handler.setFormatter(formatter)
+        
+        # Create a logger specifically for conversion
+        conversion_logger = logging.getLogger('ConversionLogger')
+        conversion_logger.propagate = False  # Prevent propagation to root logger
+        conversion_logger.setLevel(logging.DEBUG)
+        
+        # Remove any existing handlers
+        conversion_logger.handlers.clear()
+        conversion_logger.addHandler(file_handler)
+        
+        # Ensure the log file is writable
+        try:
+            with open(log_file, 'a') as f:
+                f.write(f"\n{'='*50}\n[LOGGING INITIALIZED] {time.ctime()}\n{'='*50}\n")
+        except Exception as e:
+            print(f"Error creating log file: {e}")
+        
+        # Start timing the entire conversion process
+        start_time = time.time()
+        
         try:
             filename = os.path.basename(input_file)
-            self.logger.info(f"[CONVERT] Attempting conversion for {filename}")
+            conversion_logger.info(f"{'='*50}")
+            conversion_logger.info(f"[VIDEO] CONVERSION STARTED")
+            conversion_logger.info(f"{'='*50}")
+            conversion_logger.info(f"Input File: {input_file}")
+            conversion_logger.info(f"Output File: {output_file}")
+            
+            # Get initial video metadata
+            duration, width, height = self.get_video_info(input_file)
+            initial_file_size = self.get_file_size(input_file)
+            
+            conversion_logger.info(f"Initial Video Metadata:")
+            conversion_logger.info(f"- Duration: {duration:.2f} seconds")
+            conversion_logger.info(f"- Resolution: {width}x{height}")
+            conversion_logger.info(f"- Initial File Size: {initial_file_size:.2f} KB")
             
             # Always use automatic GPU detection
             gpu_type = self.detect_gpu()
@@ -283,258 +341,258 @@ class VideoConverterCore:
             crf_adjustment_count = 0
             last_file_size = 0
 
+            # Tracking variables for performance metrics
+            conversion_attempts = 0
+            final_file_size = 0
+            final_crf = 0
+            final_bitrate = 0
+            
+            # Initialize conversion start time
+            start_time = time.time()
+
             while attempt <= max_attempts:
-                try:
-                    self.logger.info(f"[ATTEMPT] {filename}: ATTEMPT {attempt}/{max_attempts} - CRF:{crf}, Bitrate:{initial_bitrate}k")
+                conversion_attempts += 1
+                conversion_logger.info(f"\n--- Conversion Attempt {conversion_attempts} ---")
+                conversion_logger.info(f"CRF: {crf}, Initial Bitrate: {initial_bitrate} kbps")
+                
+                # Calculate progress based on attempt
+                base_progress = 15 + (attempt / max_attempts) * 70  # 15-85% range for conversion attempts
 
-                    # Calculate progress based on attempt
-                    base_progress = 15 + (attempt / max_attempts) * 70  # 15-85% range for conversion attempts
+                if process_id and file_index is not None:
+                    self.update_file_status(process_id, file_index, {
+                        'status': 'converting',
+                        'progress': int(base_progress),
+                        'stage': f'Attempt {attempt}/{max_attempts} - CRF:{crf} BR:{initial_bitrate}k',
+                        'filename': filename
+                    })
 
+                # For now, force CPU mode to ensure stability
+                # We'll re-enable GPU after fixing the CUDA issues
+                use_cuda_preproc = False
+                
+                # CPU path - always use this for now
+                ffmpeg_pre_args = []
+                scale_filter = (
+                    f"scale={self.SCALE_WIDTH}:{self.SCALE_HEIGHT}:force_original_aspect_ratio=decrease,"
+                    f"pad={self.SCALE_WIDTH}:{self.SCALE_HEIGHT}:(ow-iw)/2:(oh-ih)/2"
+                )
+                self.logger.info(f"[FFMPEG] Using CPU processing for {filename} (GPU temporarily disabled for stability)")
+
+                # Pass log base for two-pass; suppress console noise
+                pass_log_base = os.path.join(self.TEMP_DIR, f"ffmpeg_pass_{os.getpid()}_{int(time.time())}_{attempt}")
+                null_device = "NUL" if os.name == 'nt' else "/dev/null"
+
+                # FFmpeg command configuration - YOUR EXACT COMMAND
+                convert_cmd = [
+                    "ffmpeg",
+                    "-hide_banner",
+                    "-loglevel", "error",
+                    "-y",  # Overwrite output file
+                    "-threads", str(max(1, (os.cpu_count() or 4))),
+                ] + ffmpeg_pre_args + [
+                    "-i", input_file,
+                    "-vf", scale_filter,  # Scaling with padding
+                    "-c:v", "libvpx-vp9",
+                    "-crf", str(crf),
+                    "-b:v", f"{initial_bitrate}k",
+                    "-maxrate", f"{int(initial_bitrate * 1.5)}k",
+                    "-bufsize", f"{int(initial_bitrate * 3)}k",
+                    "-row-mt", "1",  # Multi-threading
+                    "-tile-columns", "4",
+                    "-cpu-used", str(self.VPX_CPU_USED),
+                    "-pass", "1",
+                    "-passlogfile", pass_log_base,
+                    "-f", "null",
+                    null_device,
+                ]
+
+                conversion_logger.info(f"[PASS1] {filename}: Starting FFmpeg Pass 1...")
+
+                # Update progress for pass 1
+                if process_id and file_index is not None:
+                    self.update_file_status(process_id, file_index, {
+                        'status': 'converting',
+                        'progress': int(base_progress + 5),
+                        'stage': f'Pass 1/2 - CRF:{crf}',
+                        'filename': filename
+                    })
+
+                # First Pass
+                result = subprocess.run(convert_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+                # Second Pass Command - rebuild it properly
+                convert_cmd = [
+                    "ffmpeg",
+                    "-hide_banner",
+                    "-loglevel", "error",
+                    "-y",  # Overwrite output file
+                    "-threads", str(max(1, (os.cpu_count() or 4))),
+                ] + ffmpeg_pre_args + [
+                    "-i", input_file,
+                    "-vf", scale_filter,  # Scaling with padding
+                    "-c:v", "libvpx-vp9",
+                    "-crf", str(crf),
+                    "-b:v", f"{initial_bitrate}k",
+                    "-maxrate", f"{int(initial_bitrate * 1.5)}k",
+                    "-bufsize", f"{int(initial_bitrate * 3)}k",
+                    "-row-mt", "1",  # Multi-threading
+                    "-tile-columns", "4",
+                    "-cpu-used", str(self.VPX_CPU_USED),
+                    "-pass", "2",
+                    "-passlogfile", pass_log_base,
+                    "-an",  # No audio
+                    "-f", "webm",
+                    output_file,
+                ]
+
+                conversion_logger.info(f"[PASS2] {filename}: Starting FFmpeg Pass 2...")
+
+                # Update progress for pass 2
+                if process_id and file_index is not None:
+                    self.update_file_status(process_id, file_index, {
+                        'status': 'converting',
+                        'progress': int(base_progress + 10),
+                        'stage': f'Pass 2/2 - CRF:{crf}',
+                        'filename': filename
+                    })
+
+                result = subprocess.run(convert_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+                # Verify output file
+                if not os.path.exists(output_file):
+                    self.logger.error(f"[ERROR] {filename}: Output file not found: {output_file}")
                     if process_id and file_index is not None:
                         self.update_file_status(process_id, file_index, {
-                            'status': 'converting',
-                            'progress': int(base_progress),
-                            'stage': f'Attempt {attempt}/{max_attempts} - CRF:{crf} BR:{initial_bitrate}k',
+                            'status': 'error',
+                            'progress': 0,
+                            'stage': 'Error: Output file not created',
                             'filename': filename
                         })
+                    return False
 
-                    # For now, force CPU mode to ensure stability
-                    # We'll re-enable GPU after fixing the CUDA issues
-                    use_cuda_preproc = False
+                # Get file size
+                file_size_kb = self.get_file_size(output_file)
+                if file_size_kb == 0:
+                    self.logger.error(f"[ERROR] {filename}: Output file size is zero")
+                    if process_id and file_index is not None:
+                        self.update_file_status(process_id, file_index, {
+                            'status': 'error',
+                            'progress': 0,
+                            'stage': 'Error: Zero file size',
+                            'filename': filename
+                        })
+                    return False
+
+                self.logger.info(f"[SIZE] {filename}: Attempt {attempt}: Output size = {file_size_kb:.2f} KB, "
+                               f"Target size = {target_size_kb} KB, "
+                               f"CRF = {crf}, Bitrate = {initial_bitrate} kbps")
+
+                # Update progress with size check
+                if process_id and file_index is not None:
+                    self.update_file_status(process_id, file_index, {
+                        'status': 'checking',
+                        'progress': 85,
+                        'stage': f'Size: {file_size_kb:.1f}KB (Target: {target_size_kb}KB)',
+                        'filename': filename
+                    })
+
+                # Check if file size is within target range
+                if target_range_min <= file_size_kb <= target_range_max:
+                    self.logger.info(f"[SUCCESS] {filename}: Output file size is within target range!")
+                    if process_id and file_index is not None:
+                        self.update_file_status(process_id, file_index, {
+                            'status': 'completed',
+                            'progress': 100,
+                            'stage': f'Completed! {file_size_kb:.1f}KB in {attempt} attempts',
+                            'filename': filename
+                        })
+                    # Record final metrics
+                    final_file_size = file_size_kb
+                    final_crf = crf
+                    final_bitrate = initial_bitrate
                     
-                    # CPU path - always use this for now
-                    ffmpeg_pre_args = []
-                    scale_filter = (
-                        f"scale={self.SCALE_WIDTH}:{self.SCALE_HEIGHT}:force_original_aspect_ratio=decrease,"
-                        f"pad={self.SCALE_WIDTH}:{self.SCALE_HEIGHT}:(ow-iw)/2:(oh-ih)/2"
-                    )
-                    self.logger.info(f"[FFMPEG] Using CPU processing for {filename} (GPU temporarily disabled for stability)")
+                    # Calculate total conversion time
+                    total_conversion_time = time.time() - start_time
+                    
+                    # Detailed conversion report
+                    conversion_logger.info(f"\n{'='*50}")
+                    conversion_logger.info(f"[VIDEO] CONVERSION SUCCESSFUL")
+                    conversion_logger.info(f"{'='*50}")
+                    conversion_logger.info(f"Total Conversion Time: {total_conversion_time:.2f} seconds")
+                    conversion_logger.info(f"Total Attempts: {conversion_attempts}")
+                    conversion_logger.info(f"Final File Size: {final_file_size:.2f} KB")
+                    conversion_logger.info(f"Final CRF: {final_crf}")
+                    conversion_logger.info(f"Final Bitrate: {final_bitrate} kbps")
+                    conversion_logger.info(f"Size Reduction: {((initial_file_size - final_file_size) / initial_file_size * 100):.2f}%")
+                    conversion_logger.info(f"{'='*50}")
+                    
+                    return True
 
-                    # Pass log base for two-pass; suppress console noise
-                    pass_log_base = os.path.join(self.TEMP_DIR, f"ffmpeg_pass_{os.getpid()}_{int(time.time())}_{attempt}")
-                    null_device = "NUL" if os.name == 'nt' else "/dev/null"
+                # Size difference for detecting plateaus - YOUR EXACT LOGIC
+                size_diff = abs(file_size_kb - last_file_size)
+                last_file_size = file_size_kb
 
-                    # FFmpeg command configuration - YOUR EXACT COMMAND
-                    convert_cmd = [
-                        "ffmpeg",
-                        "-hide_banner",
-                        "-loglevel", "error",
-                        "-y",  # Overwrite output file
-                        "-threads", str(max(1, (os.cpu_count() or 4))),
-                    ] + ffmpeg_pre_args + [
-                        "-i", input_file,
-                        "-vf", scale_filter,  # Scaling with padding
-                        "-c:v", "libvpx-vp9",
-                        "-crf", str(crf),
-                        "-b:v", f"{initial_bitrate}k",
-                        "-maxrate", f"{int(initial_bitrate * 1.5)}k",
-                        "-bufsize", f"{int(initial_bitrate * 3)}k",
-                        "-row-mt", "1",  # Multi-threading
-                        "-tile-columns", "4",
-                        "-cpu-used", str(self.VPX_CPU_USED),
-                        "-pass", "1",
-                        "-passlogfile", pass_log_base,
-                        "-f", "null",
-                        null_device,
-                    ]
-
-                    self.logger.info(f"[PASS1] {filename}: Starting FFmpeg Pass 1...")
-
-                    # Update progress for pass 1
-                    if process_id and file_index is not None:
-                        self.update_file_status(process_id, file_index, {
-                            'status': 'converting',
-                            'progress': int(base_progress + 5),
-                            'stage': f'Pass 1/2 - CRF:{crf}',
-                            'filename': filename
-                        })
-
-                    # First Pass
-                    result = subprocess.run(convert_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-                    # Second Pass Command - rebuild it properly
-                    convert_cmd = [
-                        "ffmpeg",
-                        "-hide_banner",
-                        "-loglevel", "error",
-                        "-y",  # Overwrite output file
-                        "-threads", str(max(1, (os.cpu_count() or 4))),
-                    ] + ffmpeg_pre_args + [
-                        "-i", input_file,
-                        "-vf", scale_filter,  # Scaling with padding
-                        "-c:v", "libvpx-vp9",
-                        "-crf", str(crf),
-                        "-b:v", f"{initial_bitrate}k",
-                        "-maxrate", f"{int(initial_bitrate * 1.5)}k",
-                        "-bufsize", f"{int(initial_bitrate * 3)}k",
-                        "-row-mt", "1",  # Multi-threading
-                        "-tile-columns", "4",
-                        "-cpu-used", str(self.VPX_CPU_USED),
-                        "-pass", "2",
-                        "-passlogfile", pass_log_base,
-                        "-an",  # No audio
-                        "-f", "webm",
-                        output_file,
-                    ]
-
-                    self.logger.info(f"[PASS2] {filename}: Starting FFmpeg Pass 2...")
-
-                    # Update progress for pass 2
-                    if process_id and file_index is not None:
-                        self.update_file_status(process_id, file_index, {
-                            'status': 'converting',
-                            'progress': int(base_progress + 10),
-                            'stage': f'Pass 2/2 - CRF:{crf}',
-                            'filename': filename
-                        })
-
-                    result = subprocess.run(convert_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-                    # Verify output file
-                    if not os.path.exists(output_file):
-                        self.logger.error(f"[ERROR] {filename}: Output file not found: {output_file}")
-                        if process_id and file_index is not None:
-                            self.update_file_status(process_id, file_index, {
-                                'status': 'error',
-                                'progress': 0,
-                                'stage': 'Error: Output file not created',
-                                'filename': filename
-                            })
-                        return False
-
-                    # Get file size
-                    file_size_kb = self.get_file_size(output_file)
-                    if file_size_kb == 0:
-                        self.logger.error(f"[ERROR] {filename}: Output file size is zero")
-                        if process_id and file_index is not None:
-                            self.update_file_status(process_id, file_index, {
-                                'status': 'error',
-                                'progress': 0,
-                                'stage': 'Error: Zero file size',
-                                'filename': filename
-                            })
-                        return False
-
-                    self.logger.info(f"[SIZE] {filename}: Attempt {attempt}: Output size = {file_size_kb:.2f} KB, "
-                                   f"Target size = {target_size_kb} KB, "
-                                   f"CRF = {crf}, Bitrate = {initial_bitrate} kbps")
-
-                    # Update progress with size check
-                    if process_id and file_index is not None:
-                        self.update_file_status(process_id, file_index, {
-                            'status': 'checking',
-                            'progress': 85,
-                            'stage': f'Size: {file_size_kb:.1f}KB (Target: {target_size_kb}KB)',
-                            'filename': filename
-                        })
-
-                    # Check if file size is within target range
-                    if target_range_min <= file_size_kb <= target_range_max:
-                        self.logger.info(f"[SUCCESS] {filename}: Output file size is within target range!")
-                        if process_id and file_index is not None:
-                            self.update_file_status(process_id, file_index, {
-                                'status': 'completed',
-                                'progress': 100,
-                                'stage': f'Completed! {file_size_kb:.1f}KB in {attempt} attempts',
-                                'filename': filename
-                            })
-                        return True
-
-                    # Size difference for detecting plateaus - YOUR EXACT LOGIC
-                    size_diff = abs(file_size_kb - last_file_size)
-                    last_file_size = file_size_kb
-
-                    # CRF Adjustment Phase (bigger steps early)
-                    if file_size_kb > target_range_max:
-                        # File too large - increase CRF to reduce quality
-                        if crf < max_crf:
-                            crf = min(crf + (3 if attempt <= 4 else 2), max_crf)
-                            self.logger.info(f"[ADJUST] {filename}: Increasing CRF to {crf} to reduce file size")
-                        else:
-                            # CRF at maximum, switch to bitrate reduction
-                            initial_bitrate = int(initial_bitrate * 0.92)
-                            self.logger.info(f"[ADJUST] {filename}: CRF maxed out. Reducing bitrate to {initial_bitrate} kbps")
-                    elif file_size_kb < target_range_min:
-                        # File too small - decrease CRF to improve quality
-                        if crf > min_crf:
-                            crf = max(crf - (3 if attempt <= 4 else 2), min_crf)
-                            self.logger.info(f"[ADJUST] {filename}: Decreasing CRF to {crf} to increase file size")
-                        else:
-                            # CRF at minimum, switch to bitrate increase
-                            initial_bitrate = int(initial_bitrate * 1.08)
-                            self.logger.info(f"[ADJUST] {filename}: CRF minimized. Increasing bitrate to {initial_bitrate} kbps")
-
-                    # Detect plateau in CRF adjustments (faster trigger)
-                    if size_diff < target_size_kb * 0.04:
-                        crf_adjustment_count += 1
+                # CRF Adjustment Phase (bigger steps early)
+                if file_size_kb > target_range_max:
+                    # File too large - increase CRF to reduce quality
+                    if crf < max_crf:
+                        crf = min(crf + (3 if attempt <= 4 else 2), max_crf)
+                        self.logger.info(f"[ADJUST] {filename}: Increasing CRF to {crf} to reduce file size")
                     else:
-                        crf_adjustment_count = 0
+                        # CRF at maximum, switch to bitrate reduction
+                        initial_bitrate = int(initial_bitrate * 0.92)
+                        self.logger.info(f"[ADJUST] {filename}: CRF maxed out. Reducing bitrate to {initial_bitrate} kbps")
+                elif file_size_kb < target_range_min:
+                    # File too small - decrease CRF to improve quality
+                    if crf > min_crf:
+                        crf = max(crf - (3 if attempt <= 4 else 2), min_crf)
+                        self.logger.info(f"[ADJUST] {filename}: Decreasing CRF to {crf} to increase file size")
+                    else:
+                        # CRF at minimum, switch to bitrate increase
+                        initial_bitrate = int(initial_bitrate * 1.08)
+                        self.logger.info(f"[ADJUST] {filename}: CRF minimized. Increasing bitrate to {initial_bitrate} kbps")
 
-                    # If CRF adjustments are not effective, switch to bitrate fine-tuning
-                    if crf_adjustment_count >= 2:
-                        # When bitrate adjustments are needed
-                        if file_size_kb > target_range_max:
-                            initial_bitrate = int(initial_bitrate * 0.9)  # Reduce bitrate more aggressively
-                            self.logger.info(f"[PLATEAU] {filename}: Plateaued. Reducing bitrate to {initial_bitrate} kbps")
-                        elif file_size_kb < target_range_min:
-                            initial_bitrate = int(initial_bitrate * 1.1)  # Increase bitrate more aggressively
-                            self.logger.info(f"[PLATEAU] {filename}: Plateaued. Increasing bitrate to {initial_bitrate} kbps")
+                # Detect plateau in CRF adjustments (faster trigger)
+                if size_diff < target_size_kb * 0.04:
+                    crf_adjustment_count += 1
+                else:
+                    crf_adjustment_count = 0
 
-                        # Reset adjustment tracking
-                        crf_adjustment_count = 0
+                # If CRF adjustments are not effective, switch to bitrate fine-tuning
+                if crf_adjustment_count >= 2:
+                    # When bitrate adjustments are needed
+                    if file_size_kb > target_range_max:
+                        initial_bitrate = int(initial_bitrate * 0.9)  # Reduce bitrate more aggressively
+                        self.logger.info(f"[PLATEAU] {filename}: Plateaued. Reducing bitrate to {initial_bitrate} kbps")
+                    elif file_size_kb < target_range_min:
+                        initial_bitrate = int(initial_bitrate * 1.1)  # Increase bitrate more aggressively
+                        self.logger.info(f"[PLATEAU] {filename}: Plateaued. Increasing bitrate to {initial_bitrate} kbps")
 
-                    attempt += 1
+                    # Reset adjustment tracking
+                    crf_adjustment_count = 0
 
-                    # Clean up temp files
-                    try:
-                        for temp_file in [f"{pass_log_base}-0.log", f"{pass_log_base}-0.log.mbtree"]:
-                            if os.path.exists(temp_file):
-                                os.remove(temp_file)
-                    except Exception:
-                        pass
+                attempt += 1
 
-                except subprocess.CalledProcessError as e:
-                    self.logger.error(f"[ERROR] {filename}: FFmpeg command failed on attempt {attempt}: {e}")
-                    stderr_output = e.stderr.decode() if e.stderr else "No error output"
-                    self.logger.error(f"FFmpeg stderr: {stderr_output}")
-                    if process_id and file_index is not None:
-                        self.update_file_status(process_id, file_index, {
-                            'status': 'error',
-                            'progress': 0,
-                            'stage': f'FFmpeg error on attempt {attempt}',
-                            'filename': filename
-                        })
-                    return False
-                except Exception as e:
-                    self.logger.error(f"[ERROR] {filename}: Unexpected error on attempt {attempt}: {e}")
-                    if process_id and file_index is not None:
-                        self.update_file_status(process_id, file_index, {
-                            'status': 'error',
-                            'progress': 0,
-                            'stage': f'Unexpected error: {str(e)}',
-                            'filename': filename
-                        })
-                    return False
+                # Clean up temp files
+                try:
+                    for temp_file in [f"{pass_log_base}-0.log", f"{pass_log_base}-0.log.mbtree"]:
+                        if os.path.exists(temp_file):
+                            os.remove(temp_file)
+                except Exception:
+                    pass
 
-            self.logger.error(f"[ERROR] {filename}: Failed to achieve target size after {max_attempts} attempts.")
-            if process_id and file_index is not None:
-                self.update_file_status(process_id, file_index, {
-                    'status': 'error',
-                    'progress': 0,
-                    'stage': f'Failed after {max_attempts} attempts',
-                    'filename': filename
-                })
+            # If max attempts reached without success
+            conversion_logger.error(f"\n{'='*50}")
+            conversion_logger.error(f"[VIDEO] CONVERSION FAILED")
+            conversion_logger.error(f"Total Attempts: {conversion_attempts}")
+            conversion_logger.error(f"{'='*50}\n")
+            
             return False
-
+        
         except Exception as e:
-            self.logger.error(f"[ERROR] {filename}: Video conversion failed: {e}")
-            if process_id and file_index is not None:
-                self.update_file_status(process_id, file_index, {
-                    'status': 'error',
-                    'progress': 0,
-                    'stage': f'Conversion failed: {str(e)}',
-                    'filename': filename
-                })
+            conversion_logger.error(f"\n{'='*50}")
+            conversion_logger.error(f"[VIDEO] CONVERSION ERROR: {e}")
+            conversion_logger.error(f"{'='*50}\n")
             return False
 
     def hex_edit_file(self, input_file, output_file, process_id=None, file_index=None):
