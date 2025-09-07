@@ -7,6 +7,8 @@ import re
 import threading
 import json
 from typing import Optional, Dict
+from enum import Enum
+from dataclasses import dataclass
 
 # Note: avoid importing fcntl on Windows to prevent portability issues
 try:
