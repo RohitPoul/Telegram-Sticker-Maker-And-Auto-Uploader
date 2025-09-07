@@ -18,31 +18,133 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 # Statistics tracking
 class StatisticsTracker:
     def __init__(self):
-        self.stats_file = Path("python/stats.json")
+        # Determine the stats file path
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        logs_dir = os.path.join(base_dir, '..', 'logs')
+        
+        # Ensure logs directory exists
+        os.makedirs(logs_dir, exist_ok=True)
+        
+        # Set specific stats file path
+        stats_file_path = os.path.join(logs_dir, 'stats.json')
+        
+        # Extensive logging for debugging
+        print("=" * 50)
+        print("STATISTICS TRACKER INITIALIZATION")
+        print("=" * 50)
+        print(f"Base directory: {base_dir}")
+        print(f"Logs directory: {logs_dir}")
+        print(f"Stats file path: {stats_file_path}")
+        print(f"Current working directory: {os.getcwd()}")
+        print(f"__file__: {__file__}")
+        
+        # Attempt to create the file if it doesn't exist
+        try:
+            # Create the file if it doesn't exist
+            default_stats = {
+                "total_conversions": 0,
+                "successful_conversions": 0,
+                "failed_conversions": 0,
+                "total_hexedits": 0,
+                "successful_hexedits": 0,
+                "failed_hexedits": 0,
+                "total_stickers_created": 0,
+                "session_started": time.time()
+            }
+            
+            # Attempt to write the file with explicit error handling
+            try:
+                with open(stats_file_path, 'w') as f:
+                    json.dump(default_stats, f, indent=2)
+                print(f"Created stats file: {stats_file_path}")
+            except PermissionError:
+                print(f"PERMISSION DENIED: Cannot create {stats_file_path}")
+                raise
+            except IOError as e:
+                print(f"IO ERROR creating stats file: {e}")
+                raise
+            
+            # Set the stats file path
+            self.stats_file = Path(stats_file_path)
+        except Exception as e:
+            print(f"CRITICAL ERROR creating stats file: {e}")
+            # Fallback to a default path
+            self.stats_file = Path(stats_file_path)
+        
         self.lock = threading.Lock()
-        self.stats = self.load_stats()
+        
+        # Ensure stats are loaded or initialized
+        try:
+            self.stats = self.load_stats()
+            print("Stats loaded successfully")
+        except Exception as e:
+            print(f"ERROR loading stats: {e}")
+            # Fallback to default stats
+            self.stats = {
+                "total_conversions": 0,
+                "successful_conversions": 0,
+                "failed_conversions": 0,
+                "total_hexedits": 0,
+                "successful_hexedits": 0,
+                "failed_hexedits": 0,
+                "total_stickers_created": 0,
+                "session_started": time.time()
+            }
+            self.save_stats()
+        
         self.start_time = time.time()
+        print("=" * 50)
+        print("STATISTICS TRACKER INITIALIZED")
+        print("=" * 50)
     
     def load_stats(self):
         """Load statistics from file"""
         try:
-            if self.stats_file.exists():
-                with open(self.stats_file, 'r') as f:
-                    return json.load(f)
+            # Ensure the directory exists
+            os.makedirs(os.path.dirname(self.stats_file), exist_ok=True)
+            
+            # If file doesn't exist, create it with default stats
+            if not self.stats_file.exists():
+                default_stats = {
+                    "total_conversions": 0,
+                    "successful_conversions": 0,
+                    "failed_conversions": 0,
+                    "total_hexedits": 0,
+                    "successful_hexedits": 0,
+                    "failed_hexedits": 0,
+                    "total_stickers_created": 0,
+                    "session_started": time.time()
+                }
+                
+                try:
+                    with open(self.stats_file, 'w') as f:
+                        json.dump(default_stats, f, indent=2)
+                    logger.info(f"Created stats file: {self.stats_file}")
+                except Exception as e:
+                    logger.error(f"Could not create stats file: {e}")
+                
+                return default_stats
+            
+            # If file exists, read it
+            with open(self.stats_file, 'r') as f:
+                return json.load(f)
+        
         except Exception as e:
             logger.warning(f"Could not load stats: {e}")
-        
-        # Default stats
-        return {
-            "total_conversions": 0,
-            "successful_conversions": 0,
-            "failed_conversions": 0,
-            "total_hexedits": 0,
-            "successful_hexedits": 0,
-            "failed_hexedits": 0,
-            "total_stickers_created": 0,
-            "session_started": time.time()
-        }
+            
+            # Fallback to default stats
+            default_stats = {
+                "total_conversions": 0,
+                "successful_conversions": 0,
+                "failed_conversions": 0,
+                "total_hexedits": 0,
+                "successful_hexedits": 0,
+                "failed_hexedits": 0,
+                "total_stickers_created": 0,
+                "session_started": time.time()
+            }
+            
+            return default_stats
     
     def save_stats(self):
         """Save statistics to file"""
@@ -51,7 +153,7 @@ class StatisticsTracker:
                 with open(self.stats_file, 'w') as f:
                     json.dump(self.stats, f, indent=2)
         except Exception as e:
-            logger.error(f"Could not save stats: {e}")
+            logger.error(f"Could not save stats to {self.stats_file}: {e}")
     
     def increment_conversion(self, success=True):
         """Increment conversion counter"""
@@ -83,7 +185,9 @@ class StatisticsTracker:
         """Get current statistics"""
         with self.lock:
             stats = self.stats.copy()
-            stats["uptime_seconds"] = int(time.time() - self.start_time)
+            # Fix uptime calculation - use session_started from stats, not start_time
+            session_start = stats.get("session_started", self.start_time)
+            stats["uptime_seconds"] = int(time.time() - session_start)
             return stats
     
     def reset_stats(self):
@@ -102,8 +206,8 @@ class StatisticsTracker:
             self.start_time = time.time()
             self.save_stats()
 
-# Initialize statistics tracker
-stats_tracker = StatisticsTracker()
+# Initialize statistics tracker (will be done after logger setup)
+stats_tracker = None
 
 # Setup logging (quiet by default: no stdout)
 log_level_name = os.getenv('BACKEND_LOG_LEVEL', 'WARNING').upper()
@@ -130,6 +234,9 @@ if sys.platform == 'win32':
         # Best-effort; keep running even if reconfigure is not available
         pass
 logger = logging.getLogger(__name__)
+
+# Initialize statistics tracker after logger is set up
+stats_tracker = StatisticsTracker()
 
 # Run GPU preflight check first
 try:
@@ -905,7 +1012,7 @@ def start_video_conversion():
                     del conversion_threads[process_id]
 
             except Exception as e:
-                logger.error(f"[THREAD] Conversion error: {e}", exc_info=True)
+                logger.error(f"[THREAD] Conversion error for {process_id}: {e}", exc_info=True)
                 with process_lock:
                     if process_id in active_processes:
                         active_processes[process_id].update({
@@ -1359,8 +1466,13 @@ def database_stats():
     if request.method == 'OPTIONS':
         return '', 200
     try:
+        logger.info("[API] database-stats endpoint called")
+        logger.info(f"[API] stats_tracker exists: {stats_tracker is not None}")
+        
         stats = stats_tracker.get_stats()
-        return jsonify({
+        logger.info(f"[API] Retrieved stats: {stats}")
+        
+        response_data = {
             "success": True,
             "data": {
                 "total_conversions": stats["total_conversions"],
@@ -1373,9 +1485,12 @@ def database_stats():
                 "session_started": stats["session_started"],
                 "uptime_seconds": stats["uptime_seconds"]
             }
-        })
+        }
+        
+        logger.info(f"[API] Sending response: {response_data}")
+        return jsonify(response_data)
     except Exception as e:
-        logger.error(f"Error getting database stats: {e}")
+        logger.error(f"Error getting database stats: {e}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/reset-stats', methods=['POST', 'OPTIONS'], strict_slashes=False)
@@ -1476,10 +1591,18 @@ if __name__ == '__main__':
     logger.info("Backend server starting...")
 
     # Run Flask with proper configuration
-    app.run(
-        host="0.0.0.0",
-        port=5000,
-        debug=False,
-        threaded=True,
-        use_reloader=False
-    )
+    logger.info(f"Backend starting on host: 0.0.0.0, port: 5000")
+    logger.info(f"Current working directory: {os.getcwd()}")
+    logger.info(f"Python path: {sys.path}")
+    
+    try:
+        app.run(
+            host="0.0.0.0",
+            port=5000,
+            debug=False,
+            threaded=True,
+            use_reloader=False
+        )
+    except Exception as e:
+        logger.critical(f"FATAL: Backend startup failed: {e}", exc_info=True)
+        sys.exit(1)
