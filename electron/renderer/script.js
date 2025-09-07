@@ -177,10 +177,10 @@ class TelegramUtilities {
     // Initial stats fetch
     this.updateSystemStats();
     
-    // Update stats every 2 seconds
+    // Update stats every 5 seconds (reduced frequency)
     setInterval(() => {
       this.updateSystemStats();
-    }, 2000);
+    }, 5000);
   }
   
   async detectAccelerationMode() {
@@ -2068,7 +2068,7 @@ class TelegramUtilities {
     console.log("Starting to monitor process:", processId);
     
     const MAX_CONSECUTIVE_ERRORS = 3;
-    const POLLING_INTERVAL = 1000;
+    const POLLING_INTERVAL = 2000; // Reduced from 1000ms to 2000ms
     const MAX_OPERATION_TIME = 30 * 60 * 1000; // 30 minutes
     let consecutiveErrors = 0;
     
@@ -2113,17 +2113,28 @@ class TelegramUtilities {
         // Unwrap nested response shape { success, data: {...} }
         const progress = (response && response.data && response.data.data) ? response.data.data : response.data;
         
-        // Update file statuses
+        // Update file statuses (only log on significant changes)
         if (progress && progress.file_statuses) {
+          let hasChanges = false;
           Object.entries(progress.file_statuses).forEach(([index, fileStatus]) => {
             const file = this.videoFiles[parseInt(index)];
             if (file) {
+              const oldStatus = file.status;
+              const oldProgress = file.progress;
               file.status = fileStatus.status;
               file.progress = fileStatus.progress || 0;
               file.stage = fileStatus.stage || 'Processing';
+              
+              // Only log if status changed or progress increased significantly
+              if (oldStatus !== file.status || Math.abs(oldProgress - file.progress) > 5) {
+                hasChanges = true;
+              }
             }
           });
-          this.updateVideoFileList();
+          
+          if (hasChanges) {
+            this.updateVideoFileList();
+          }
         }
         
         // Check if process is complete
