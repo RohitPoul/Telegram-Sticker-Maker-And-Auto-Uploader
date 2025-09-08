@@ -1,13 +1,15 @@
 // Debug controls for renderer logs/tests
 const RENDERER_DEBUG = /[?&]debug=1\b/.test(location.search) || localStorage.getItem('debug') === '1';
-// Enable console logging for debugging
-console.log("🔧 Console logging enabled for debugging");
 
-console.log("🚀 SCRIPT.JS LOADED - TelegramUtilities class starting...");
+// Only log in debug mode
+if (RENDERER_DEBUG) {
+    if (RENDERER_DEBUG) console.log("🔧 Console logging enabled for debugging");
+    if (RENDERER_DEBUG) console.log("🚀 SCRIPT.JS LOADED - TelegramUtilities class starting...");
+}
 
 class TelegramUtilities {
   constructor() {
-    console.log("🏗️ TelegramUtilities constructor called");
+    if (RENDERER_DEBUG) console.log("🏗️ TelegramUtilities constructor called");
     this.activeProcesses = new Map();
     this.videoFiles = [];
     this.mediaFiles = [];
@@ -37,7 +39,7 @@ class TelegramUtilities {
   }
   
   async init() {
-    console.log("🚀 APP INIT STARTING...");
+    if (RENDERER_DEBUG) console.log("🚀 APP INIT STARTING...");
     this.setupEventListeners();
     this.setupTabSwitching();
     this.loadSettings();
@@ -46,15 +48,15 @@ class TelegramUtilities {
     this.initializeTelegramConnection();
     
     // Update stats immediately on startup (only once)
-    console.log("🔄 CALLING updateSystemInfo() IMMEDIATELY...");
+    if (RENDERER_DEBUG) console.log("🔄 CALLING updateSystemInfo() IMMEDIATELY...");
     this.updateSystemInfo();
     
-    console.log("🔄 CALLING updateDatabaseStats() IMMEDIATELY...");
+    if (RENDERER_DEBUG) console.log("🔄 CALLING updateDatabaseStats() IMMEDIATELY...");
     this.updateDatabaseStats();
     
     // Add manual refresh function for testing
     window.forceRefreshStats = () => {
-      console.log("🔄 Force refreshing stats...");
+      if (RENDERER_DEBUG) console.log("🔄 Force refreshing stats...");
       this.updateSystemInfo();
       this.updateDatabaseStats();
     };
@@ -199,7 +201,7 @@ class TelegramUtilities {
       
       // Handle different response scenarios
       if (!response.success) {
-        console.warn("GPU detection failed, falling back to CPU mode:", response.error);
+        if (RENDERER_DEBUG) console.warn("GPU detection failed, falling back to CPU mode:", response.error);
         
         // Set CPU fallback mode
         if (modeBadge) {
@@ -285,7 +287,7 @@ class TelegramUtilities {
       }
       
       // No GPUs detected - CPU fallback
-      console.info("No GPUs detected, using CPU fallback mode");
+      if (RENDERER_DEBUG) console.info("No GPUs detected, using CPU fallback mode");
       
       if (modeBadge) {
         modeBadge.textContent = "CPU";
@@ -312,7 +314,7 @@ class TelegramUtilities {
       
       return false;
     } catch (error) {
-      console.error("GPU detection error, falling back to CPU mode:", error);
+      if (RENDERER_DEBUG) console.error("GPU detection error, falling back to CPU mode:", error);
       
       const modeBadge = document.getElementById("mode-badge");
       const modeDetails = document.getElementById("mode-details");
@@ -624,7 +626,7 @@ class TelegramUtilities {
         }
       }
     } catch (error) {
-      console.debug("Failed to fetch system stats:", error);
+      if (RENDERER_DEBUG) console.debug("Failed to fetch system stats:", error);
     }
   }
 
@@ -644,9 +646,9 @@ class TelegramUtilities {
     try {
       const ts = new Date().toISOString();
       if (payload !== undefined) {
-        console.debug(`[TG ${ts}] ${label}`, payload);
+        if (RENDERER_DEBUG) console.debug(`[TG ${ts}] ${label}`, payload);
       } else {
-        console.debug(`[TG ${ts}] ${label}`);
+        if (RENDERER_DEBUG) console.debug(`[TG ${ts}] ${label}`);
       }
     } catch (_) {
       // no-op
@@ -654,31 +656,31 @@ class TelegramUtilities {
   }
 
   // Wrap apiRequest with tracing
-  async apiRequest(method, path, body = null, opts = {}) {
+  async apiRequest(method, path, body = null) {
     const id = Math.random().toString(36).slice(2, 8);
-    this.logDebug(`apiRequest#${id} → ${method} ${path}`);
+    const url = `http://127.0.0.1:5000${path}`;
+    const DEBUG = (typeof RENDERER_DEBUG !== 'undefined') ? RENDERER_DEBUG : false;
+    if (DEBUG) console.log(`🌐 apiRequest#${id} → ${method} ${path}`);
     const started = performance.now();
-    try {
-      const headers = { 'Content-Type': 'application/json' };
-      const res = await fetch(`http://127.0.0.1:5000${path}`, {
-        method,
-        headers,
-        body: body ? JSON.stringify(body) : null,
-      });
-      const text = await res.text();
-      let json;
-      try { json = text ? JSON.parse(text) : {}; } catch { json = { raw: text }; }
-      this.logDebug(`apiRequest#${id} ← ${res.status} ${method} ${path} (${Math.round(performance.now()-started)}ms)`, json);
-      if (!res.ok) {
-        const err = new Error(json?.error || `${res.status} ${res.statusText}`);
-        err.status = res.status;
-        throw err;
-      }
-      return json;
-    } catch (error) {
-      this.logDebug(`apiRequest#${id} ✖ ${method} ${path}`, { error: String(error) });
-      throw error;
+
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : null
+    });
+
+    const text = await res.text();
+    let json;
+    try { json = text ? JSON.parse(text) : {}; } catch (_) { json = { raw: text }; }
+
+    if (DEBUG) console.log(`🌐 apiRequest#${id} ← ${res.status} ${method} ${path} (${Math.round(performance.now()-started)}ms)`);
+
+    if (!res.ok) {
+      const err = new Error(json?.error || `${res.status} ${res.statusText}`);
+      err.status = res.status;
+      throw err;
     }
+    return json;
   }
 
   setupEventListeners() {
@@ -690,7 +692,7 @@ class TelegramUtilities {
     const browseOutputBtn = document.getElementById("browse-video-output");
     const startConversionBtn = document.getElementById("start-conversion");
     
-    console.log("📋 Found buttons:", {
+    if (RENDERER_DEBUG) console.log("📋 Found buttons:", {
       addVideos: !!addVideosBtn,
       clearVideos: !!clearVideosBtn,
       browseOutput: !!browseOutputBtn,
@@ -700,7 +702,7 @@ class TelegramUtilities {
     if (addVideosBtn) {
       addVideosBtn.addEventListener("click", () => this.addVideoFiles());
     } else {
-      console.warn("⚠️ add-videos button not found - will retry if needed");
+      if (RENDERER_DEBUG) console.warn("⚠️ add-videos button not found - will retry if needed");
     }
     
     // Setup emoji modal enhancements
@@ -709,13 +711,13 @@ class TelegramUtilities {
     if (clearVideosBtn) {
       clearVideosBtn.addEventListener("click", () => this.clearVideoFiles());
     } else {
-      console.error("❌ clear-videos button not found!");
+      if (RENDERER_DEBUG) console.error("❌ clear-videos button not found!");
     }
     
     if (browseOutputBtn) {
       browseOutputBtn.addEventListener("click", () => this.browseVideoOutput());
     } else {
-      console.error("❌ browse-video-output button not found!");
+      if (RENDERER_DEBUG) console.error("❌ browse-video-output button not found!");
     }
     
     if (startConversionBtn) {
@@ -730,14 +732,14 @@ class TelegramUtilities {
     
     if (pauseBtn) {
       pauseBtn.addEventListener("click", () => {
-        console.log("⏸️ PAUSE BUTTON CLICKED!");
+        if (RENDERER_DEBUG) console.log("⏸️ PAUSE BUTTON CLICKED!");
         this.pauseOperation();
       });
     }
     
     if (resumeBtn) {
       resumeBtn.addEventListener("click", () => {
-        console.log("▶️ RESUME BUTTON CLICKED!");
+        if (RENDERER_DEBUG) console.log("▶️ RESUME BUTTON CLICKED!");
         this.resumeOperation();
       });
     }
@@ -748,14 +750,14 @@ class TelegramUtilities {
     
     if (pauseHexBtn) {
       pauseHexBtn.addEventListener("click", () => {
-        console.log("⏸️ HEX PAUSE BUTTON CLICKED!");
+        if (RENDERER_DEBUG) console.log("⏸️ HEX PAUSE BUTTON CLICKED!");
         this.pauseOperation();
       });
     }
     
     if (resumeHexBtn) {
       resumeHexBtn.addEventListener("click", () => {
-        console.log("▶️ HEX RESUME BUTTON CLICKED!");
+        if (RENDERER_DEBUG) console.log("▶️ HEX RESUME BUTTON CLICKED!");
         this.resumeOperation();
       });
     }
@@ -928,7 +930,7 @@ class TelegramUtilities {
             this.saveSettings();
           }
         } catch (err) {
-          console.error('Failed to read clipboard:', err);
+          if (RENDERER_DEBUG) console.error('Failed to read clipboard:', err);
           this.showToast('error', 'Clipboard Error', 'Failed to read from clipboard');
         }
       });
@@ -1022,23 +1024,23 @@ class TelegramUtilities {
   }
 
   handleTabSwitch(tabId) {
-    console.log('Switching to tab:', tabId);
+    if (RENDERER_DEBUG) console.log('Switching to tab:', tabId);
     const tabContents = document.querySelectorAll(".tab-content");
-    console.log('All tab contents:', tabContents);
+    if (RENDERER_DEBUG) console.log('All tab contents:', tabContents);
     
     tabContents.forEach((content) => {
-      console.log('Removing active from:', content.id);
+      if (RENDERER_DEBUG) console.log('Removing active from:', content.id);
       content.classList.remove("active");
     });
     
     const targetTab = document.getElementById(tabId);
-    console.log('Target tab:', targetTab);
+    if (RENDERER_DEBUG) console.log('Target tab:', targetTab);
     
     if (targetTab) {
-      console.log('Adding active to:', tabId);
+      if (RENDERER_DEBUG) console.log('Adding active to:', tabId);
       targetTab.classList.add("active");
     } else {
-      console.error('Tab not found:', tabId);
+      if (RENDERER_DEBUG) console.error('Tab not found:', tabId);
     }
 
     switch (tabId) {
@@ -1055,7 +1057,7 @@ class TelegramUtilities {
         // Specific actions for about tab
         break;
       default:
-        console.warn('Unknown tab:', tabId);
+        if (RENDERER_DEBUG) console.warn('Unknown tab:', tabId);
     }
   }
 
@@ -1098,15 +1100,15 @@ class TelegramUtilities {
   }
 
   async handleDroppedVideoFiles(files) {
-    console.log("=== DRAG & DROP DEBUG ===");
-    console.log("Raw dropped files:", files);
+    if (RENDERER_DEBUG) console.log("=== DRAG & DROP DEBUG ===");
+    if (RENDERER_DEBUG) console.log("Raw dropped files:", files);
     
     const videoExtensions = ["mp4", "avi", "mov", "mkv", "flv", "webm"];
     let addedCount = 0;
     
     for (let index = 0; index < files.length; index++) {
       const file = files[index];
-      console.log(`🗂️ Processing dropped file ${index + 1}:`, {
+      if (RENDERER_DEBUG) console.log(`🗂️ Processing dropped file ${index + 1}:`, {
         name: file.name,
         size: file.size,
         type: file.type,
@@ -1115,7 +1117,7 @@ class TelegramUtilities {
       });
       
       const extension = file.name.split(".").pop().toLowerCase();
-      console.log(`📝 File extension: ${extension}`);
+      if (RENDERER_DEBUG) console.log(`📝 File extension: ${extension}`);
       
       if (videoExtensions.includes(extension)) {
         // Use file.path if available (Electron), otherwise use name
@@ -1138,7 +1140,7 @@ class TelegramUtilities {
             fileObject: file // Store the actual file object for later use
           });
           addedCount++;
-          console.log(`✅ Added dropped file: ${file.name} with metadata:`, metadata);
+          if (RENDERER_DEBUG) console.log(`✅ Added dropped file: ${file.name} with metadata:`, metadata);
           
           // IMMEDIATE UI UPDATE - Update file count instantly
           const counter = document.getElementById("video-file-count");
@@ -1146,14 +1148,14 @@ class TelegramUtilities {
             counter.textContent = this.videoFiles.length;
           }
         } else {
-          console.log(`⚠️ Dropped file already exists: ${file.name}`);
+          if (RENDERER_DEBUG) console.log(`⚠️ Dropped file already exists: ${file.name}`);
         }
       } else {
-        console.log(`❌ Invalid extension for: ${file.name}`);
+        if (RENDERER_DEBUG) console.log(`❌ Invalid extension for: ${file.name}`);
       }
     }
     
-    console.log(`📊 Dropped files added: ${addedCount}`);
+    if (RENDERER_DEBUG) console.log(`📊 Dropped files added: ${addedCount}`);
     
     if (addedCount > 0) {
       this.updateVideoFileList();
@@ -1162,7 +1164,7 @@ class TelegramUtilities {
       this.showToast("warning", "No Valid Files", "Please drop video files only");
     }
     
-    console.log("=== DRAG & DROP DEBUG END ===");
+    if (RENDERER_DEBUG) console.log("=== DRAG & DROP DEBUG END ===");
   }
 
   handleDroppedMediaFiles(files) {
@@ -1335,7 +1337,7 @@ class TelegramUtilities {
       const response = await this.apiRequest("GET", "/api/health");
       
       if (!response.success) {
-        console.error("Backend health check failed:", {
+        if (RENDERER_DEBUG) console.error("Backend health check failed:", {
           status: response.status,
           error: response.error,
           details: response.details || 'No additional details'
@@ -1363,7 +1365,7 @@ class TelegramUtilities {
       
 
     } catch (error) {
-      console.error("Backend status check failed:", {
+      if (RENDERER_DEBUG) console.error("Backend status check failed:", {
         message: error.message,
         stack: error.stack,
         timestamp: new Date().toISOString()
@@ -1489,19 +1491,19 @@ class TelegramUtilities {
   // VIDEO CONVERTER METHODS WITH PROPER PROGRESS TRACKING
   // =============================================
   async addVideoFiles() {
-    console.log("=== ADD VIDEO FILES DEBUG ===");
-    console.log("Current video files before adding:", this.videoFiles.length);
+    if (RENDERER_DEBUG) console.log("=== ADD VIDEO FILES DEBUG ===");
+    if (RENDERER_DEBUG) console.log("Current video files before adding:", this.videoFiles.length);
     
     try {
       // Check if electronAPI is available
       if (!window.electronAPI) {
-        console.error("❌ window.electronAPI is not available");
+        if (RENDERER_DEBUG) console.error("❌ window.electronAPI is not available");
         this.showToast("error", "System Error", "Electron API not available");
         return;
       }
       
-      console.log("✅ Electron API is available");
-      console.log("Container exists:", !!document.getElementById("video-file-list"));
+      if (RENDERER_DEBUG) console.log("✅ Electron API is available");
+      if (RENDERER_DEBUG) console.log("Container exists:", !!document.getElementById("video-file-list"));
       
       const files = await window.electronAPI.selectFiles({
         filters: [
@@ -1513,17 +1515,17 @@ class TelegramUtilities {
         ],
       });
       
-      console.log("📁 Selected files:", files);
+      if (RENDERER_DEBUG) console.log("📁 Selected files:", files);
       
       if (!files || files.length === 0) {
-        console.log("ℹ️ No files selected");
+        if (RENDERER_DEBUG) console.log("ℹ️ No files selected");
         return;
       }
       
       let addedCount = 0;
       for (let index = 0; index < files.length; index++) {
         const file = files[index];
-        console.log(`📄 Processing file ${index + 1}:`, {
+        if (RENDERER_DEBUG) console.log(`📄 Processing file ${index + 1}:`, {
           path: file,
           exists: file ? "checking..." : "NO PATH"
         });
@@ -1544,7 +1546,7 @@ class TelegramUtilities {
             height: metadata.height
           });
           addedCount++;
-          console.log(`✅ Added file: ${file.split(/[\\/]/).pop()} with metadata:`, metadata);
+          if (RENDERER_DEBUG) console.log(`✅ Added file: ${file.split(/[\\/]/).pop()} with metadata:`, metadata);
           
           // IMMEDIATE UI UPDATE - Update file count instantly
           const counter = document.getElementById("video-file-count");
@@ -1552,13 +1554,13 @@ class TelegramUtilities {
             counter.textContent = this.videoFiles.length;
           }
         } else {
-          console.log(`⚠️ File already exists: ${file.split(/[\\/]/).pop()}`);
+          if (RENDERER_DEBUG) console.log(`⚠️ File already exists: ${file.split(/[\\/]/).pop()}`);
         }
       }
       
-      console.log(`📊 Total files added: ${addedCount}`);
-      console.log(`📊 Total files in list: ${this.videoFiles.length}`);
-      console.log("📊 Files array:", this.videoFiles);
+      if (RENDERER_DEBUG) console.log(`📊 Total files added: ${addedCount}`);
+      if (RENDERER_DEBUG) console.log(`📊 Total files in list: ${this.videoFiles.length}`);
+      if (RENDERER_DEBUG) console.log("📊 Files array:", this.videoFiles);
       
       // Force immediate update
       this.updateVideoFileList();
@@ -1567,8 +1569,8 @@ class TelegramUtilities {
       setTimeout(() => {
         const container = document.getElementById("video-file-list");
         if (container) {
-          console.log("✅ Container children after update:", container.children.length);
-          console.log("✅ Container HTML preview:", container.innerHTML.substring(0, 200));
+          if (RENDERER_DEBUG) console.log("✅ Container children after update:", container.children.length);
+          if (RENDERER_DEBUG) console.log("✅ Container HTML preview:", container.innerHTML.substring(0, 200));
         }
       }, 200);
       
@@ -1578,11 +1580,11 @@ class TelegramUtilities {
         this.showToast("info", "No New Files", "All selected files were already in the list");
       }
       
-      console.log("=== ADD VIDEO FILES DEBUG END ===");
+      if (RENDERER_DEBUG) console.log("=== ADD VIDEO FILES DEBUG END ===");
       
     } catch (error) {
-      console.error("❌ Error adding video files:", error);
-      console.error("Stack trace:", error.stack);
+      if (RENDERER_DEBUG) console.error("❌ Error adding video files:", error);
+      if (RENDERER_DEBUG) console.error("Stack trace:", error.stack);
       this.showToast("error", "Error", "Failed to add video files: " + error.message);
     }
   }
@@ -1636,7 +1638,7 @@ class TelegramUtilities {
   updateVideoFileList() {
     const container = document.getElementById("video-file-list");
     if (!container) {
-      console.warn('🚨 UI DEBUG - Container Not Found', 'video-file-list container not found');
+      if (RENDERER_DEBUG) console.warn('🚨 UI DEBUG - Container Not Found', 'video-file-list container not found');
       // Try again after a short delay in case DOM is still loading
       setTimeout(() => {
         const retryContainer = document.getElementById("video-file-list");
@@ -1660,9 +1662,9 @@ class TelegramUtilities {
       }))
     });
     
-    console.log("Updating video file list with", this.videoFiles.length, "files");
+    if (RENDERER_DEBUG) console.log("Updating video file list with", this.videoFiles.length, "files");
     this.videoFiles.forEach((file, index) => {
-      console.log(`File ${index}: ${file.name} - status=${file.status}, progress=${file.progress}, stage=${file.stage}`);
+      if (RENDERER_DEBUG) console.log(`File ${index}: ${file.name} - status=${file.status}, progress=${file.progress}, stage=${file.stage}`);
     });
     
     // IMMEDIATE FILE COUNT UPDATE - Do this first for instant feedback
@@ -1843,7 +1845,7 @@ class TelegramUtilities {
       try {
         await this.apiRequest("POST", "/api/stop-process", { process_id: removed.process_id });
       } catch (error) {
-        console.error("Error stopping process:", error);
+        if (RENDERER_DEBUG) console.error("Error stopping process:", error);
       }
     }
     
@@ -1852,7 +1854,7 @@ class TelegramUtilities {
 
   async browseVideoOutput() {
     try {
-      console.log("[DEBUG] Starting directory selection...");
+      if (RENDERER_DEBUG) console.log("[DEBUG] Starting directory selection...");
       
       // Check if Electron API is available
       if (!window.electronAPI || !window.electronAPI.selectDirectory) {
@@ -1860,7 +1862,7 @@ class TelegramUtilities {
       }
       
       const directory = await window.electronAPI.selectDirectory();
-      console.log("[DEBUG] Directory selection result:", directory);
+      if (RENDERER_DEBUG) console.log("[DEBUG] Directory selection result:", directory);
       
       if (directory) {
         this.currentVideoOutput = directory;
@@ -1874,8 +1876,8 @@ class TelegramUtilities {
         );
       }
     } catch (error) {
-      console.error("[ERROR] Error selecting directory:", error);
-      console.error("[ERROR] Error details:", {
+      if (RENDERER_DEBUG) console.error("[ERROR] Error selecting directory:", error);
+      if (RENDERER_DEBUG) console.error("[ERROR] Error details:", {
         message: error.message,
         stack: error.stack,
         electronAPI: !!window.electronAPI,
@@ -1890,21 +1892,21 @@ class TelegramUtilities {
   }
 
   async startVideoConversion() {
-    console.log("=== START CONVERSION DEBUG ===");
-    console.log("Current operation:", this.currentOperation);
-    console.log("Video files count:", this.videoFiles.length);
-    console.log("Video files list:", this.videoFiles);
-    console.log("Output directory:", this.currentVideoOutput);
+    if (RENDERER_DEBUG) console.log("=== START CONVERSION DEBUG ===");
+    if (RENDERER_DEBUG) console.log("Current operation:", this.currentOperation);
+    if (RENDERER_DEBUG) console.log("Video files count:", this.videoFiles.length);
+    if (RENDERER_DEBUG) console.log("Video files list:", this.videoFiles);
+    if (RENDERER_DEBUG) console.log("Output directory:", this.currentVideoOutput);
     
     // Basic validation
     if (this.videoFiles.length === 0) {
-      console.log("❌ No video files to convert");
+      if (RENDERER_DEBUG) console.log("❌ No video files to convert");
       this.showToast("warning", "No Files", "Please add videos to convert.");
       return;
     }
     
     if (!this.currentVideoOutput) {
-      console.log("❌ No output directory set");
+      if (RENDERER_DEBUG) console.log("❌ No output directory set");
       this.showToast("error", "No Output Folder", "Please select an output directory.");
       await this.browseVideoOutput();
       if (!this.currentVideoOutput) return;
@@ -1912,32 +1914,32 @@ class TelegramUtilities {
     
     // Check for operation conflicts
     if (this.currentOperation === 'converting') {
-      console.log("❌ Conversion already in progress");
+      if (RENDERER_DEBUG) console.log("❌ Conversion already in progress");
       this.showToast("warning", "Operation in Progress", "A conversion is already running.");
       return;
     }
     
     // Check backend connectivity
-    console.log("🔍 Checking backend status...");
+    if (RENDERER_DEBUG) console.log("🔍 Checking backend status...");
     try {
       const healthCheck = await this.apiRequest("GET", "/api/health");
       
-      console.log("🏥 Health check result:", healthCheck);
+      if (RENDERER_DEBUG) console.log("🏥 Health check result:", healthCheck);
       
       if (!healthCheck.success) {
-        console.log("❌ Backend health check failed");
+        if (RENDERER_DEBUG) console.log("❌ Backend health check failed");
         this.showToast("error", "Backend Error", "Backend server is not responding");
         return;
       }
     } catch (error) {
-      console.error("❌ Backend health check error:", error);
+      if (RENDERER_DEBUG) console.error("❌ Backend health check error:", error);
       this.showToast("error", "Connection Error", "Cannot connect to backend server");
       return;
     }
     
     // Prepare conversion data
     const filesToConvert = this.videoFiles.map(f => f.path);
-    console.log("📋 Conversion data prepared:", {
+    if (RENDERER_DEBUG) console.log("📋 Conversion data prepared:", {
       files: filesToConvert,
       output_dir: this.currentVideoOutput,
       fileCount: filesToConvert.length
@@ -1946,7 +1948,7 @@ class TelegramUtilities {
     // Check if any file paths are invalid
     const invalidFiles = filesToConvert.filter(path => !path || path === 'undefined');
     if (invalidFiles.length > 0) {
-      console.error("❌ Invalid file paths found:", invalidFiles);
+      if (RENDERER_DEBUG) console.error("❌ Invalid file paths found:", invalidFiles);
       this.showToast("error", "Invalid Files", "Some files have invalid paths. Please re-add them.");
       return;
     }
@@ -1986,7 +1988,7 @@ class TelegramUtilities {
     this.updateButtonStates();
     
     try {
-      console.log("🚀 Sending conversion request to backend...");
+      if (RENDERER_DEBUG) console.log("🚀 Sending conversion request to backend...");
       
       const response = await this.apiRequest("POST", "/api/convert-videos", {
         files: filesToConvert,
@@ -1997,10 +1999,10 @@ class TelegramUtilities {
         }
       });
       
-      console.log("📨 Backend response:", response);
-      console.log("📨 Backend response data:", response.data);
-      console.log("📨 Backend response data type:", typeof response.data);
-      console.log("📨 Backend response keys:", Object.keys(response.data || {}));
+      if (RENDERER_DEBUG) console.log("📨 Backend response:", response);
+      if (RENDERER_DEBUG) console.log("📨 Backend response data:", response.data);
+      if (RENDERER_DEBUG) console.log("📨 Backend response data type:", typeof response.data);
+      if (RENDERER_DEBUG) console.log("📨 Backend response keys:", Object.keys(response.data || {}));
       
       if (response.success) {
         // Standardize process ID extraction
@@ -2018,7 +2020,7 @@ class TelegramUtilities {
         
         if (processId) {
           this.currentProcessId = processId;
-          console.log("✅ Conversion started successfully with process ID:", this.currentProcessId);
+          if (RENDERER_DEBUG) console.log("✅ Conversion started successfully with process ID:", this.currentProcessId);
           
           // Add process to activeProcesses
           this.activeProcesses.set(this.currentProcessId, {
@@ -2035,7 +2037,7 @@ class TelegramUtilities {
             startBtn.innerHTML = '<i class="fas fa-cog fa-spin"></i> Converting...';
           }
         } else {
-          console.error("❌ No process_id received from backend");
+          if (RENDERER_DEBUG) console.error("❌ No process_id received from backend");
           this.showToast("error", "Conversion Error", "Failed to get process ID from backend");
           this.resetOperationState();
         }
@@ -2044,7 +2046,7 @@ class TelegramUtilities {
       }
       
     } catch (error) {
-      console.error("❌ Conversion start error:", error);
+      if (RENDERER_DEBUG) console.error("❌ Conversion start error:", error);
       this.showToast("error", "Conversion Error", error.message);
       this.resetOperationState();
       
@@ -2060,12 +2062,12 @@ class TelegramUtilities {
       this.updateButtonStates();
     }
     
-    console.log("=== START CONVERSION DEBUG END ===");
+    if (RENDERER_DEBUG) console.log("=== START CONVERSION DEBUG END ===");
   }
 
   // Unified progress monitoring system
   monitorProcess(processId) {
-    console.log("Starting to monitor process:", processId);
+    if (RENDERER_DEBUG) console.log("Starting to monitor process:", processId);
     
     const MAX_CONSECUTIVE_ERRORS = 3;
     const POLLING_INTERVAL = 2000; // Reduced from 1000ms to 2000ms
@@ -2089,7 +2091,7 @@ class TelegramUtilities {
         // Check timeout
         const processInfo = this.activeProcesses.get(processId);
         if (!processInfo || Date.now() - processInfo.startTime > MAX_OPERATION_TIME) {
-          console.warn("Process timeout or not found");
+          if (RENDERER_DEBUG) console.warn("Process timeout or not found");
           this.stopProgressMonitoring();
           this.resetOperationState();
           this.showToast("warning", "Timeout", "Operation took too long");
@@ -2144,7 +2146,7 @@ class TelegramUtilities {
         }
         
       } catch (error) {
-        console.error("Progress monitoring error:", error);
+        if (RENDERER_DEBUG) console.error("Progress monitoring error:", error);
         consecutiveErrors++;
         if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
           this.stopProgressMonitoring();
@@ -2164,24 +2166,24 @@ class TelegramUtilities {
 
   // Improved process completion handler
   handleProcessCompletion(processData) {
-    console.log("=== PROCESS COMPLETION DEBUG ===");
-    console.log("🎯 Process completion data:", processData);
-    console.log("🎯 Current process ID:", this.currentProcessId);
-    console.log("🎯 Active processes before cleanup:", this.activeProcesses.size);
+    if (RENDERER_DEBUG) console.log("=== PROCESS COMPLETION DEBUG ===");
+    if (RENDERER_DEBUG) console.log("🎯 Process completion data:", processData);
+    if (RENDERER_DEBUG) console.log("🎯 Current process ID:", this.currentProcessId);
+    if (RENDERER_DEBUG) console.log("🎯 Active processes before cleanup:", this.activeProcesses.size);
     
     // Clean up process tracking
     if (this.currentProcessId) {
       this.activeProcesses.delete(this.currentProcessId);
-      console.log("🗑️ Removed process from active processes:", this.currentProcessId);
+      if (RENDERER_DEBUG) console.log("🗑️ Removed process from active processes:", this.currentProcessId);
     }
     
     // Determine overall success based on process status
     const isSuccessful = processData.status === 'completed';
-    console.log("🎯 Overall success:", isSuccessful);
+    if (RENDERER_DEBUG) console.log("🎯 Overall success:", isSuccessful);
     
     // Update all file statuses based on results
     if (processData.file_statuses) {
-      console.log("🔄 Updating file statuses from completion data:", processData.file_statuses);
+      if (RENDERER_DEBUG) console.log("🔄 Updating file statuses from completion data:", processData.file_statuses);
       Object.keys(processData.file_statuses).forEach(index => {
         const fileStatus = processData.file_statuses[index];
         const file = this.videoFiles[parseInt(index)];
@@ -2203,16 +2205,16 @@ class TelegramUtilities {
             file.stage = fileStatus.stage || 'Processing';
           }
           
-          console.log(`📁 File ${index} (${file.name}):`);
-          console.log(`   Status: ${oldStatus} → ${file.status}`);
-          console.log(`   Progress: ${oldProgress}% → ${file.progress}%`);
-          console.log(`   Stage: ${oldStage} → ${file.stage}`);
+          if (RENDERER_DEBUG) console.log(`📁 File ${index} (${file.name}):`);
+          if (RENDERER_DEBUG) console.log(`   Status: ${oldStatus} → ${file.status}`);
+          if (RENDERER_DEBUG) console.log(`   Progress: ${oldProgress}% → ${file.progress}%`);
+          if (RENDERER_DEBUG) console.log(`   Stage: ${oldStage} → ${file.stage}`);
         } else {
-          console.warn(`❌ File index ${index} not found in videoFiles array`);
+          if (RENDERER_DEBUG) console.warn(`❌ File index ${index} not found in videoFiles array`);
         }
       });
     } else {
-      console.warn("⚠️ No file_statuses in completion data");
+      if (RENDERER_DEBUG) console.warn("⚠️ No file_statuses in completion data");
     }
     
     // Update UI
@@ -2222,8 +2224,8 @@ class TelegramUtilities {
     const allFilesCompleted = this.videoFiles.every(file => file.status === 'completed');
     const anyFilesFailed = this.videoFiles.some(file => file.status === 'error');
     
-    console.log("🎯 All files completed:", allFilesCompleted);
-    console.log("🎯 Any files failed:", anyFilesFailed);
+    if (RENDERER_DEBUG) console.log("🎯 All files completed:", allFilesCompleted);
+    if (RENDERER_DEBUG) console.log("🎯 Any files failed:", anyFilesFailed);
     
     // Show toast notification
     if (allFilesCompleted) {
@@ -2250,23 +2252,23 @@ class TelegramUtilities {
     
     // Only reset operation state if ALL files are completed
     if (allFilesCompleted) {
-      console.log("🎯 ALL files completed, resetting operation state");
+      if (RENDERER_DEBUG) console.log("🎯 ALL files completed, resetting operation state");
       this.resetOperationState();
     } else {
-      console.log("🎯 Not all files completed, keeping operation state active");
-      console.log("🎯 Remaining files:", this.videoFiles.filter(f => f.status !== 'completed').map(f => f.name));
+      if (RENDERER_DEBUG) console.log("🎯 Not all files completed, keeping operation state active");
+      if (RENDERER_DEBUG) console.log("🎯 Remaining files:", this.videoFiles.filter(f => f.status !== 'completed').map(f => f.name));
     }
     
-    console.log("=== PROCESS COMPLETION END ===");
+    if (RENDERER_DEBUG) console.log("=== PROCESS COMPLETION END ===");
   }
 
   // Improved reset method
   resetOperationState() {
-    console.log("=== RESET OPERATION STATE DEBUG ===");
-    console.log("Before reset - Current operation:", this.currentOperation);
-    console.log("Before reset - Current process ID:", this.currentProcessId);
-    console.log("Before reset - Is paused:", this.isPaused);
-    console.log("Before reset - Progress interval:", this.progressInterval);
+    if (RENDERER_DEBUG) console.log("=== RESET OPERATION STATE DEBUG ===");
+    if (RENDERER_DEBUG) console.log("Before reset - Current operation:", this.currentOperation);
+    if (RENDERER_DEBUG) console.log("Before reset - Current process ID:", this.currentProcessId);
+    if (RENDERER_DEBUG) console.log("Before reset - Is paused:", this.isPaused);
+    if (RENDERER_DEBUG) console.log("Before reset - Progress interval:", this.progressInterval);
     
     // Clear all operation flags
     this.currentOperation = null;
@@ -2316,11 +2318,11 @@ class TelegramUtilities {
     // Update button states
     this.updateButtonStates();
     
-    console.log("After reset - Current operation:", this.currentOperation);
-    console.log("After reset - Current process ID:", this.currentProcessId);
-    console.log("After reset - Is paused:", this.isPaused);
-    console.log("After reset - Progress interval:", this.progressInterval);
-    console.log("=== RESET COMPLETE ===");
+    if (RENDERER_DEBUG) console.log("After reset - Current operation:", this.currentOperation);
+    if (RENDERER_DEBUG) console.log("After reset - Current process ID:", this.currentProcessId);
+    if (RENDERER_DEBUG) console.log("After reset - Is paused:", this.isPaused);
+    if (RENDERER_DEBUG) console.log("After reset - Progress interval:", this.progressInterval);
+    if (RENDERER_DEBUG) console.log("=== RESET COMPLETE ===");
   }
 
   async startHexEdit() {
@@ -2413,7 +2415,7 @@ class TelegramUtilities {
         throw new Error(response.error || "Failed to start hex edit");
       }
     } catch (error) {
-      console.error("Error starting hex edit:", error);
+      if (RENDERER_DEBUG) console.error("Error starting hex edit:", error);
       this.showToast("error", "Hex Edit Failed", error.message);
       this.currentOperation = null;
       this.currentProcessId = null;
@@ -2438,7 +2440,7 @@ class TelegramUtilities {
     this.progressInterval = setInterval(async () => {
       // Check for long-running operation
       if (Date.now() - operationStartTime > LONG_OPERATION_TIMEOUT) {
-        console.warn(`[PROGRESS] Operation exceeded maximum time limit`);
+        if (RENDERER_DEBUG) console.warn(`[PROGRESS] Operation exceeded maximum time limit`);
         this.stopProgressMonitoring();
         this.resetOperationState();
         this.showToast("warning", "Operation Timeout", "Operation took too long and was stopped");
@@ -2460,7 +2462,7 @@ class TelegramUtilities {
         this.logProgressDetails(progress);
         
         // Existing progress handling logic
-        console.log(`[PROGRESS] ${processId}: ${progress.progress}% - ${progress.currentStage}`);
+        if (RENDERER_DEBUG) console.log(`[PROGRESS] ${processId}: ${progress.progress}% - ${progress.currentStage}`);
         
         // Update pause state if changed
         if (progress.paused !== this.isPaused) {
@@ -2521,7 +2523,7 @@ class TelegramUtilities {
     
     let consecutiveErrors = 0;
     const startTs = Date.now();
-    console.log(`[HEX] monitor:start`, { processId, files: this.videoFiles.length });
+    if (RENDERER_DEBUG) console.log(`[HEX] monitor:start`, { processId, files: this.videoFiles.length });
     
     // For hex edit, check progress immediately since it's very fast
     this.checkHexProgressImmediately(processId);
@@ -2529,7 +2531,7 @@ class TelegramUtilities {
     this.progressInterval = setInterval(async () => {
       // Timeout guard
       if (Date.now() - startTs > LONG_OPERATION_TIMEOUT) {
-        console.warn(`[HEX] monitor:timeout - stopping polling`);
+        if (RENDERER_DEBUG) console.warn(`[HEX] monitor:timeout - stopping polling`);
         clearInterval(this.progressInterval);
         this.progressInterval = null;
         this.resetOperationState();
@@ -2539,7 +2541,7 @@ class TelegramUtilities {
       
       try {
         const progress = await this.getHexEditProgress(processId);
-        console.log(`[HEX] monitor:data`, progress);
+        if (RENDERER_DEBUG) console.log(`[HEX] monitor:data`, progress);
         
         // Update overall UI for hex edit
         this.updateHexOverallProgress(progress);
@@ -2548,14 +2550,14 @@ class TelegramUtilities {
         this.updateVideoFileList();
         
         if (progress.status === 'completed' || progress.status === 'error') {
-          console.log(`[HEX] monitor:complete`, { status: progress.status });
+          if (RENDERER_DEBUG) console.log(`[HEX] monitor:complete`, { status: progress.status });
           clearInterval(this.progressInterval);
           this.progressInterval = null;
           this.handleConversionComplete(progress); // Reuse completion UI with wasHexEdit detection inside
         }
       } catch (err) {
         consecutiveErrors += 1;
-        console.warn(`[HEX] monitor:error`, { consecutiveErrors, err: err?.message });
+        if (RENDERER_DEBUG) console.warn(`[HEX] monitor:error`, { consecutiveErrors, err: err?.message });
         if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
           clearInterval(this.progressInterval);
           this.progressInterval = null;
@@ -2571,12 +2573,12 @@ class TelegramUtilities {
   // Immediate progress check for hex edit since it's very fast
   async checkHexProgressImmediately(processId) {
     try {
-      console.log(`[HEX] immediate:check`, { processId });
+      if (RENDERER_DEBUG) console.log(`[HEX] immediate:check`, { processId });
       const progress = await this.getHexEditProgress(processId);
       
       // If hex edit is already completed (very fast operation)
       if (progress.status === 'completed') {
-        console.log(`[HEX] immediate:completed`, progress);
+        if (RENDERER_DEBUG) console.log(`[HEX] immediate:completed`, progress);
         clearInterval(this.progressInterval);
         this.progressInterval = null;
         this.handleConversionComplete(progress);
@@ -2588,7 +2590,7 @@ class TelegramUtilities {
       this.updateVideoFileList();
       
     } catch (err) {
-      console.warn(`[HEX] immediate:error`, err?.message);
+      if (RENDERER_DEBUG) console.warn(`[HEX] immediate:error`, err?.message);
       // Continue with normal polling if immediate check fails
     }
   }
@@ -2601,7 +2603,7 @@ class TelegramUtilities {
     const data = resp.data || {};
     const fileStatuses = data.file_statuses || {};
     const keys = Object.keys(fileStatuses);
-    console.log(`[HEX] progress:raw`, { keysCount: keys.length, keys });
+    if (RENDERER_DEBUG) console.log(`[HEX] progress:raw`, { keysCount: keys.length, keys });
     
     // Apply statuses to our local videoFiles array
     keys.forEach((k) => {
@@ -2624,7 +2626,7 @@ class TelegramUtilities {
       }
       
       if (before.s !== file.status || before.p !== file.progress || before.st !== file.stage) {
-        console.log(`[HEX] file:update`, { idx, before, after: { s: file.status, p: file.progress, st: file.stage } });
+        if (RENDERER_DEBUG) console.log(`[HEX] file:update`, { idx, before, after: { s: file.status, p: file.progress, st: file.stage } });
       }
     });
     
@@ -2663,7 +2665,7 @@ class TelegramUtilities {
   }
 
   logProgressDetails(progress) {
-    console.log(`[PROGRESS DETAILS]`, {
+    if (RENDERER_DEBUG) console.log(`[PROGRESS DETAILS]`, {
       processId: this.currentProcessId,
       progress: progress.progress,
       status: progress.status,
@@ -2674,7 +2676,7 @@ class TelegramUtilities {
   }
 
   handleProgressError(error, consecutiveErrors) {
-    console.error(`[PROGRESS ERROR #${consecutiveErrors}]`, {
+    if (RENDERER_DEBUG) console.error(`[PROGRESS ERROR #${consecutiveErrors}]`, {
       message: error.message,
       stack: error.stack,
       timestamp: new Date().toISOString()
@@ -2688,7 +2690,7 @@ class TelegramUtilities {
   }
 
   handleConversionComplete(progress) {
-    console.log(`[COMPLETE] Operation finished with status: ${progress.status}`);
+    if (RENDERER_DEBUG) console.log(`[COMPLETE] Operation finished with status: ${progress.status}`);
     
     this.stopProgressMonitoring();
     const wasHexEdit = this.currentOperation === 'hexediting';
@@ -2840,9 +2842,9 @@ class TelegramUtilities {
       });
       
       if (!response.success) {
-        console.error(`Progress check failed for ${processId}:`, response.error);
+        if (RENDERER_DEBUG) console.error(`Progress check failed for ${processId}:`, response.error);
         if (response.details && response.details.active_processes) {
-          console.log("Active processes:", response.details.active_processes);
+          if (RENDERER_DEBUG) console.log("Active processes:", response.details.active_processes);
         }
         return null;
       }
@@ -2880,12 +2882,12 @@ class TelegramUtilities {
       
       // Update the videoFiles array immediately for both conversion and hex edit
       if ((this.currentOperation === 'converting' || this.currentOperation === 'hexediting') && Object.keys(fileStatuses).length > 0) {
-        console.log(`[PROGRESS] Updating ${Object.keys(fileStatuses).length} file statuses for ${this.currentOperation}`);
+        if (RENDERER_DEBUG) console.log(`[PROGRESS] Updating ${Object.keys(fileStatuses).length} file statuses for ${this.currentOperation}`);
         
         Object.entries(fileStatuses).forEach(([idx, fs]) => {
           const file = this.videoFiles[parseInt(idx)];
           if (!file) {
-            console.warn(`[PROGRESS] File at index ${idx} not found in videoFiles`);
+            if (RENDERER_DEBUG) console.warn(`[PROGRESS] File at index ${idx} not found in videoFiles`);
             return;
           }
           
@@ -2900,7 +2902,7 @@ class TelegramUtilities {
           
           // Log if there were changes
           if (oldStatus !== file.status || oldProgress !== file.progress || oldStage !== file.stage) {
-            console.log(`[PROGRESS] File ${idx} updated:`, {
+            if (RENDERER_DEBUG) console.log(`[PROGRESS] File ${idx} updated:`, {
               status: `${oldStatus} → ${file.status}`,
               progress: `${oldProgress}% → ${file.progress}%`,
               stage: `${oldStage} → ${file.stage}`
@@ -2930,7 +2932,7 @@ class TelegramUtilities {
       
       return returnData;
     } catch (error) {
-      console.error("Error getting conversion progress:", error);
+      if (RENDERER_DEBUG) console.error("Error getting conversion progress:", error);
       return null;
     }
   }
@@ -3075,14 +3077,14 @@ class TelegramUtilities {
     const apiHashInput = document.getElementById("telegram-api-hash");
     const phoneInput = document.getElementById("telegram-phone");
     
-    console.log('[DEBUG] connectTelegram called - checking inputs:', {
+    if (RENDERER_DEBUG) console.log('[DEBUG] connectTelegram called - checking inputs:', {
       apiIdInput: !!apiIdInput,
       apiHashInput: !!apiHashInput, 
       phoneInput: !!phoneInput
     });
     
     if (!apiIdInput || !apiHashInput || !phoneInput) {
-      console.error('[DEBUG] Missing input elements:', {
+      if (RENDERER_DEBUG) console.error('[DEBUG] Missing input elements:', {
         apiIdInput: !!apiIdInput,
         apiHashInput: !!apiHashInput,
         phoneInput: !!phoneInput
@@ -3095,7 +3097,7 @@ class TelegramUtilities {
     const apiHash = apiHashInput.value.trim();
     const phoneNumber = phoneInput.value.trim();
     
-    console.log('[DEBUG] Input values:', {
+    if (RENDERER_DEBUG) console.log('[DEBUG] Input values:', {
       apiId: apiId ? 'provided' : 'empty',
       apiHash: apiHash ? 'provided' : 'empty', 
       phoneNumber: phoneNumber ? 'provided' : 'empty'
@@ -3103,7 +3105,7 @@ class TelegramUtilities {
     
     // Validate inputs
     if (!apiId || !apiHash || !phoneNumber) {
-      console.error('[DEBUG] Validation failed - missing inputs');
+      if (RENDERER_DEBUG) console.error('[DEBUG] Validation failed - missing inputs');
       
       // Show specific field errors
       const missingFields = [];
@@ -3131,7 +3133,7 @@ class TelegramUtilities {
       
       this.showLoadingOverlay("Connecting to Telegram...");
       
-      console.log('[DEBUG] Sending connection request to backend');
+      if (RENDERER_DEBUG) console.log('[DEBUG] Sending connection request to backend');
       
       let response;
       let retryCount = 0;
@@ -3146,15 +3148,15 @@ class TelegramUtilities {
             process_id: "connect_" + Date.now(),
           });
           
-          console.log('[DEBUG] Connection response received:', response);
+          if (RENDERER_DEBUG) console.log('[DEBUG] Connection response received:', response);
           break; // Success, exit retry loop
           
         } catch (error) {
-          console.error(`[DEBUG] Connection attempt ${retryCount + 1} failed:`, error);
+          if (RENDERER_DEBUG) console.error(`[DEBUG] Connection attempt ${retryCount + 1} failed:`, error);
           
           // Check for database lock error
           if (error.message && error.message.includes('database is locked') && retryCount < maxRetries - 1) {
-            console.log(`[DEBUG] Database lock detected, retrying in ${(retryCount + 1) * 1000}ms...`);
+            if (RENDERER_DEBUG) console.log(`[DEBUG] Database lock detected, retrying in ${(retryCount + 1) * 1000}ms...`);
             await new Promise(resolve => setTimeout(resolve, (retryCount + 1) * 1000));
             retryCount++;
             continue;
@@ -3198,17 +3200,17 @@ class TelegramUtilities {
           }, 500);
         } else {
           // Successful connection
-          console.log('[DEBUG] Connection successful - updating UI');
+          if (RENDERER_DEBUG) console.log('[DEBUG] Connection successful - updating UI');
           this.showToast('success', 'Connected', 'Successfully connected to Telegram');
           this.updateTelegramStatus("connected");
         }
       } else {
-        console.error('[DEBUG] Connection failed - response not successful:', response);
+        if (RENDERER_DEBUG) console.error('[DEBUG] Connection failed - response not successful:', response);
         const errorMsg = (response && response.error) || 'Unknown error occurred';
         this.showToast('error', 'Connection Failed', errorMsg);
       }
     } catch (error) {
-      console.error('[DEBUG] Connection error caught:', error);
+      if (RENDERER_DEBUG) console.error('[DEBUG] Connection error caught:', error);
       this.hideLoadingOverlay();
       
       let errorMsg = error.message || 'Failed to connect';
@@ -3220,7 +3222,7 @@ class TelegramUtilities {
       
       this.showToast('error', 'Connection Error', errorMsg);
     } finally {
-      console.log('[DEBUG] Resetting connection button');
+      if (RENDERER_DEBUG) console.log('[DEBUG] Resetting connection button');
       const connectBtn = document.getElementById("connect-telegram");
       if (connectBtn) {
         connectBtn.disabled = false;
@@ -3278,9 +3280,9 @@ class TelegramUtilities {
         const result = (response.data !== undefined && response.data !== null) ? response.data : response;
         // Check if 2FA password is needed
         const needsPassword = !!(result && result.needs_password);
-        console.debug('[verify-code] response:', response, 'computed needsPassword=', needsPassword);
-        console.debug('[verify-code] result object:', result);
-        console.debug('[verify-code] needs_password field:', result?.needs_password);
+        if (RENDERER_DEBUG) console.debug('[verify-code] response:', response, 'computed needsPassword=', needsPassword);
+        if (RENDERER_DEBUG) console.debug('[verify-code] result object:', result);
+        if (RENDERER_DEBUG) console.debug('[verify-code] needs_password field:', result?.needs_password);
         if (needsPassword) {
           this.pendingCode = false;
           this.pendingPassword = true;
@@ -3317,7 +3319,7 @@ class TelegramUtilities {
         codeInput.select();
       }
     } catch (error) {
-      console.error("Error verifying code:", error);
+      if (RENDERER_DEBUG) console.error("Error verifying code:", error);
       this.showToast(
         "error",
         "Verification Error",
@@ -3378,7 +3380,7 @@ class TelegramUtilities {
         passwordInput.select();
       }
     } catch (error) {
-      console.error("Error verifying password:", error);
+      if (RENDERER_DEBUG) console.error("Error verifying password:", error);
       this.showToast(
         "error",
         "Authentication Error",
@@ -3448,7 +3450,7 @@ class TelegramUtilities {
         );
       }
     } catch (error) {
-      console.error("Error adding images:", error);
+      if (RENDERER_DEBUG) console.error("Error adding images:", error);
       this.showToast(
         "error",
         "Error",
@@ -3512,7 +3514,7 @@ class TelegramUtilities {
         );
       }
     } catch (error) {
-      console.error("Error adding videos:", error);
+      if (RENDERER_DEBUG) console.error("Error adding videos:", error);
       this.showToast(
         "error",
         "Error",
@@ -3536,7 +3538,7 @@ class TelegramUtilities {
   updateMediaFileList() {
     const container = document.getElementById("sticker-media-list");
     if (!container) {
-      console.warn('⚠️ sticker-media-list container not found');
+      if (RENDERER_DEBUG) console.warn('⚠️ sticker-media-list container not found');
       // Try again after a short delay in case DOM is still loading
       setTimeout(() => {
         const retryContainer = document.getElementById("sticker-media-list");
@@ -3659,7 +3661,7 @@ class TelegramUtilities {
         }
       }
     } catch (error) {
-      console.error('Failed to get file info:', error);
+      if (RENDERER_DEBUG) console.error('Failed to get file info:', error);
     }
     
     const info = `
@@ -3844,7 +3846,7 @@ class TelegramUtilities {
       }
     } catch (error) {
       this.hideLoadingOverlay();
-      console.error("Error creating sticker pack:", error);
+      if (RENDERER_DEBUG) console.error("Error creating sticker pack:", error);
       this.showToast(
         "error",
         "Creation Error",
@@ -3887,12 +3889,12 @@ class TelegramUtilities {
             this.onStickerProcessCompleted(false, progress);
           }
         } else {
-          console.error("Sticker progress monitoring failed:", response.error);
+          if (RENDERER_DEBUG) console.error("Sticker progress monitoring failed:", response.error);
           clearInterval(this.stickerProgressInterval);
           this.onStickerProcessCompleted(false, { error: response.error });
         }
       } catch (error) {
-        console.error("Error monitoring sticker progress:", error);
+        if (RENDERER_DEBUG) console.error("Error monitoring sticker progress:", error);
         clearInterval(this.stickerProgressInterval);
         this.onStickerProcessCompleted(false, { error: error.message });
       }
@@ -4339,31 +4341,31 @@ class TelegramUtilities {
 
     async updateSystemInfo() {
     try {
-      console.log("🔄 updateSystemInfo() CALLED - Starting...");
-      console.log("🌐 Making API request to /api/health...");
+      if (RENDERER_DEBUG) console.log("🔄 updateSystemInfo() CALLED - Starting...");
+      if (RENDERER_DEBUG) console.log("🌐 Making API request to /api/health...");
       const health = await this.apiRequest("GET", "/api/health");
-      console.log("📊 Backend status response:", health);
-      console.log("📊 Response success:", health?.success);
-      console.log("📊 Response data:", health?.data);
+      if (RENDERER_DEBUG) console.log("📊 Backend status response:", health);
+      if (RENDERER_DEBUG) console.log("📊 Response success:", health?.success);
+      if (RENDERER_DEBUG) console.log("📊 Response data:", health?.data);
       
-      console.log("📊 FULL Health Response:", JSON.stringify(health, null, 2));
-      console.log("📊 Response data:", health?.data);
-      console.log("📊 Health Success:", health?.success);
-      console.log("📊 Health Status:", health?.status);
+      if (RENDERER_DEBUG) console.log("📊 FULL Health Response:", JSON.stringify(health, null, 2));
+      if (RENDERER_DEBUG) console.log("📊 Response data:", health?.data);
+      if (RENDERER_DEBUG) console.log("📊 Health Success:", health?.success);
+      if (RENDERER_DEBUG) console.log("📊 Health Status:", health?.status);
       
       // Update Backend Status - just show Connected/Disconnected
-      console.log("🔍 Looking for backend status elements...");
+      if (RENDERER_DEBUG) console.log("🔍 Looking for backend status elements...");
       const backendStatusEl = document.getElementById("backend-status-text");
       const backendStatusContainer = document.getElementById("backend-status");
-      console.log("🔍 backendStatusEl found:", !!backendStatusEl);
-      console.log("🔍 backendStatusContainer found:", !!backendStatusContainer);
+      if (RENDERER_DEBUG) console.log("🔍 backendStatusEl found:", !!backendStatusEl);
+      if (RENDERER_DEBUG) console.log("🔍 backendStatusContainer found:", !!backendStatusContainer);
       
       // More robust backend status detection
       const isBackendHealthy = health && 
         (health.success === true || 
          (health.status && health.status.toLowerCase().includes('connected')));
       
-      console.log("📊 Backend Health Check:", {
+      if (RENDERER_DEBUG) console.log("📊 Backend Health Check:", {
         success: health?.success,
         status: health?.status,
         isHealthy: isBackendHealthy
@@ -4371,43 +4373,43 @@ class TelegramUtilities {
       
       if (backendStatusEl && backendStatusContainer) {
         if (isBackendHealthy) {
-          console.log("✅ Health check successful - setting Connected");
+          if (RENDERER_DEBUG) console.log("✅ Health check successful - setting Connected");
           backendStatusEl.textContent = "Connected";
           backendStatusContainer.className = "status-item connected";
-          console.log("✅ Backend status updated: Connected");
+          if (RENDERER_DEBUG) console.log("✅ Backend status updated: Connected");
           
           // Also update the settings page backend status
           const settingsBackendStatus = document.getElementById("backend-status-text");
           if (settingsBackendStatus) {
             settingsBackendStatus.textContent = "Connected";
-            console.log("✅ Settings backend status updated: Connected");
+            if (RENDERER_DEBUG) console.log("✅ Settings backend status updated: Connected");
           } else {
-            console.log("❌ settingsBackendStatus not found");
+            if (RENDERER_DEBUG) console.log("❌ settingsBackendStatus not found");
           }
         } else {
-          console.log("❌ Health check failed - setting Disconnected");
+          if (RENDERER_DEBUG) console.log("❌ Health check failed - setting Disconnected");
           backendStatusEl.textContent = "Disconnected";
           backendStatusContainer.className = "status-item disconnected";
-          console.log("❌ Backend status failed:", health);
+          if (RENDERER_DEBUG) console.log("❌ Backend status failed:", health);
           
           // Also update the settings page backend status
           const settingsBackendStatus = document.getElementById("backend-status-text");
           if (settingsBackendStatus) {
             settingsBackendStatus.textContent = "Disconnected";
-            console.log("✅ Settings backend status updated: Disconnected");
+            if (RENDERER_DEBUG) console.log("✅ Settings backend status updated: Disconnected");
           } else {
-            console.log("❌ settingsBackendStatus not found");
+            if (RENDERER_DEBUG) console.log("❌ settingsBackendStatus not found");
           }
         }
       } else {
-        console.log("❌ Backend status elements not found!");
+        if (RENDERER_DEBUG) console.log("❌ Backend status elements not found!");
       }
 
       // Update FFmpeg Status - simple status without colors
       const ffmpegStatusEl = document.getElementById("ffmpeg-status");
       if (ffmpegStatusEl) {
         ffmpegStatusEl.textContent = "Available";
-        console.log("✅ FFmpeg status set to: Available");
+        if (RENDERER_DEBUG) console.log("✅ FFmpeg status set to: Available");
       }
     } catch (error) {
       // If backend is not available, show disconnected state
@@ -4486,68 +4488,67 @@ class TelegramUtilities {
 
   async updateDatabaseStats() {
     try {
-      console.log("📊 updateDatabaseStats() CALLED - Starting...");
-      console.log("🌐 Making API request to /api/database-stats...");
-      const stats = await this.apiRequest("GET", "/api/database-stats");
-      console.log("📊 Database stats response:", stats);
-      console.log("📊 Stats success:", stats?.success);
-      console.log("📊 Stats data:", stats?.data);
-      if (stats.success) {
-        console.log("✅ Database stats successful - updating UI...");
-        const data = stats.data;
-        
-        // Update conversion stats with null checks
-        console.log("🔍 Looking for total-conversions element...");
-        const totalConversionsEl = document.getElementById("total-conversions");
-        console.log("🔍 totalConversionsEl found:", !!totalConversionsEl);
-        if (totalConversionsEl) {
-          totalConversionsEl.textContent = data.total_conversions;
-          console.log("✅ Updated total-conversions:", data.total_conversions);
-        }
-        
-        console.log("🔍 Looking for successful-conversions element...");
-        const successfulConversionsEl = document.getElementById("successful-conversions");
-        console.log("🔍 successfulConversionsEl found:", !!successfulConversionsEl);
-        if (successfulConversionsEl) {
-          successfulConversionsEl.textContent = data.successful_conversions;
-          console.log("✅ Updated successful-conversions:", data.successful_conversions);
-        }
-        
-        console.log("🔍 Looking for failed-conversions element...");
-        const failedConversionsEl = document.getElementById("failed-conversions");
-        console.log("🔍 failedConversionsEl found:", !!failedConversionsEl);
-        if (failedConversionsEl) {
-          failedConversionsEl.textContent = data.failed_conversions;
-          console.log("✅ Updated failed-conversions:", data.failed_conversions);
-        }
-        
-        // Update hexedit stats
-        console.log("🔍 Looking for total-hexedits element...");
-        const totalHexeditsEl = document.getElementById("total-hexedits");
-        console.log("🔍 totalHexeditsEl found:", !!totalHexeditsEl);
-        if (totalHexeditsEl) {
-          totalHexeditsEl.textContent = data.total_hexedits;
-          console.log("✅ Updated total-hexedits:", data.total_hexedits);
-        }
-        
-        // Update sticker stats
-        console.log("🔍 Looking for total-stickers element...");
-        const totalStickersEl = document.getElementById("total-stickers");
-        console.log("🔍 totalStickersEl found:", !!totalStickersEl);
-        if (totalStickersEl) {
-          totalStickersEl.textContent = data.total_stickers_created;
-          console.log("✅ Updated total-stickers:", data.total_stickers_created);
-        }
-        
-        // Update session start time
-        const sessionStart = new Date(data.session_started * 1000);
-        const sessionStartEl = document.getElementById("session-start");
-        if (sessionStartEl) {
-          sessionStartEl.textContent = this.formatTimeAgo(sessionStart);
-        }
-      }
-    } catch (error) {
-      console.error("Error updating database stats:", error);
+      const res = await window.electronAPI.readStats();
+      if (!res?.success || !res?.data) throw new Error(res?.error || 'readStats failed');
+      const s = res.data;
+      console.log('📊 Loaded stats.json:', JSON.stringify(s));
+
+      const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = String(val ?? 0); };
+
+      setText('total-conversions', s.total_conversions);
+      setText('successful-conversions', s.successful_conversions);
+      setText('failed-conversions', s.failed_conversions);
+      setText('total-hexedits', s.total_hexedits);
+      setText('successful-hexedits', s.successful_hexedits);
+      setText('failed-hexedits', s.failed_hexedits);
+      setText('total-stickers', s.total_stickers_created);
+
+      const ses = document.getElementById('session-start') || document.getElementById('session-started');
+      if (ses && s.session_started) ses.textContent = new Date(s.session_started * 1000).toLocaleString();
+
+      console.log('📊 Database stats updated from file via preload');
+    } catch (e) {
+      console.error('❌ updateDatabaseStats (preload) failed:', e);
+    }
+  }
+
+  updateStats() {
+    // Do NOT touch database info fields here to avoid overwriting with zeros
+    // Keep only non-database UI refresh (e.g., local cache size)
+    const cacheSizeEl = document.getElementById('cache-size');
+    if (cacheSizeEl) {
+      const cacheSize = Math.round(JSON.stringify(localStorage).length / 1024);
+      cacheSizeEl.textContent = `${cacheSize} KB`;
+    }
+  }
+
+  async exportStats() {
+    try {
+      const res = await window.electronAPI.readStats();
+      if (!res?.success || !res?.data) throw new Error(res?.error || 'readStats failed');
+      const d = res.data;
+      const payload = {
+        total_conversions: d.total_conversions ?? 0,
+        successful_conversions: d.successful_conversions ?? 0,
+        failed_conversions: d.failed_conversions ?? 0,
+        total_hexedits: d.total_hexedits ?? 0,
+        successful_hexedits: d.successful_hexedits ?? 0,
+        failed_hexedits: d.failed_hexedits ?? 0,
+        total_stickers_created: d.total_stickers_created ?? 0,
+        session_started: d.session_started ?? null,
+        exported_at: new Date().toISOString()
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `database-stats-${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      this.showToast('Database stats exported', 'success');
+    } catch (e) {
+      console.error('Export stats failed:', e);
+      this.showToast('Failed to export stats', 'error');
     }
   }
 
@@ -4603,7 +4604,7 @@ class TelegramUtilities {
         "Settings exported successfully"
       );
     } catch (error) {
-      console.error("Error exporting settings:", error);
+      if (RENDERER_DEBUG) console.error("Error exporting settings:", error);
       this.showToast(
         "error",
         "Export Failed",
@@ -4662,7 +4663,7 @@ class TelegramUtilities {
             "Settings imported successfully"
           );
         } catch (error) {
-          console.error("Error importing settings:", error);
+          if (RENDERER_DEBUG) console.error("Error importing settings:", error);
           this.showToast(
             "error",
             "Import Failed",
@@ -4673,7 +4674,7 @@ class TelegramUtilities {
       
       input.click();
     } catch (error) {
-      console.error("Error importing settings:", error);
+      if (RENDERER_DEBUG) console.error("Error importing settings:", error);
       this.showToast(
         "error",
         "Import Failed",
@@ -4737,10 +4738,10 @@ This action cannot be undone. Are you sure?
         // Clear backend session
         this.apiRequest("POST", "/api/clear-session")
           .then(() => {
-            console.log("Backend session cleared");
+            if (RENDERER_DEBUG) console.log("Backend session cleared");
           })
           .catch(err => {
-            console.log("Failed to clear backend session:", err);
+            if (RENDERER_DEBUG) console.log("Failed to clear backend session:", err);
           });
         
         this.showToast(
@@ -4749,7 +4750,7 @@ This action cannot be undone. Are you sure?
           "All application data has been cleared successfully"
         );
       } catch (error) {
-        console.error("Error clearing data:", error);
+        if (RENDERER_DEBUG) console.error("Error clearing data:", error);
         this.showToast(
           "error",
           "Clear Failed",
@@ -4842,7 +4843,7 @@ This action cannot be undone. Are you sure?
         this.showToast("info", "Operation Paused", "The current operation has been paused");
       }
     } catch (error) {
-      console.error("Error pausing operation:", error);
+      if (RENDERER_DEBUG) console.error("Error pausing operation:", error);
       this.showToast("error", "Pause Failed", "Failed to pause the operation");
     }
   }
@@ -4875,7 +4876,7 @@ This action cannot be undone. Are you sure?
         this.showToast("info", "Operation Resumed", "The operation has been resumed");
       }
     } catch (error) {
-      console.error("Error resuming operation:", error);
+      if (RENDERER_DEBUG) console.error("Error resuming operation:", error);
       this.showToast("error", "Resume Failed", "Failed to resume the operation");
     }
   }
@@ -4941,7 +4942,7 @@ This action cannot be undone. Are you sure?
       document.getElementById('cache-size').textContent = '0 MB';
       this.showToast('Cache cleared successfully', 'success');
     } catch (error) {
-      console.error('Failed to clear cache:', error);
+      if (RENDERER_DEBUG) console.error('Failed to clear cache:', error);
       this.showToast('Failed to clear cache', 'error');
     }
   }
@@ -4958,32 +4959,12 @@ This action cannot be undone. Are you sure?
         this.showToast('Backend restarted successfully', 'success');
       }, 3000);
     } catch (error) {
-      console.error('Failed to restart backend:', error);
+      if (RENDERER_DEBUG) console.error('Failed to restart backend:', error);
       // Try to reconnect after a delay
       setTimeout(() => {
         this.checkBackendStatus();
       }, 5000);
     }
-  }
-  
-  exportStats() {
-    const stats = {
-      session: this.sessionStats,
-      timestamp: new Date().toISOString(),
-      uptime: document.getElementById('app-uptime').textContent,
-      platform: document.getElementById('platform-info').textContent,
-      architecture: document.getElementById('arch-info').textContent
-    };
-    
-    const blob = new Blob([JSON.stringify(stats, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `sticker-maker-stats-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    
-    this.showToast('Stats exported successfully', 'success');
   }
   
   async resetStats() {
@@ -5036,28 +5017,6 @@ This action cannot be undone. Are you sure?
       } catch (error) {
         this.showToast("error", "Clear Failed", "Failed to clear credentials: " + error.message);
       }
-    }
-  }
-  
-  updateStats() {
-    // Update conversion stats with null checks
-    const totalConversionsEl = document.getElementById('total-conversions');
-    if (totalConversionsEl) totalConversionsEl.textContent = this.sessionStats.totalConversions;
-    
-    const successfulConversionsEl = document.getElementById('successful-conversions');
-    if (successfulConversionsEl) successfulConversionsEl.textContent = this.sessionStats.successfulConversions;
-    
-    const failedConversionsEl = document.getElementById('failed-conversions');
-    if (failedConversionsEl) failedConversionsEl.textContent = this.sessionStats.failedConversions;
-    
-    const totalStickersEl = document.getElementById('total-stickers');
-    if (totalStickersEl) totalStickersEl.textContent = this.sessionStats.totalStickers;
-    
-    // Update cache size (approximate) - only if element exists
-    const cacheSizeEl = document.getElementById('cache-size');
-    if (cacheSizeEl) {
-      const cacheSize = Math.round(JSON.stringify(localStorage).length / 1024);
-      cacheSizeEl.textContent = `${cacheSize} KB`;
     }
   }
   
@@ -5286,7 +5245,7 @@ This action cannot be undone. Are you sure?
     projectLinks.forEach(link => {
       link.addEventListener('click', (e) => {
         // Track project clicks
-        console.log('🚀 Project link clicked:', link.href);
+        if (RENDERER_DEBUG) console.log('🚀 Project link clicked:', link.href);
         this.showToast('info', 'Opening Project', 'Opening project in your browser...');
       });
     });
@@ -5296,7 +5255,7 @@ This action cannot be undone. Are you sure?
     const channelBtn = document.querySelector('.channel-join-btn');
     if (channelBtn) {
       channelBtn.addEventListener('click', (e) => {
-        console.log('📱 Channel join button clicked');
+        if (RENDERER_DEBUG) console.log('📱 Channel join button clicked');
         this.showToast('success', 'Joining Channel', 'Opening Telegram channel in your browser...');
       });
     }
@@ -5459,7 +5418,7 @@ This action cannot be undone. Are you sure?
 
   initializeNavigation() {
     const navItems = document.querySelectorAll(".nav-item");
-    console.log('Navigation items:', navItems);
+    if (RENDERER_DEBUG) console.log('Navigation items:', navItems);
 
     navItems.forEach((item) => {
       item.addEventListener("click", () => {
@@ -5470,7 +5429,7 @@ This action cannot be undone. Are you sure?
         item.classList.add("active");
         
         const tabId = item.getAttribute("data-tab");
-        console.log('Clicked tab:', tabId);
+        if (RENDERER_DEBUG) console.log('Clicked tab:', tabId);
         
         this.handleTabSwitch(tabId);
       });
@@ -5480,10 +5439,10 @@ This action cannot be undone. Are you sure?
     const initialActiveTab = document.querySelector(".nav-item.active");
     if (initialActiveTab) {
       const initialTabId = initialActiveTab.getAttribute("data-tab");
-      console.log('Initial active tab:', initialTabId);
+      if (RENDERER_DEBUG) console.log('Initial active tab:', initialTabId);
       this.handleTabSwitch(initialTabId);
     } else {
-      console.warn('No initial active tab found');
+      if (RENDERER_DEBUG) console.warn('No initial active tab found');
     }
   }
 
@@ -5616,7 +5575,7 @@ This action cannot be undone. Are you sure?
         };
       }
     } catch (error) {
-      console.warn(`Failed to get metadata for ${filePath}:`, error);
+      if (RENDERER_DEBUG) console.warn(`Failed to get metadata for ${filePath}:`, error);
     }
     
     // Fallback: try to get basic file size
@@ -5635,7 +5594,7 @@ This action cannot be undone. Are you sure?
         };
       }
     } catch (error) {
-      console.warn(`Failed to analyze video ${filePath}:`, error);
+      if (RENDERER_DEBUG) console.warn(`Failed to analyze video ${filePath}:`, error);
     }
     
     return {
@@ -5682,9 +5641,9 @@ This action cannot be undone. Are you sure?
       // Encrypt sensitive data before storing
       const encryptedValue = this.encryptData(value);
       localStorage.setItem(key, encryptedValue);
-      console.log(`[SECURE] Stored ${key} securely`);
+      if (RENDERER_DEBUG) console.log(`[SECURE] Stored ${key} securely`);
     } catch (error) {
-      console.error(`[SECURE] Error storing ${key}:`, error);
+      if (RENDERER_DEBUG) console.error(`[SECURE] Error storing ${key}:`, error);
       this.showToast('error', 'Credential Storage Error', 'Failed to securely store credentials');
     }
   }
@@ -5697,7 +5656,7 @@ This action cannot be undone. Are you sure?
       const decryptedValue = this.decryptData(encryptedValue);
       return decryptedValue;
     } catch (error) {
-      console.error(`[SECURE] Error retrieving ${key}:`, error);
+      if (RENDERER_DEBUG) console.error(`[SECURE] Error retrieving ${key}:`, error);
       this.showToast('error', 'Credential Retrieval Error', 'Failed to retrieve stored credentials');
       return null;
     }
@@ -5759,7 +5718,7 @@ This action cannot be undone. Are you sure?
         }
       }
     } catch (error) {
-      console.error('Error loading credentials:', error);
+      if (RENDERER_DEBUG) console.error('Error loading credentials:', error);
     }
   }
 
@@ -5802,7 +5761,7 @@ This action cannot be undone. Are you sure?
       
       this.showToast('success', 'Credentials Cleared', 'Telegram credentials have been removed');
     } catch (error) {
-      console.error('[SECURE] Error clearing credentials:', error);
+      if (RENDERER_DEBUG) console.error('[SECURE] Error clearing credentials:', error);
       this.showToast('error', 'Clearing Error', 'Failed to clear stored credentials');
     }
   }
@@ -5822,9 +5781,9 @@ This action cannot be undone. Are you sure?
         localStorage.setItem('telegram_recent_phones', JSON.stringify(uniqueRecentPhones));
       }
       
-      console.log('[PHONE] Phone number saved successfully');
+      if (RENDERER_DEBUG) console.log('[PHONE] Phone number saved successfully');
     } catch (error) {
-      console.error('[PHONE] Error saving phone number:', error);
+      if (RENDERER_DEBUG) console.error('[PHONE] Error saving phone number:', error);
     }
   }
 
@@ -5833,7 +5792,7 @@ This action cannot be undone. Are you sure?
       const storedPhones = localStorage.getItem('telegram_recent_phones');
       return storedPhones ? JSON.parse(storedPhones) : [];
     } catch (error) {
-      console.error('[PHONE] Error retrieving recent phone numbers:', error);
+      if (RENDERER_DEBUG) console.error('[PHONE] Error retrieving recent phone numbers:', error);
       return [];
     }
   }
@@ -5884,7 +5843,7 @@ This action cannot be undone. Are you sure?
             this.showToast('success', 'Clipboard', 'Text pasted successfully');
           }
         } catch (error) {
-          console.error('Clipboard paste error:', error);
+          if (RENDERER_DEBUG) console.error('Clipboard paste error:', error);
           this.showToast('error', 'Clipboard Error', 'Failed to paste from clipboard');
         }
       });
@@ -5924,7 +5883,7 @@ This action cannot be undone. Are you sure?
     const phoneInput = document.getElementById("telegram-phone");
     const connectBtn = document.getElementById("connect-telegram");
     
-    console.log('[DEBUG] Telegram form elements check:', {
+    if (RENDERER_DEBUG) console.log('[DEBUG] Telegram form elements check:', {
       apiIdInput: !!apiIdInput,
       apiHashInput: !!apiHashInput,
       phoneInput: !!phoneInput,
@@ -5932,7 +5891,7 @@ This action cannot be undone. Are you sure?
     });
     
     if (!connectBtn) {
-      console.error('[DEBUG] Critical: Connect button not found!');
+      if (RENDERER_DEBUG) console.error('[DEBUG] Critical: Connect button not found!');
       return;
     }
     
@@ -5947,7 +5906,7 @@ This action cannot be undone. Are you sure?
     // Sync visibility icons
     this.syncVisibilityIcons?.();
     
-    console.log('[DEBUG] Telegram connection initialization complete');
+    if (RENDERER_DEBUG) console.log('[DEBUG] Telegram connection initialization complete');
   }
 
   syncVisibilityIcons() {
@@ -6038,7 +5997,7 @@ This action cannot be undone. Are you sure?
           }, 1000);
         } catch (err) {
           this.showToast('error', 'Paste Failed', 'Could not read clipboard');
-          console.error('Clipboard paste error:', err);
+          if (RENDERER_DEBUG) console.error('Clipboard paste error:', err);
         }
       });
     });
@@ -6053,13 +6012,13 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
     app = new TelegramUtilities();
     window.app = app;
-    console.log("✅ App initialized after DOM ready");
+    if (RENDERER_DEBUG) console.log("✅ App initialized after DOM ready");
   });
 } else {
   // DOM is already loaded (shouldn't happen in normal flow but just in case)
   app = new TelegramUtilities();
   window.app = app;
-  console.log("✅ App initialized (DOM was already ready)");
+  if (RENDERER_DEBUG) console.log("✅ App initialized (DOM was already ready)");
 }
 
 // Additional global functions for inline event handlers (use arrow functions to get app at call time)
@@ -6104,7 +6063,7 @@ window.addEventListener("beforeunload", (event) => {
 
 // Global click handler for debugging
 document.addEventListener("click", (event) => {
-  console.log("🖱️ Global click detected:", {
+  if (RENDERER_DEBUG) console.log("🖱️ Global click detected:", {
     target: event.target,
     id: event.target.id,
     className: event.target.className,
@@ -6112,5 +6071,5 @@ document.addEventListener("click", (event) => {
   });
 });
 
-console.log("Telegram Utilities application loaded successfully!");
-console.log("Telegram Utilities application loaded successfully!");
+if (RENDERER_DEBUG) console.log("Telegram Utilities application loaded successfully!");
+if (RENDERER_DEBUG) console.log("Telegram Utilities application loaded successfully!");
