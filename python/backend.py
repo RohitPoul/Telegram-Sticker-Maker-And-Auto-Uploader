@@ -11,207 +11,24 @@ import signal
 from pathlib import Path
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+import traceback
+import queue
+
+# Stats functions will be defined after logger is initialized
 
 # Add the current directory to Python path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, current_dir)
+print(f"[INIT] Added to Python path: {current_dir}")
+print(f"[INIT] Current working directory: {os.getcwd()}")
+print(f"[INIT] Python path: {sys.path[:3]}")
 
-# Statistics tracking
-class StatisticsTracker:
-    def __init__(self):
-        # Determine the stats file path
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        logs_dir = os.path.join(base_dir, '..', 'logs')
-        
-        # Ensure logs directory exists
-        os.makedirs(logs_dir, exist_ok=True)
-        
-        # Set specific stats file path
-        stats_file_path = os.path.join(logs_dir, 'stats.json')
-        
-        # Extensive logging for debugging
-        print("=" * 50)
-        print("STATISTICS TRACKER INITIALIZATION")
-        print("=" * 50)
-        print(f"Base directory: {base_dir}")
-        print(f"Logs directory: {logs_dir}")
-        print(f"Stats file path: {stats_file_path}")
-        print(f"Current working directory: {os.getcwd()}")
-        print(f"__file__: {__file__}")
-        
-        # Attempt to create the file if it doesn't exist
-        try:
-            # Create the file if it doesn't exist
-            default_stats = {
-                "total_conversions": 0,
-                "successful_conversions": 0,
-                "failed_conversions": 0,
-                "total_hexedits": 0,
-                "successful_hexedits": 0,
-                "failed_hexedits": 0,
-                "total_stickers_created": 0,
-                "session_started": time.time()
-            }
-            
-            # Attempt to write the file with explicit error handling
-            try:
-                with open(stats_file_path, 'w') as f:
-                    json.dump(default_stats, f, indent=2)
-                print(f"Created stats file: {stats_file_path}")
-            except PermissionError:
-                print(f"PERMISSION DENIED: Cannot create {stats_file_path}")
-                raise
-            except IOError as e:
-                print(f"IO ERROR creating stats file: {e}")
-                raise
-            
-            # Set the stats file path
-            self.stats_file = Path(stats_file_path)
-        except Exception as e:
-            print(f"CRITICAL ERROR creating stats file: {e}")
-            # Fallback to a default path
-            self.stats_file = Path(stats_file_path)
-        
-        self.lock = threading.Lock()
-        
-        # Ensure stats are loaded or initialized
-        try:
-            self.stats = self.load_stats()
-            print("Stats loaded successfully")
-        except Exception as e:
-            print(f"ERROR loading stats: {e}")
-            # Fallback to default stats
-            self.stats = {
-                "total_conversions": 0,
-                "successful_conversions": 0,
-                "failed_conversions": 0,
-                "total_hexedits": 0,
-                "successful_hexedits": 0,
-                "failed_hexedits": 0,
-                "total_stickers_created": 0,
-                "session_started": time.time()
-            }
-            self.save_stats()
-        
-        self.start_time = time.time()
-        print("=" * 50)
-        print("STATISTICS TRACKER INITIALIZED")
-        print("=" * 50)
-    
-    def load_stats(self):
-        """Load statistics from file"""
-        try:
-            # Ensure the directory exists
-            os.makedirs(os.path.dirname(self.stats_file), exist_ok=True)
-            
-            # If file doesn't exist, create it with default stats
-            if not self.stats_file.exists():
-                default_stats = {
-                    "total_conversions": 0,
-                    "successful_conversions": 0,
-                    "failed_conversions": 0,
-                    "total_hexedits": 0,
-                    "successful_hexedits": 0,
-                    "failed_hexedits": 0,
-                    "total_stickers_created": 0,
-                    "session_started": time.time()
-                }
-                
-                try:
-                    with open(self.stats_file, 'w') as f:
-                        json.dump(default_stats, f, indent=2)
-                    logger.info(f"Created stats file: {self.stats_file}")
-                except Exception as e:
-                    logger.error(f"Could not create stats file: {e}")
-                
-                return default_stats
-            
-            # If file exists, read it
-            with open(self.stats_file, 'r') as f:
-                return json.load(f)
-        
-        except Exception as e:
-            logger.warning(f"Could not load stats: {e}")
-            
-            # Fallback to default stats
-            default_stats = {
-                "total_conversions": 0,
-                "successful_conversions": 0,
-                "failed_conversions": 0,
-                "total_hexedits": 0,
-                "successful_hexedits": 0,
-                "failed_hexedits": 0,
-                "total_stickers_created": 0,
-                "session_started": time.time()
-            }
-            
-            return default_stats
-    
-    def save_stats(self):
-        """Save statistics to file"""
-        try:
-            with self.lock:
-                with open(self.stats_file, 'w') as f:
-                    json.dump(self.stats, f, indent=2)
-        except Exception as e:
-            logger.error(f"Could not save stats to {self.stats_file}: {e}")
-    
-    def increment_conversion(self, success=True):
-        """Increment conversion counter"""
-        with self.lock:
-            self.stats["total_conversions"] += 1
-            if success:
-                self.stats["successful_conversions"] += 1
-            else:
-                self.stats["failed_conversions"] += 1
-            self.save_stats()
-    
-    def increment_hexedit(self, success=True):
-        """Increment hexedit counter"""
-        with self.lock:
-            self.stats["total_hexedits"] += 1
-            if success:
-                self.stats["successful_hexedits"] += 1
-            else:
-                self.stats["failed_hexedits"] += 1
-            self.save_stats()
-    
-    def increment_stickers(self, count=1):
-        """Increment sticker creation counter"""
-        with self.lock:
-            self.stats["total_stickers_created"] += count
-            self.save_stats()
-    
-    def get_stats(self):
-        """Get current statistics"""
-        with self.lock:
-            stats = self.stats.copy()
-            # Fix uptime calculation - use session_started from stats, not start_time
-            session_start = stats.get("session_started", self.start_time)
-            stats["uptime_seconds"] = int(time.time() - session_start)
-            return stats
-    
-    def reset_stats(self):
-        """Reset all statistics"""
-        with self.lock:
-            self.stats = {
-                "total_conversions": 0,
-                "successful_conversions": 0,
-                "failed_conversions": 0,
-                "total_hexedits": 0,
-                "successful_hexedits": 0,
-                "failed_hexedits": 0,
-                "total_stickers_created": 0,
-                "session_started": time.time()
-            }
-            self.start_time = time.time()
-            self.save_stats()
-
-# Initialize statistics tracker (will be done after logger setup)
-stats_tracker = None
+# Import statistics tracker from separate module
+from stats_tracker import stats_tracker
 
 # Setup logging (quiet by default: no stdout)
-log_level_name = os.getenv('BACKEND_LOG_LEVEL', 'WARNING').upper()
-log_level = getattr(logging, log_level_name, logging.WARNING)
+log_level_name = os.getenv('BACKEND_LOG_LEVEL', 'INFO').upper()  # Temporarily set to INFO for debugging
+log_level = getattr(logging, log_level_name, logging.ERROR)
 
 handlers = [logging.FileHandler('backend.log', encoding='utf-8')]
 if os.getenv('BACKEND_LOG_TO_STDOUT', '0') in ('1', 'true', 'TRUE'):
@@ -235,8 +52,11 @@ if sys.platform == 'win32':
         pass
 logger = logging.getLogger(__name__)
 
-# Initialize statistics tracker after logger is set up
-stats_tracker = StatisticsTracker()
+# Statistics are now handled by the centralized StatisticsTracker class
+# All stats operations should use stats_tracker.increment_conversion(), 
+# stats_tracker.increment_hexedit(), stats_tracker.increment_stickers(), etc.
+
+# Statistics tracker is imported from separate module
 
 # Run GPU preflight check first
 try:
@@ -248,8 +68,11 @@ except Exception as e:
 
 # Import video converter (after logging configured)
 try:
+    print(f"[IMPORT] Attempting to import video_converter from {current_dir}")
     from video_converter import VideoConverterCore
+    print(f"[IMPORT] VideoConverterCore imported successfully")
     video_converter = VideoConverterCore()
+    print(f"[IMPORT] VideoConverterCore instantiated successfully")
     VIDEO_CONVERTER_AVAILABLE = True
     logger.info("[OK] Video converter imported successfully")
     
@@ -376,14 +199,39 @@ def cleanup_telegram_and_sessions():
 # Register cleanup handlers
 atexit.register(cleanup_processes)
 atexit.register(cleanup_telegram_and_sessions)
-def _sig_handler(sig, frame):
-    try:
-        cleanup_telegram_and_sessions()
-    finally:
-        cleanup_processes()
 
-signal.signal(signal.SIGINT, _sig_handler)
-signal.signal(signal.SIGTERM, _sig_handler)
+# Global flag to prevent multiple shutdown attempts
+_SHUTDOWN_IN_PROGRESS = False
+
+def graceful_shutdown(signum=None, frame=None):
+    """Gracefully shut down the backend server."""
+    global _SHUTDOWN_IN_PROGRESS
+    
+    if _SHUTDOWN_IN_PROGRESS:
+        return
+    
+    _SHUTDOWN_IN_PROGRESS = True
+    
+    logger.info("Initiating graceful shutdown...")
+    
+    try:
+        # Stop any running threads
+        for thread in threading.enumerate():
+            if thread != threading.main_thread():
+                thread.join(timeout=5)
+        
+        # Close any open file handles or database connections
+        # Add any specific cleanup logic here
+        
+        logger.info("Shutdown complete.")
+        sys.exit(0)
+    except Exception as e:
+        logger.error(f"Error during shutdown: {e}")
+        sys.exit(1)
+
+# Register signal handlers
+signal.signal(signal.SIGINT, graceful_shutdown)
+signal.signal(signal.SIGTERM, graceful_shutdown)
 
 def validate_file_access(file_paths):
     """Validate that files exist and are accessible"""
@@ -864,7 +712,16 @@ def start_video_conversion():
         data = request.get_json()
         if not data:
             logger.error("[API] No JSON data received")
+            logger.error(f"[API] Request headers: {request.headers}")
+            logger.error(f"[API] Request method: {request.method}")
+            logger.error(f"[API] Request content type: {request.content_type}")
             return jsonify({"success": False, "error": "No data provided"}), 400
+
+        # Log received data for debugging
+        logger.info(f"[API] Received conversion request data: {data}")
+        logger.info(f"[API] Request content type: {request.content_type}")
+        logger.info(f"[API] Request method: {request.method}")
+        logger.info(f"[API] Request headers: {dict(request.headers)}")
 
         # Extract and validate parameters
         input_files = data.get('files', [])
@@ -979,20 +836,33 @@ def start_video_conversion():
                         active_processes[process_id]["status"] = "processing"
                         active_processes[process_id]["current_stage"] = "Starting batch conversion..."
 
-                # Use video converter
-                results = video_converter.batch_convert(
-                    input_files=input_files,
-                    output_dir=output_dir,
-                    gpu_mode=settings.get('gpu_mode', 'auto'),
-                    process_id=process_id
-                )
+                # Check if video converter is available
+                if not VIDEO_CONVERTER_AVAILABLE or not video_converter:
+                    logger.error(f"[THREAD] Video converter not available!")
+                    raise Exception("Video converter not available")
+
+                logger.info(f"[THREAD] Calling video_converter.batch_convert with {len(input_files)} files")
+
+                # Use video converter with timeout protection
+                try:
+                    results = video_converter.batch_convert(
+                        input_files=input_files,
+                        output_dir=output_dir,
+                        gpu_mode=settings.get('gpu_mode', 'auto'),
+                        process_id=process_id
+                    )
+                except Exception as convert_error:
+                    logger.error(f"[THREAD] Conversion failed: {convert_error}")
+                    results = [{"success": False, "error": str(convert_error)} for _ in input_files]
+                
+                logger.info(f"[THREAD] batch_convert returned {len(results)} results")
 
                 # Update final status
                 with process_lock:
                     if process_id in active_processes:
                         successful_files = sum(1 for r in results if r.get("success", False))
                         active_processes[process_id].update({
-                            "status": "completed",
+                            "status": "completed" if successful_files > 0 else "failed",
                             "progress": 100,
                             "completed_files": successful_files,
                             "failed_files": len(results) - successful_files,
@@ -1001,33 +871,33 @@ def start_video_conversion():
                             "results": results,
                             "can_pause": False
                         })
-                        logger.info(f"[THREAD] Conversion completed: {successful_files}/{len(results)} successful")
                         
-                        # Update statistics
-                        for result in results:
-                            stats_tracker.increment_conversion(success=result.get("success", False))
-
-                # Clean up thread reference
-                if process_id in conversion_threads:
-                    del conversion_threads[process_id]
-
+                        logger.info(f"[THREAD] Conversion completed: {successful_files}/{len(results)} successful")
+    
             except Exception as e:
-                logger.error(f"[THREAD] Conversion error for {process_id}: {e}", exc_info=True)
+                logger.error(f"[THREAD] Critical error in conversion thread: {e}")
+                logger.error(traceback.format_exc())
+                
+                # Increment failed stats if the entire thread fails using centralized StatisticsTracker
+                try:
+                    stats_tracker.increment_conversion(success=False)
+                except Exception as stats_error:
+                    logger.error(f"[THREAD] Failed to increment failed stats: {stats_error}")
+                
+                # Update process status to failed
                 with process_lock:
                     if process_id in active_processes:
                         active_processes[process_id].update({
-                            "status": "error",
-                            "current_stage": f"Error: {str(e)}",
+                            "status": "failed",
+                            "current_stage": f"Conversion failed: {str(e)}",
                             "end_time": time.time(),
                             "can_pause": False
                         })
                 
-                # Clean up thread reference
-                if process_id in conversion_threads:
-                    del conversion_threads[process_id]
+                raise
 
         # Start the thread and track it
-        thread = threading.Thread(target=conversion_thread, daemon=True)
+        thread = threading.Thread(target=safe_thread_run(conversion_thread), daemon=True)
         thread.start()
         
         # Store thread reference for cleanup
@@ -1318,9 +1188,7 @@ def hex_edit_files():
                             "can_pause": False
                         })
                         
-                        # Update statistics
-                        for result in results:
-                            stats_tracker.increment_hexedit(success=result.get("success", False))
+                        # Statistics are now updated in video_converter.py
 
                 # Clean up thread reference
                 if process_id in conversion_threads:
@@ -1461,37 +1329,26 @@ def backend_status():
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/database-stats', methods=['GET', 'OPTIONS'], strict_slashes=False)
-def database_stats():
-    """Get database/statistics information"""
+def get_database_stats():
+    """Get database statistics from centralized StatisticsTracker"""
+    logger.info("[API] Received database-stats request")
+    
     if request.method == 'OPTIONS':
         return '', 200
+    
     try:
-        logger.info("[API] database-stats endpoint called")
-        logger.info(f"[API] stats_tracker exists: {stats_tracker is not None}")
-        
         stats = stats_tracker.get_stats()
-        logger.info(f"[API] Retrieved stats: {stats}")
-        
-        response_data = {
+        logger.info(f"[API] Retrieved database stats: {stats}")
+        return jsonify({
             "success": True,
-            "data": {
-                "total_conversions": stats["total_conversions"],
-                "successful_conversions": stats["successful_conversions"],
-                "failed_conversions": stats["failed_conversions"],
-                "total_hexedits": stats["total_hexedits"],
-                "successful_hexedits": stats["successful_hexedits"],
-                "failed_hexedits": stats["failed_hexedits"],
-                "total_stickers_created": stats["total_stickers_created"],
-                "session_started": stats["session_started"],
-                "uptime_seconds": stats["uptime_seconds"]
-            }
-        }
-        
-        logger.info(f"[API] Sending response: {response_data}")
-        return jsonify(response_data)
+            "data": stats
+        })
     except Exception as e:
-        logger.error(f"Error getting database stats: {e}", exc_info=True)
-        return jsonify({"success": False, "error": str(e)}), 500
+        logger.error(f"[API] Error fetching database stats: {str(e)}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 
 @app.route('/api/reset-stats', methods=['POST', 'OPTIONS'], strict_slashes=False)
 def reset_stats():
