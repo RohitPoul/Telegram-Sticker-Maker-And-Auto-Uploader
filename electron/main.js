@@ -94,7 +94,7 @@ function startPythonBackend() {
             },
         });
         
-        // Log backend output for debugging
+        // Always log backend output for debugging
         pythonProcess.stdout.on('data', (data) => {
             console.log(`Backend: ${data}`);
         });
@@ -171,9 +171,9 @@ ipcMain.handle("select-directory", async () => {
 
 ipcMain.handle('api-request', async (event, { method, endpoint, data }) => {
     try {
-        // quiet request logging; enable by setting E_MAIN_VERBOSE=1
-        const verbose = process.env.E_MAIN_VERBOSE === '1';
-        if (verbose) {
+        // Only log API requests in debug mode
+        const debugMode = process.env.ELECTRON_DEBUG === '1';
+        if (debugMode) {
             console.log(`[API REQUEST] ${method} ${BACKEND_URL}${endpoint}`);
             if (data) console.log(`[API REQUEST] Data:`, JSON.stringify(data, null, 2));
         }
@@ -193,7 +193,7 @@ ipcMain.handle('api-request', async (event, { method, endpoint, data }) => {
         
         const response = await axios(config);
         
-        if (verbose) console.log(`[API SUCCESS] Status: ${response.status}`);
+        if (debugMode) console.log(`[API SUCCESS] Status: ${response.status}`);
         return { success: true, data: response.data };
     } catch (error) {
         console.error(`[API ERROR] ${error.message}`);
@@ -216,6 +216,17 @@ ipcMain.handle('api-request', async (event, { method, endpoint, data }) => {
 
 ipcMain.handle("open-external", async (event, url) => {
     shell.openExternal(url);
+});
+
+ipcMain.handle('read-stats', async () => {
+    try {
+        const statsPath = path.join(process.cwd(), 'logs', 'stats.json');
+        const raw = fs.readFileSync(statsPath, 'utf8');
+        const data = JSON.parse(raw);
+        return { success: true, data, path: statsPath };
+    } catch (e) {
+        return { success: false, error: e?.message || String(e) };
+    }
 });
 
 // GPU INFO: query DXGI/ANGLE info from Electron
