@@ -6,4 +6,5 @@ contextBridge.exposeInMainWorld("electronAPI", {
   apiRequest: (request) => ipcRenderer.invoke("api-request", request),
   openExternal: (url) => ipcRenderer.invoke("open-external", url),
   getGPUInfo: () => ipcRenderer.invoke("get-gpu-info"),
+  readStats: () => ipcRenderer.invoke('read-stats')
 });
