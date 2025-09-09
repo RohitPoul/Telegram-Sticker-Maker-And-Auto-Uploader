@@ -621,7 +621,7 @@ class TelegramUtilities {
         }
       }
     } catch (error) {
-      if (RENDERER_DEBUG) console.debug("Failed to fetch system stats:", error);
+      // Failed to fetch system stats
     }
   }
 
@@ -652,34 +652,23 @@ class TelegramUtilities {
 
   // Wrap apiRequest with tracing
   async apiRequest(method, path, body = null) {
-    const id = Math.random().toString(36).slice(2, 8);
     const url = `http://127.0.0.1:5000${path}`;
-    const DEBUG = (typeof RENDERER_DEBUG !== 'undefined') ? RENDERER_DEBUG : false;
-    console.log(`🌐 apiRequest#${id} → ${method} ${path}`);
-    if (body) console.log(`📤 Request body:`, body);
     const started = performance.now();
 
-    console.log(`⏳ Making fetch request to ${url}...`);
     const res = await fetch(url, {
         method,
       headers: { 'Content-Type': 'application/json' },
       body: body ? JSON.stringify(body) : null
       });
-    console.log(`📡 Fetch response received:`, res.status, res.statusText);
 
-    console.log(`📖 Reading response text...`);
       const text = await res.text();
-    console.log(`📄 Response text length:`, text.length);
       let json;
-    try { 
+    try {
       json = text ? JSON.parse(text) : {}; 
-      console.log(`✅ JSON parsed successfully:`, json);
     } catch (e) { 
-      console.log(`❌ JSON parse error:`, e);
       json = { raw: text }; 
     }
 
-    if (DEBUG) console.log(`🌐 apiRequest#${id} ← ${res.status} ${method} ${path} (${Math.round(performance.now()-started)}ms)`);
 
       if (!res.ok) {
         const err = new Error(json?.error || `${res.status} ${res.statusText}`);
