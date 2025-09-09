@@ -9,6 +9,7 @@ import logging
 import time
 import re
 from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, Any
 
 # Configure logging
 logger = logging.getLogger(__name__)
