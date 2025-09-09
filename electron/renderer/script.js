@@ -660,27 +660,38 @@ class TelegramUtilities {
     const id = Math.random().toString(36).slice(2, 8);
     const url = `http://127.0.0.1:5000${path}`;
     const DEBUG = (typeof RENDERER_DEBUG !== 'undefined') ? RENDERER_DEBUG : false;
-    if (DEBUG) console.log(`🌐 apiRequest#${id} → ${method} ${path}`);
+    console.log(`🌐 apiRequest#${id} → ${method} ${path}`);
+    if (body) console.log(`📤 Request body:`, body);
     const started = performance.now();
 
+    console.log(`⏳ Making fetch request to ${url}...`);
     const res = await fetch(url, {
-      method,
+        method,
       headers: { 'Content-Type': 'application/json' },
       body: body ? JSON.stringify(body) : null
-    });
+      });
+    console.log(`📡 Fetch response received:`, res.status, res.statusText);
 
-    const text = await res.text();
-    let json;
-    try { json = text ? JSON.parse(text) : {}; } catch (_) { json = { raw: text }; }
+    console.log(`📖 Reading response text...`);
+      const text = await res.text();
+    console.log(`📄 Response text length:`, text.length);
+      let json;
+    try { 
+      json = text ? JSON.parse(text) : {}; 
+      console.log(`✅ JSON parsed successfully:`, json);
+    } catch (e) { 
+      console.log(`❌ JSON parse error:`, e);
+      json = { raw: text }; 
+    }
 
     if (DEBUG) console.log(`🌐 apiRequest#${id} ← ${res.status} ${method} ${path} (${Math.round(performance.now()-started)}ms)`);
 
-    if (!res.ok) {
-      const err = new Error(json?.error || `${res.status} ${res.statusText}`);
-      err.status = res.status;
-      throw err;
-    }
-    return json;
+      if (!res.ok) {
+        const err = new Error(json?.error || `${res.status} ${res.statusText}`);
+        err.status = res.status;
+        throw err;
+      }
+      return json;
   }
 
   setupEventListeners() {
@@ -692,11 +703,14 @@ class TelegramUtilities {
     const browseOutputBtn = document.getElementById("browse-video-output");
     const startConversionBtn = document.getElementById("start-conversion");
     
+    const startHexEditBtn = document.getElementById("start-hex-edit");
+    
     if (RENDERER_DEBUG) console.log("📋 Found buttons:", {
       addVideos: !!addVideosBtn,
       clearVideos: !!clearVideosBtn,
       browseOutput: !!browseOutputBtn,
-      startConversion: !!startConversionBtn
+      startConversion: !!startConversionBtn,
+      startHexEdit: !!startHexEditBtn
     });
     
     if (addVideosBtn) {
@@ -721,10 +735,18 @@ class TelegramUtilities {
     }
     
     if (startConversionBtn) {
+      console.log("✅ Start Conversion button found and event listener added");
       startConversionBtn.addEventListener("click", () => this.startVideoConversion());
+    } else {
+      console.error("❌ start-conversion button not found!");
     }
     
-    document.getElementById("start-hex-edit").addEventListener("click", () => this.startHexEdit());
+    if (startHexEditBtn) {
+      console.log("✅ Start Hex Edit button found and event listener added");
+      startHexEditBtn.addEventListener("click", () => this.startHexEdit());
+    } else {
+      console.error("❌ start-hex-edit button not found!");
+    }
       
     // Add pause/resume event listeners
     const pauseBtn = document.getElementById("pause-conversion");
@@ -952,6 +974,7 @@ class TelegramUtilities {
     // New system management events
     document.getElementById("clear-logs").addEventListener("click", () => this.clearLogs());
     document.getElementById("clear-credentials").addEventListener("click", () => this.clearCredentials());
+    document.getElementById("kill-python-processes").addEventListener("click", () => this.killPythonProcesses());
     
     // Theme selector
     const themeSelector = document.getElementById("theme-selector");
@@ -1892,72 +1915,89 @@ class TelegramUtilities {
   }
 
   async startVideoConversion() {
-    if (RENDERER_DEBUG) console.log("=== START CONVERSION DEBUG ===");
-    if (RENDERER_DEBUG) console.log("Current operation:", this.currentOperation);
-    if (RENDERER_DEBUG) console.log("Video files count:", this.videoFiles.length);
-    if (RENDERER_DEBUG) console.log("Video files list:", this.videoFiles);
-    if (RENDERER_DEBUG) console.log("Output directory:", this.currentVideoOutput);
+    console.log("🎬 START VIDEO CONVERSION BUTTON CLICKED!");
+    console.log("=== START CONVERSION DEBUG ===");
+    console.log("Current operation:", this.currentOperation);
+    console.log("Video files count:", this.videoFiles.length);
+    console.log("Video files list:", this.videoFiles);
+    console.log("Output directory:", this.currentVideoOutput);
     
     // Basic validation
+    console.log("🔍 Step 1: Checking video files...");
     if (this.videoFiles.length === 0) {
-      if (RENDERER_DEBUG) console.log("❌ No video files to convert");
+      console.log("❌ No video files to convert");
       this.showToast("warning", "No Files", "Please add videos to convert.");
       return;
     }
+    console.log("✅ Video files validation passed");
     
+    console.log("🔍 Step 2: Checking output directory...");
     if (!this.currentVideoOutput) {
-      if (RENDERER_DEBUG) console.log("❌ No output directory set");
+      console.log("❌ No output directory set");
       this.showToast("error", "No Output Folder", "Please select an output directory.");
       await this.browseVideoOutput();
-      if (!this.currentVideoOutput) return;
+      if (!this.currentVideoOutput) {
+        console.log("❌ Still no output directory after browse");
+        return;
     }
+    }
+    console.log("✅ Output directory validation passed");
     
-    // Check for operation conflicts
+    console.log("🔍 Step 3: Checking operation conflicts...");
     if (this.currentOperation === 'converting') {
-      if (RENDERER_DEBUG) console.log("❌ Conversion already in progress");
+      console.log("❌ Conversion already in progress");
       this.showToast("warning", "Operation in Progress", "A conversion is already running.");
       return;
     }
+    console.log("✅ Operation conflict check passed");
     
     // Check backend connectivity
-    if (RENDERER_DEBUG) console.log("🔍 Checking backend status...");
+    console.log("🔍 Step 4: Checking backend status...");
     try {
+      console.log("📡 Making health check request...");
       const healthCheck = await this.apiRequest("GET", "/api/health");
       
-      if (RENDERER_DEBUG) console.log("🏥 Health check result:", healthCheck);
+      console.log("🏥 Health check result:", healthCheck);
       
       if (!healthCheck.success) {
-        if (RENDERER_DEBUG) console.log("❌ Backend health check failed");
+        console.log("❌ Backend health check failed");
         this.showToast("error", "Backend Error", "Backend server is not responding");
         return;
       }
+      console.log("✅ Backend health check passed");
     } catch (error) {
-      if (RENDERER_DEBUG) console.error("❌ Backend health check error:", error);
+      console.error("❌ Backend health check error:", error);
       this.showToast("error", "Connection Error", "Cannot connect to backend server");
       return;
     }
     
     // Prepare conversion data
+    console.log("🔍 Step 5: Preparing conversion data...");
     const filesToConvert = this.videoFiles.map(f => f.path);
-    if (RENDERER_DEBUG) console.log("📋 Conversion data prepared:", {
+    console.log("📋 Conversion data prepared:", {
       files: filesToConvert,
       output_dir: this.currentVideoOutput,
       fileCount: filesToConvert.length
     });
     
     // Check if any file paths are invalid
+    console.log("🔍 Step 6: Validating file paths...");
     const invalidFiles = filesToConvert.filter(path => !path || path === 'undefined');
     if (invalidFiles.length > 0) {
-      if (RENDERER_DEBUG) console.error("❌ Invalid file paths found:", invalidFiles);
+      console.error("❌ Invalid file paths found:", invalidFiles);
       this.showToast("error", "Invalid Files", "Some files have invalid paths. Please re-add them.");
       return;
     }
+    console.log("✅ File path validation passed");
     
     // Set operation state
+    console.log("🔍 Step 7: Setting operation state...");
     this.currentOperation = 'converting';
     this.isPaused = false;
+    console.log("✅ Operation state set to 'converting'");
     
     // Update UI - Disable conversion button, enable pause, disable hex edit
+    console.log("🔍 Step 8: Updating UI buttons...");
     const startBtn = document.getElementById("start-conversion");
     const hexBtn = document.getElementById("start-hex-edit");
     const pauseBtn = document.getElementById("pause-conversion");
@@ -1967,42 +2007,53 @@ class TelegramUtilities {
       startBtn.disabled = true;
       startBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Converting...';
       startBtn.style.display = 'inline-flex';
+      console.log("✅ Start button updated");
     }
     
     if (hexBtn) {
       hexBtn.disabled = true;
       hexBtn.style.opacity = '0.5';
       hexBtn.style.display = 'inline-flex';
+      console.log("✅ Hex edit button updated");
     }
     
     if (pauseBtn) {
       pauseBtn.style.display = 'inline-block';
       pauseBtn.disabled = false;
+      console.log("✅ Pause button updated");
     }
     
     if (resumeBtn) {
       resumeBtn.style.display = 'none';
+      console.log("✅ Resume button hidden");
     }
     
     // Force update button states
+    console.log("🔍 Step 9: Updating button states...");
     this.updateButtonStates();
+    console.log("✅ Button states updated");
     
     try {
-      if (RENDERER_DEBUG) console.log("🚀 Sending conversion request to backend...");
+      console.log("🔍 Step 10: Sending conversion request to backend...");
+      console.log("🚀 Making API request to /api/convert-videos...");
       
-      const response = await this.apiRequest("POST", "/api/convert-videos", {
+      const requestData = {
         files: filesToConvert,
         output_dir: this.currentVideoOutput,
         settings: {
           gpu_mode: "auto", // Always use automatic GPU detection
           quality: Number(localStorage.getItem("quality_setting") || 75)
         }
-      });
+      };
       
-      if (RENDERER_DEBUG) console.log("📨 Backend response:", response);
-      if (RENDERER_DEBUG) console.log("📨 Backend response data:", response.data);
-      if (RENDERER_DEBUG) console.log("📨 Backend response data type:", typeof response.data);
-      if (RENDERER_DEBUG) console.log("📨 Backend response keys:", Object.keys(response.data || {}));
+      console.log("📤 Request data:", requestData);
+      
+      const response = await this.apiRequest("POST", "/api/convert-videos", requestData);
+      
+      console.log("📨 Backend response received:", response);
+      console.log("📨 Backend response data:", response.data);
+      console.log("📨 Backend response data type:", typeof response.data);
+      console.log("📨 Backend response keys:", Object.keys(response.data || {}));
       
       if (response.success) {
         // Standardize process ID extraction
@@ -2032,6 +2083,9 @@ class TelegramUtilities {
           // Start progress monitoring
           this.monitorProcess(this.currentProcessId);
           this.showToast("success", "Conversion Started", `Conversion of ${filesToConvert.length} files started!`);
+          
+          // Force immediate stats refresh to show conversion started
+          await this.updateDatabaseStats();
           
           if (startBtn) {
             startBtn.innerHTML = '<i class="fas fa-cog fa-spin"></i> Converting...';
@@ -2142,7 +2196,7 @@ class TelegramUtilities {
         // Check if process is complete
         if (progress && (progress.status === 'completed' || progress.status === 'error')) {
           this.stopProgressMonitoring();
-          this.handleProcessCompletion(progress);
+          await this.handleProcessCompletion(progress);
         }
         
       } catch (error) {
@@ -2165,7 +2219,7 @@ class TelegramUtilities {
   }
 
   // Improved process completion handler
-  handleProcessCompletion(processData) {
+  async handleProcessCompletion(processData) {
     if (RENDERER_DEBUG) console.log("=== PROCESS COMPLETION DEBUG ===");
     if (RENDERER_DEBUG) console.log("🎯 Process completion data:", processData);
     if (RENDERER_DEBUG) console.log("🎯 Current process ID:", this.currentProcessId);
@@ -2250,6 +2304,9 @@ class TelegramUtilities {
       );
     }
     
+    // Force immediate stats refresh to show updated counters
+    await this.updateDatabaseStats();
+    
     // Only reset operation state if ALL files are completed
     if (allFilesCompleted) {
       if (RENDERER_DEBUG) console.log("🎯 ALL files completed, resetting operation state");
@@ -2326,6 +2383,7 @@ class TelegramUtilities {
   }
 
   async startHexEdit() {
+    console.log("🔧 START HEX EDIT BUTTON CLICKED!");
     if (this.currentOperation) {
       this.showToast("warning", "Operation in Progress", "Another operation is already running");
       return;
@@ -2409,6 +2467,10 @@ class TelegramUtilities {
       
       if (response.success) {
         this.showToast("success", "Hex Edit Started", "Hex editing has started");
+        
+        // Force immediate stats refresh to show hex edit started
+        await this.updateDatabaseStats();
+        
         // Use dedicated hex-edit progress monitor (separate from conversion)
         this.startHexProgressMonitoring(processId);
       } else {
@@ -2499,7 +2561,7 @@ class TelegramUtilities {
             this.updateVideoFileList();
           }
           
-          this.handleConversionComplete(progress);
+          await this.handleConversionComplete(progress);
         }
       } catch (error) {
         consecutiveErrors++;
@@ -2553,7 +2615,7 @@ class TelegramUtilities {
           if (RENDERER_DEBUG) console.log(`[HEX] monitor:complete`, { status: progress.status });
           clearInterval(this.progressInterval);
           this.progressInterval = null;
-          this.handleConversionComplete(progress); // Reuse completion UI with wasHexEdit detection inside
+          await this.handleConversionComplete(progress); // Reuse completion UI with wasHexEdit detection inside
         }
       } catch (err) {
         consecutiveErrors += 1;
@@ -2581,7 +2643,7 @@ class TelegramUtilities {
         if (RENDERER_DEBUG) console.log(`[HEX] immediate:completed`, progress);
         clearInterval(this.progressInterval);
         this.progressInterval = null;
-        this.handleConversionComplete(progress);
+        await this.handleConversionComplete(progress);
         return;
       }
       
@@ -2689,7 +2751,7 @@ class TelegramUtilities {
     }
   }
 
-  handleConversionComplete(progress) {
+  async handleConversionComplete(progress) {
     if (RENDERER_DEBUG) console.log(`[COMPLETE] Operation finished with status: ${progress.status}`);
     
     this.stopProgressMonitoring();
@@ -2811,6 +2873,9 @@ class TelegramUtilities {
     });
     
     this.updateVideoFileList();
+    
+    // Force immediate stats refresh to show updated counters
+    await this.updateDatabaseStats();
   }
 
   updateOverallProgress(progress) {
@@ -4405,25 +4470,35 @@ class TelegramUtilities {
         if (RENDERER_DEBUG) console.log("❌ Backend status elements not found!");
       }
 
-      // Update FFmpeg Status - simple status without colors
+      // Update FFmpeg Status - get real status from API
       const ffmpegStatusEl = document.getElementById("ffmpeg-status");
-      if (ffmpegStatusEl) {
-        ffmpegStatusEl.textContent = "Available";
-        if (RENDERER_DEBUG) console.log("✅ FFmpeg status set to: Available");
+      if (ffmpegStatusEl && health?.data?.ffmpeg_available !== undefined) {
+        const ffmpegAvailable = health.data.ffmpeg_available;
+        ffmpegStatusEl.textContent = ffmpegAvailable ? "Available" : "Not Available";
+        ffmpegStatusEl.style.color = ffmpegAvailable ? "#28a745" : "#dc3545";
+        if (RENDERER_DEBUG) console.log(`✅ FFmpeg status set to: ${ffmpegAvailable ? 'Available' : 'Not Available'}`);
+      } else if (ffmpegStatusEl) {
+        ffmpegStatusEl.textContent = "Unknown";
+        ffmpegStatusEl.style.color = "#6c757d";
+        if (RENDERER_DEBUG) console.log("⚠️ FFmpeg status unknown - no data from API");
       }
     } catch (error) {
+      if (RENDERER_DEBUG) console.error("❌ updateSystemInfo failed:", error);
+      
       // If backend is not available, show disconnected state
       const backendStatusEl = document.getElementById("backend-status-text");
       const backendStatusContainer = document.getElementById("backend-status");
       if (backendStatusEl && backendStatusContainer) {
         backendStatusEl.textContent = "Disconnected";
         backendStatusContainer.className = "status-item disconnected";
+        if (RENDERER_DEBUG) console.log("❌ Backend status set to: Disconnected (API call failed)");
       }
       
       const ffmpegStatusEl = document.getElementById("ffmpeg-status");
       if (ffmpegStatusEl) {
         ffmpegStatusEl.textContent = "Unknown";
         ffmpegStatusEl.style.color = "#6c757d";
+        if (RENDERER_DEBUG) console.log("❌ FFmpeg status set to: Unknown (API call failed)");
       }
     }
     
@@ -5017,6 +5092,99 @@ This action cannot be undone. Are you sure?
       } catch (error) {
         this.showToast("error", "Clear Failed", "Failed to clear credentials: " + error.message);
       }
+    }
+  }
+  
+  async killPythonProcesses() {
+    // Show custom confirmation modal
+    this.showKillProcessesModal();
+  }
+
+  showKillProcessesModal() {
+    const modalHtml = `
+      <div class="modal-overlay" id="kill-processes-modal">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3><i class="fas fa-exclamation-triangle" style="color: #ff6b6b;"></i> Kill Python Processes</h3>
+            <button class="modal-close" onclick="window.app?.hideKillProcessesModal()">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="warning-box">
+              <p><strong>⚠️ WARNING:</strong> This will kill ALL Python processes on your system!</p>
+              <p>This includes:</p>
+              <ul>
+                <li>This app's backend</li>
+                <li>Any other Python scripts running</li>
+                <li>Jupyter notebooks</li>
+                <li>Python IDEs</li>
+              </ul>
+              <p><strong>You will need to restart this app after killing the processes.</strong></p>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="window.app?.hideKillProcessesModal()">
+              <i class="fas fa-times"></i> Cancel
+            </button>
+            <button class="btn btn-danger" onclick="window.app?.confirmKillProcesses()">
+              <i class="fas fa-skull-crossbones"></i> Kill All Processes
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Remove existing modal if any
+    const existingModal = document.getElementById('kill-processes-modal');
+    if (existingModal) {
+      existingModal.remove();
+    }
+
+    // Add modal to body
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Add escape key handler
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        this.hideKillProcessesModal();
+        document.removeEventListener('keydown', handleEscape);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+  }
+
+  hideKillProcessesModal() {
+    const modal = document.getElementById('kill-processes-modal');
+    if (modal) {
+      modal.remove();
+    }
+  }
+
+  async confirmKillProcesses() {
+    this.hideKillProcessesModal();
+    
+    try {
+      const response = await this.apiRequest("POST", "/api/kill-python-processes");
+      if (response.success) {
+        this.showToast("success", "Python Processes Killed", response.message);
+        
+        // Show additional info if there were errors
+        if (response.errors && response.errors.length > 0) {
+          console.warn("Some processes couldn't be killed:", response.errors);
+        }
+        
+        // Note: The backend will be killed, so the app might become unresponsive
+        // User will need to restart the app
+        setTimeout(() => {
+          this.showToast("info", "Backend Killed", "The backend has been terminated. Please restart the app.");
+        }, 2000);
+        
+      } else {
+        this.showToast("error", "Kill Failed", response.error || "Failed to kill Python processes");
+      }
+    } catch (error) {
+      this.showToast("error", "Kill Failed", "Failed to kill Python processes: " + error.message);
     }
   }
   
