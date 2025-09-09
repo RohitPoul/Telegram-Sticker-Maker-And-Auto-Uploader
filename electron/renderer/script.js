@@ -1158,7 +1158,6 @@ class TelegramUtilities {
       }
     }
     
-    if (RENDERER_DEBUG) console.log(`📊 Dropped files added: ${addedCount}`);
     
     if (addedCount > 0) {
       this.updateVideoFileList();
@@ -1561,9 +1560,6 @@ class TelegramUtilities {
         }
       }
       
-      if (RENDERER_DEBUG) console.log(`📊 Total files added: ${addedCount}`);
-      if (RENDERER_DEBUG) console.log(`📊 Total files in list: ${this.videoFiles.length}`);
-      if (RENDERER_DEBUG) console.log("📊 Files array:", this.videoFiles);
       
       // Force immediate update
       this.updateVideoFileList();
@@ -3150,7 +3146,6 @@ class TelegramUtilities {
           
           // Check for database lock error
           if (error.message && error.message.includes('database is locked') && retryCount < maxRetries - 1) {
-            if (RENDERER_DEBUG) console.log(`[DEBUG] Database lock detected, retrying in ${(retryCount + 1) * 1000}ms...`);
             await new Promise(resolve => setTimeout(resolve, (retryCount + 1) * 1000));
             retryCount++;
             continue;
@@ -4467,8 +4462,6 @@ class TelegramUtilities {
       const res = await window.electronAPI.readStats();
       if (!res?.success || !res?.data) throw new Error(res?.error || 'readStats failed');
       const s = res.data;
-      console.log('📊 Loaded stats.json:', JSON.stringify(s));
-
       const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = String(val ?? 0); };
 
       setText('total-conversions', s.total_conversions);
@@ -4477,12 +4470,10 @@ class TelegramUtilities {
       setText('total-hexedits', s.total_hexedits);
       setText('successful-hexedits', s.successful_hexedits);
       setText('failed-hexedits', s.failed_hexedits);
-      setText('total-stickers', s.total_stickers_created);
+      setText('total-stickers-created', s.total_stickers_created);
 
       const ses = document.getElementById('session-start') || document.getElementById('session-started');
       if (ses && s.session_started) ses.textContent = new Date(s.session_started * 1000).toLocaleString();
-
-      console.log('📊 Database stats updated from file via preload');
     } catch (e) {
       console.error('❌ updateDatabaseStats (preload) failed:', e);
     }
