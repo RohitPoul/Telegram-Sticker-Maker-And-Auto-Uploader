@@ -897,7 +897,7 @@ def start_video_conversion():
                 raise
 
         # Start the thread and track it
-        thread = threading.Thread(target=safe_thread_run(conversion_thread), daemon=True)
+        thread = threading.Thread(target=conversion_thread, daemon=True)
         thread.start()
         
         # Store thread reference for cleanup
@@ -1421,6 +1421,43 @@ def clear_credentials():
     except Exception as e:
         logger.error(f"Error clearing credentials: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/kill-python-processes', methods=['POST', 'OPTIONS'], strict_slashes=False)
+def kill_python_processes():
+    """Kill all Python processes except the current one"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    try:
+        # Import the kill script
+        from kill_python_processes import kill_python_processes
+        
+        logger.info("Kill Python processes requested")
+        results = kill_python_processes()
+        
+        if results['success']:
+            message = f"Killed {results['killed_count']} Python processes"
+            if results['errors']:
+                message += f" (with {len(results['errors'])} warnings)"
+            
+            return jsonify({
+                "success": True,
+                "message": message,
+                "killed_count": results['killed_count'],
+                "errors": results['errors']
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Failed to kill Python processes",
+                "details": results['errors']
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Error killing Python processes: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 
 # Error handlers
 @app.errorhandler(404)
