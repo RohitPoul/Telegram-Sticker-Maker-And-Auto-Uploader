@@ -1268,6 +1268,57 @@ html {
   color: #ff6b6b;
 }
 
+/* System Management Button Grid */
+.management-buttons-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+.button-row {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  align-items: center;
+}
+
+.button-row.critical-action {
+  justify-content: center;
+  margin-top: 0.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.button-row .btn {
+  flex: 1;
+  min-width: 160px;
+  max-width: 200px;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.button-row .btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.button-row .btn-danger {
+  flex: none;
+  min-width: 220px;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.button-row .btn-danger:hover {
+  background-color: #dc3545;
+  border-color: #dc3545;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(220, 53, 69, 0.4);
+}
+
 /* Animations */
 @keyframes pulse {
   0% {

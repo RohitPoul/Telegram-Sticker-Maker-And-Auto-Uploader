@@ -438,7 +438,7 @@
                 </div>
                 <div class="info-item">
                   <label>Backend Status</label>
-                  <span id="backend-status-text">Connecting...</span>
+                  <span id="settings-backend-status">Connecting...</span>
                 </div>
                 <div class="info-item">
                   <label>FFmpeg Status</label>
@@ -464,18 +464,21 @@
                 <h3><i class="fas fa-cog"></i> System Management</h3>
               </div>
               <div class="card-body">
-                <div class="button-group" style="margin-top: 15px;">
-                  <button class="btn btn-secondary" id="clear-logs">
-                    <i class="fas fa-file-alt"></i> Clear Logs
-                  </button>
-
-                  <button class="btn btn-secondary" id="clear-credentials">
-                    <i class="fas fa-key"></i> Clear Credentials
-                  </button>
-
-                  <button class="btn btn-danger" id="kill-python-processes">
-                    <i class="fas fa-skull-crossbones"></i> Kill Python Processes
-                  </button>
+                <div class="management-buttons-grid">
+                  <div class="button-row">
+                    <button class="btn btn-secondary" id="clear-logs">
+                      <i class="fas fa-file-alt"></i> Clear Logs
+                    </button>
+                    <button class="btn btn-secondary" id="clear-credentials">
+                      <i class="fas fa-key"></i> Clear Credentials
+                    </button>
+                  </div>
+                  
+                  <div class="button-row critical-action">
+                    <button class="btn btn-danger" id="kill-python-processes">
+                      <i class="fas fa-skull-crossbones"></i> Kill Python Processes
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
