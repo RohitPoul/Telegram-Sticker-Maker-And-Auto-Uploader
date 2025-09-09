@@ -1,15 +1,10 @@
 // Debug controls for renderer logs/tests
-const RENDERER_DEBUG = /[?&]debug=1\b/.test(location.search) || localStorage.getItem('debug') === '1';
+const RENDERER_DEBUG = false;
 
-// Only log in debug mode
-if (RENDERER_DEBUG) {
-    if (RENDERER_DEBUG) console.log("🔧 Console logging enabled for debugging");
-    if (RENDERER_DEBUG) console.log("🚀 SCRIPT.JS LOADED - TelegramUtilities class starting...");
-}
+// Debug logging disabled
 
 class TelegramUtilities {
   constructor() {
-    if (RENDERER_DEBUG) console.log("🏗️ TelegramUtilities constructor called");
     this.activeProcesses = new Map();
     this.videoFiles = [];
     this.mediaFiles = [];
@@ -1312,13 +1307,13 @@ class TelegramUtilities {
 
   setupProgressMonitoring() {
     // Set up periodic status checks
-    setInterval(() => {
-      this.updateSystemInfo();
+            setInterval(() => {
+              this.updateSystemInfo();
     }, 5000); // Update every 5 seconds
-    
+            
     // Update database stats every 2 seconds for immediate updates
-    setInterval(() => {
-      this.updateDatabaseStats();
+            setInterval(() => {
+              this.updateDatabaseStats();
     }, 2000); // Update every 2 seconds
     
     // Monitor memory usage
@@ -1915,89 +1910,56 @@ class TelegramUtilities {
   }
 
   async startVideoConversion() {
-    console.log("🎬 START VIDEO CONVERSION BUTTON CLICKED!");
-    console.log("=== START CONVERSION DEBUG ===");
-    console.log("Current operation:", this.currentOperation);
-    console.log("Video files count:", this.videoFiles.length);
-    console.log("Video files list:", this.videoFiles);
-    console.log("Output directory:", this.currentVideoOutput);
     
     // Basic validation
-    console.log("🔍 Step 1: Checking video files...");
     if (this.videoFiles.length === 0) {
-      console.log("❌ No video files to convert");
       this.showToast("warning", "No Files", "Please add videos to convert.");
       return;
     }
-    console.log("✅ Video files validation passed");
     
-    console.log("🔍 Step 2: Checking output directory...");
     if (!this.currentVideoOutput) {
-      console.log("❌ No output directory set");
       this.showToast("error", "No Output Folder", "Please select an output directory.");
       await this.browseVideoOutput();
       if (!this.currentVideoOutput) {
-        console.log("❌ Still no output directory after browse");
         return;
     }
     }
-    console.log("✅ Output directory validation passed");
     
-    console.log("🔍 Step 3: Checking operation conflicts...");
     if (this.currentOperation === 'converting') {
-      console.log("❌ Conversion already in progress");
       this.showToast("warning", "Operation in Progress", "A conversion is already running.");
       return;
     }
-    console.log("✅ Operation conflict check passed");
     
     // Check backend connectivity
-    console.log("🔍 Step 4: Checking backend status...");
     try {
-      console.log("📡 Making health check request...");
       const healthCheck = await this.apiRequest("GET", "/api/health");
       
-      console.log("🏥 Health check result:", healthCheck);
-      
       if (!healthCheck.success) {
-        console.log("❌ Backend health check failed");
         this.showToast("error", "Backend Error", "Backend server is not responding");
         return;
       }
-      console.log("✅ Backend health check passed");
     } catch (error) {
-      console.error("❌ Backend health check error:", error);
+      console.error("Backend health check error:", error);
       this.showToast("error", "Connection Error", "Cannot connect to backend server");
       return;
     }
     
     // Prepare conversion data
-    console.log("🔍 Step 5: Preparing conversion data...");
     const filesToConvert = this.videoFiles.map(f => f.path);
-    console.log("📋 Conversion data prepared:", {
-      files: filesToConvert,
-      output_dir: this.currentVideoOutput,
-      fileCount: filesToConvert.length
-    });
     
     // Check if any file paths are invalid
-    console.log("🔍 Step 6: Validating file paths...");
     const invalidFiles = filesToConvert.filter(path => !path || path === 'undefined');
     if (invalidFiles.length > 0) {
-      console.error("❌ Invalid file paths found:", invalidFiles);
+      console.error("Invalid file paths found:", invalidFiles);
       this.showToast("error", "Invalid Files", "Some files have invalid paths. Please re-add them.");
       return;
     }
-    console.log("✅ File path validation passed");
     
     // Set operation state
-    console.log("🔍 Step 7: Setting operation state...");
     this.currentOperation = 'converting';
     this.isPaused = false;
-    console.log("✅ Operation state set to 'converting'");
     
     // Update UI - Disable conversion button, enable pause, disable hex edit
-    console.log("🔍 Step 8: Updating UI buttons...");
     const startBtn = document.getElementById("start-conversion");
     const hexBtn = document.getElementById("start-hex-edit");
     const pauseBtn = document.getElementById("pause-conversion");
@@ -2007,36 +1969,27 @@ class TelegramUtilities {
       startBtn.disabled = true;
       startBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Converting...';
       startBtn.style.display = 'inline-flex';
-      console.log("✅ Start button updated");
     }
     
     if (hexBtn) {
       hexBtn.disabled = true;
       hexBtn.style.opacity = '0.5';
       hexBtn.style.display = 'inline-flex';
-      console.log("✅ Hex edit button updated");
     }
     
     if (pauseBtn) {
       pauseBtn.style.display = 'inline-block';
       pauseBtn.disabled = false;
-      console.log("✅ Pause button updated");
     }
     
     if (resumeBtn) {
       resumeBtn.style.display = 'none';
-      console.log("✅ Resume button hidden");
     }
     
     // Force update button states
-    console.log("🔍 Step 9: Updating button states...");
     this.updateButtonStates();
-    console.log("✅ Button states updated");
     
     try {
-      console.log("🔍 Step 10: Sending conversion request to backend...");
-      console.log("🚀 Making API request to /api/convert-videos...");
-      
       const requestData = {
         files: filesToConvert,
         output_dir: this.currentVideoOutput,
@@ -2046,14 +1999,7 @@ class TelegramUtilities {
         }
       };
       
-      console.log("📤 Request data:", requestData);
-      
       const response = await this.apiRequest("POST", "/api/convert-videos", requestData);
-      
-      console.log("📨 Backend response received:", response);
-      console.log("📨 Backend response data:", response.data);
-      console.log("📨 Backend response data type:", typeof response.data);
-      console.log("📨 Backend response keys:", Object.keys(response.data || {}));
       
       if (response.success) {
         // Standardize process ID extraction
@@ -2071,7 +2017,6 @@ class TelegramUtilities {
         
         if (processId) {
           this.currentProcessId = processId;
-          if (RENDERER_DEBUG) console.log("✅ Conversion started successfully with process ID:", this.currentProcessId);
           
           // Add process to activeProcesses
           this.activeProcesses.set(this.currentProcessId, {
@@ -2091,7 +2036,7 @@ class TelegramUtilities {
             startBtn.innerHTML = '<i class="fas fa-cog fa-spin"></i> Converting...';
           }
         } else {
-          if (RENDERER_DEBUG) console.error("❌ No process_id received from backend");
+          console.error("No process_id received from backend");
           this.showToast("error", "Conversion Error", "Failed to get process ID from backend");
           this.resetOperationState();
         }
@@ -2100,7 +2045,7 @@ class TelegramUtilities {
       }
       
     } catch (error) {
-      if (RENDERER_DEBUG) console.error("❌ Conversion start error:", error);
+      console.error("Conversion start error:", error);
       this.showToast("error", "Conversion Error", error.message);
       this.resetOperationState();
       
@@ -2116,7 +2061,6 @@ class TelegramUtilities {
       this.updateButtonStates();
     }
     
-    if (RENDERER_DEBUG) console.log("=== START CONVERSION DEBUG END ===");
   }
 
   // Unified progress monitoring system
