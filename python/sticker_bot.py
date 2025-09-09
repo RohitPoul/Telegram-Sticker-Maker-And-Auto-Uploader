@@ -330,7 +330,12 @@ class SimpleConversationManager:
         
         while time.time() - start_time < timeout:
             try:
-                response = await asyncio.wait_for(self.response_queue.get(), timeout=2.0)
+                # Use a more thread-safe approach to avoid signal issues
+                try:
+                    response = await asyncio.wait_for(self.response_queue.get(), timeout=2.0)
+                except asyncio.TimeoutError:
+                    # Continue waiting - this is expected
+                    continue
                 
                 if response.response_type == expected_type:
                     self.logger.info(f"[SUCCESS] Received expected response: {expected_type.value}")
@@ -342,8 +347,10 @@ class SimpleConversationManager:
                 
                 self.logger.warning(f"[WARNING] Unexpected response type: {response.response_type.value}")
                 
-            except asyncio.TimeoutError:
-                continue
+            except Exception as e:
+                # Log any other errors but continue waiting
+                self.logger.warning(f"[WAIT] Error while waiting: {e}")
+                await asyncio.sleep(0.1)  # Small delay before retrying
         
         raise TimeoutError(f"Timeout waiting for {expected_type.value}")
 
@@ -396,8 +403,18 @@ class StickerBotCore:
         # Connection state tracking
         self._connection_lock = threading.Lock()
         self._last_connection_attempt = None
+        self.session_file = None  # Track current session file
         
         telegram_logger.info(f"[DEBUG] StickerBotCore initialized successfully in thread: {thread_name}")
+    
+    def monitor_session_file(self):
+        """Monitor session file and log if it gets deleted"""
+        if self.session_file and os.path.exists(self.session_file):
+            telegram_logger.info(f"[SESSION] Session file exists: {self.session_file}")
+        elif self.session_file:
+            telegram_logger.warning(f"[SESSION] Session file DELETED: {self.session_file}")
+        else:
+            telegram_logger.info(f"[SESSION] No session file tracked")
     
     def cleanup_connection(self):
         """
@@ -446,16 +463,17 @@ class StickerBotCore:
                 self.bot_peer = None
                 telegram_logger.info(f"[DEBUG] Bot peer reference cleared in thread: {thread_name}")
                 
-                # Clean up session files to prevent database locks
+                # Smart session cleanup - only remove temporary/invalid sessions
                 try:
-                    telegram_logger.info(f"[DEBUG] Cleaning up session files in thread: {thread_name}")
-                    session_pattern = f'session_*.session*'
-                    for session_file in glob.glob(session_pattern):
+                    telegram_logger.info(f"[DEBUG] Smart session cleanup in thread: {thread_name}")
+                    # Only remove temporary sessions, keep persistent ones
+                    temp_session_pattern = f'temp_session_*.session*'
+                    for session_file in glob.glob(temp_session_pattern):
                         try:
                             os.remove(session_file)
-                            telegram_logger.info(f"[DEBUG] Removed session file: {session_file}")
+                            telegram_logger.info(f"[DEBUG] Removed temporary session file: {session_file}")
                         except Exception as e:
-                            telegram_logger.warning(f"[DEBUG] Could not remove session file {session_file}: {e}")
+                            telegram_logger.warning(f"[DEBUG] Could not remove temp session file {session_file}: {e}")
                             
                     # Force garbage collection to release any lingering connections
                     import gc
@@ -516,18 +534,25 @@ class StickerBotCore:
         try:
             telegram_logger.info(f"[DEBUG] Starting connection process in thread: {thread_name}")
             
-            # Clean up any existing session files before starting
+            # Smart session management - reuse existing sessions when possible
             try:
-                telegram_logger.info(f"[DEBUG] Cleaning up existing session files in thread: {thread_name}")
-                session_pattern = f'session_*.session*'
-                for session_file in glob.glob(session_pattern):
-                    try:
-                        os.remove(session_file)
-                        telegram_logger.info(f"[DEBUG] Removed existing session file: {session_file}")
-                    except Exception as e:
-                        telegram_logger.warning(f"[DEBUG] Could not remove existing session file {session_file}: {e}")
+                telegram_logger.info(f"[DEBUG] Checking for existing sessions in thread: {thread_name}")
+                # Look for existing persistent sessions
+                persistent_sessions = glob.glob('session_*.session')
+                if persistent_sessions:
+                    telegram_logger.info(f"[DEBUG] Found existing persistent sessions: {persistent_sessions}")
+                    # Only clean up temporary sessions
+                    temp_sessions = glob.glob('temp_session_*.session*')
+                    for temp_file in temp_sessions:
+                        try:
+                            os.remove(temp_file)
+                            telegram_logger.info(f"[DEBUG] Removed temporary session: {temp_file}")
+                        except Exception as e:
+                            telegram_logger.warning(f"[DEBUG] Could not remove temp session {temp_file}: {e}")
+                else:
+                    telegram_logger.info(f"[DEBUG] No existing persistent sessions found")
             except Exception as e:
-                telegram_logger.warning(f"[DEBUG] Error during initial session cleanup: {e}")
+                telegram_logger.warning(f"[DEBUG] Error during session check: {e}")
             
             # Normalize phone number
             safe_phone_number = safe_phone_number.strip()
@@ -548,24 +573,47 @@ class StickerBotCore:
                     "phone_number": safe_phone_number
                 }
             
-            # Create in-memory session to avoid database locks
-            telegram_logger.info(f"[DEBUG] Creating in-memory TelegramClient in thread: {thread_name}")
+            # Smart session creation - reuse existing or create persistent session
+            telegram_logger.info(f"[DEBUG] Creating TelegramClient in thread: {thread_name}")
             
-            # Use unique session name to avoid conflicts
-            import uuid
-            session_name = f"temp_session_{uuid.uuid4().hex[:8]}"
+            # Check for existing persistent session in current directory and python directory
+            persistent_session = None
+            session_dirs = ['.', 'python', '..']
             
-            # Try in-memory first, fallback to temporary file if needed
-            try:
-                self.client = TelegramClient(None, safe_api_id, safe_api_hash)  # None = in-memory session
-                telegram_logger.info(f"[DEBUG] In-memory TelegramClient created successfully")
-            except Exception as memory_error:
-                telegram_logger.warning(f"[DEBUG] In-memory client failed: {memory_error}, trying file session")
-                self.client = TelegramClient(session_name, safe_api_id, safe_api_hash)
-                telegram_logger.info(f"[DEBUG] File-based TelegramClient created: {session_name}")
+            for session_dir in session_dirs:
+                session_pattern = os.path.join(session_dir, 'session_*.session')
+                for session_file in glob.glob(session_pattern):
+                    if os.path.exists(session_file):
+                        persistent_session = session_file.replace('.session', '')
+                        telegram_logger.info(f"[SESSION] Found existing persistent session: {persistent_session}")
+                        break
+                if persistent_session:
+                    break
+            
+            if persistent_session:
+                # Reuse existing session
+                try:
+                    self.client = TelegramClient(persistent_session, safe_api_id, safe_api_hash)
+                    self.session_file = persistent_session
+                    telegram_logger.info(f"[SESSION] Reusing persistent session: {persistent_session}")
+                except Exception as e:
+                    telegram_logger.warning(f"[SESSION] Failed to reuse session {persistent_session}: {e}, creating new")
+                    persistent_session = None
+            
+            if not persistent_session:
+                # Create new persistent session in python directory
+                import uuid
+                session_name = f"session_{uuid.uuid4().hex[:8]}"
+                # Ensure session is created in python directory
+                if not os.path.exists('python'):
+                    os.makedirs('python', exist_ok=True)
+                session_path = os.path.join('python', session_name)
+                self.client = TelegramClient(session_path, safe_api_id, safe_api_hash)
+                self.session_file = session_path
+                telegram_logger.info(f"[SESSION] Created new persistent session: {session_path}")
             
             # Connect to Telegram
-            telegram_logger.info(f"[DEBUG] Attempting to connect to Telegram in thread: {thread_name}")
+            telegram_logger.info(f"[TELEGRAM] Connecting to Telegram...")
             try:
                 run_telegram_coroutine(self.client.connect())
                 telegram_logger.info(f"[DEBUG] Connected to Telegram successfully in thread: {thread_name}")
@@ -983,12 +1031,13 @@ def handle_database_lock_error(e, operation_name):
         active_threads = [t.name for t in threading.enumerate()]
         telegram_logger.info(f"[DATABASE] Active threads during lock: {active_threads}")
         
-        # Try to remove lock files
-        for pattern in ['*.session-journal', '*.session-wal', 'session_*.session*']:
+        # Smart lock file cleanup - only remove temporary lock files
+        lock_patterns = ['*.session-journal', '*.session-wal', 'temp_session_*.session*']
+        for pattern in lock_patterns:
             for lock_file in glob.glob(pattern):
                 try:
                     os.remove(lock_file)
-                    telegram_logger.info(f"[DATABASE] Removed lock file: {lock_file}")
+                    telegram_logger.info(f"[DATABASE] Removed temporary lock file: {lock_file}")
                 except Exception as le:
                     telegram_logger.warning(f"[DATABASE] Could not remove lock file {lock_file}: {le}")
     except Exception as cleanup_error:
@@ -1004,22 +1053,32 @@ def sticker_pack_worker():
             # Unpack task parameters
             pack_name, sticker_type, media_files, process_id = task
             
+            # Update process status to processing
+            from backend import active_processes, process_lock
+            with process_lock:
+                if process_id in active_processes:
+                    active_processes[process_id]['status'] = 'processing'
+                    active_processes[process_id]['current_stage'] = 'Starting sticker pack creation...'
+            
             try:
                 # Perform sticker pack creation
                 result = sticker_bot.create_sticker_pack(pack_name, sticker_type, media_files, process_id)
                 
-                # Optional: You could update a result tracking mechanism here
-                from backend import active_processes
-                if process_id in active_processes:
-                    active_processes[process_id]['result'] = result
-                    active_processes[process_id]['status'] = 'completed'
+                # Update process with result
+                with process_lock:
+                    if process_id in active_processes:
+                        active_processes[process_id]['result'] = result
+                        active_processes[process_id]['status'] = 'completed'
+                        active_processes[process_id]['current_stage'] = 'Sticker pack created successfully'
+                        active_processes[process_id]['progress'] = 100
             
             except Exception as e:
                 # Log error and update process status
-                from backend import active_processes
-                if process_id in active_processes:
-                    active_processes[process_id]['status'] = 'error'
-                    active_processes[process_id]['error'] = str(e)
+                with process_lock:
+                    if process_id in active_processes:
+                        active_processes[process_id]['status'] = 'error'
+                        active_processes[process_id]['current_stage'] = f'Error: {str(e)}'
+                        active_processes[process_id]['error'] = str(e)
                 
                 sticker_bot.logger.error(f"Background sticker pack creation error: {e}")
             
@@ -1249,6 +1308,20 @@ def register_sticker_routes(app):
 
             # Start background worker if not already running
             start_sticker_pack_worker()
+
+            # Add process to active_processes immediately for tracking
+            with process_lock:
+                active_processes[process_id] = {
+                    "status": "queued",
+                    "current_stage": "Waiting in queue...",
+                    "progress": 0,
+                    "total_files": len(media_files),
+                    "completed_files": 0,
+                    "start_time": time.time(),
+                    "type": "sticker_pack",
+                    "pack_name": pack_name,
+                    "sticker_type": sticker_type
+                }
 
             # Add task to queue
             sticker_pack_queue.put((pack_name, sticker_type, media_files, process_id))
