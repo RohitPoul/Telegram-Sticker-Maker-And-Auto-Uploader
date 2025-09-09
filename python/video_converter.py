@@ -666,6 +666,31 @@ class VideoConverterCore:
         self.logger.info(f"[BATCH] Output dir: {output_dir}")
         self.logger.info(f"[BATCH] GPU Mode: {gpu_mode}")
         
+        # Validate inputs
+        if not input_files:
+            self.logger.error("[BATCH] No input files provided!")
+            return []
+        
+        if not output_dir:
+            self.logger.error("[BATCH] No output directory provided!")
+            return []
+        
+        # Log full input file details
+        for i, input_file in enumerate(input_files):
+            self.logger.info(f"[BATCH] File {i+1}: {input_file}")
+            if not os.path.exists(input_file):
+                self.logger.error(f"[BATCH] Input file does not exist: {input_file}")
+            else:
+                file_size = os.path.getsize(input_file)
+                self.logger.info(f"[BATCH] File {i+1} size: {file_size} bytes")
+        
+        # Import StatisticsTracker for centralized stats management
+        try:
+            from stats_tracker import stats_tracker
+        except ImportError as e:
+            self.logger.error(f"[BATCH] Failed to import StatisticsTracker: {e}")
+            stats_tracker = None
+        
         # Start resource monitoring
         self.gpu_manager.start_monitoring(interval=2.0)
         
@@ -791,6 +816,22 @@ class VideoConverterCore:
             # Stop monitoring
             self.gpu_manager.stop_monitoring()
             
+            # Update statistics using centralized StatisticsTracker
+            self.logger.info(f"[BATCH] Updating stats for {len(results)} results")
+            for i, result in enumerate(results):
+                success = result.get("success", False)
+                self.logger.info(f"[BATCH] Result {i}: success={success}")
+                if stats_tracker:
+                    # Log before increment for traceability
+                    if success:
+                        self.logger.info("[STATS] conversion success +1 (about to update stats.json)")
+                    else:
+                        self.logger.info("[STATS] conversion fail +1 (about to update stats.json)")
+                    stats_tracker.increment_conversion(success=success)
+                else:
+                    self.logger.warning(f"[BATCH] StatisticsTracker not available, skipping stats update")
+            self.logger.info(f"[BATCH] Stats updated successfully")
+            
             return results
             
         except Exception as e:
@@ -884,4 +925,29 @@ class VideoConverterCore:
             self.logger.error(f"Error updating hex edit final progress: {e}")
 
         self.logger.info(f"[HEX COMPLETE] Batch hex edit completed. Success: {completed_files}/{len(results)}")
+        
+        # Update statistics for hex edits using centralized StatisticsTracker
+        try:
+            # Import StatisticsTracker for centralized stats management
+            try:
+                from stats_tracker import stats_tracker
+            except ImportError as e:
+                self.logger.error(f"[HEX] Failed to import StatisticsTracker: {e}")
+                stats_tracker = None
+            
+            for result in results:
+                success = result.get("success", False)
+                if stats_tracker:
+                    # Log before increment for traceability
+                    if success:
+                        self.logger.info("[STATS] hexedit success +1 (about to update stats.json)")
+                    else:
+                        self.logger.info("[STATS] hexedit fail +1 (about to update stats.json)")
+                    stats_tracker.increment_hexedit(success=success)
+                else:
+                    self.logger.warning(f"[HEX] StatisticsTracker not available, skipping stats update")
+            self.logger.info(f"[HEX COMPLETE] Stats updated for hex edits")
+        except Exception as e:
+            self.logger.error(f"[HEX COMPLETE] Failed to update stats: {e}")
+        
         return results
