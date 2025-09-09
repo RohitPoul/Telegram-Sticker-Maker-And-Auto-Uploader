@@ -14,6 +14,9 @@ from typing import Dict, Any
 # Configure logging
 logger = logging.getLogger(__name__)
 
+# Global session tracking
+current_session_file = None
+
 class TelegramConnectionHandler:
     """
     Thread-safe wrapper for Telegram operations.
@@ -175,9 +178,39 @@ class TelegramConnectionHandler:
                             'phone_number': safe_phone_number
                         }
                     
-                    # Create client with in-memory session
+                    # Create client with persistent session
                     logger.critical(f"[CRITICAL] Creating TelegramClient with API ID: {api_id}")
-                    client = TelegramClient(None, int(api_id), api_hash)
+                    
+                    # Check for existing persistent session
+                    import glob
+                    persistent_session = None
+                    session_dirs = ['.', 'python', '..']
+                    
+                    for session_dir in session_dirs:
+                        session_pattern = os.path.join(session_dir, 'session_*.session')
+                        for session_file in glob.glob(session_pattern):
+                            if os.path.exists(session_file):
+                                persistent_session = session_file.replace('.session', '')
+                                logger.critical(f"[SESSION] Found existing persistent session: {persistent_session}")
+                                break
+                        if persistent_session:
+                            break
+                    
+                    if not persistent_session:
+                        # Create new persistent session
+                        import uuid
+                        session_name = f"session_{uuid.uuid4().hex[:8]}"
+                        if not os.path.exists('python'):
+                            os.makedirs('python', exist_ok=True)
+                        persistent_session = os.path.join('python', session_name)
+                        logger.critical(f"[SESSION] Creating new persistent session: {persistent_session}")
+                    
+                    client = TelegramClient(persistent_session, int(api_id), api_hash)
+                    
+                    # Store session file for monitoring
+                    global current_session_file
+                    current_session_file = persistent_session
+                    logger.critical(f"[SESSION] Tracking session file: {current_session_file}")
                     
                     # Connect
                     logger.critical("[CRITICAL] Connecting to Telegram...")
