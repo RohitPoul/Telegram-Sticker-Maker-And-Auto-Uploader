@@ -43,15 +43,11 @@ class TelegramUtilities {
     this.initializeTelegramConnection();
     
     // Update stats immediately on startup (only once)
-    if (RENDERER_DEBUG) console.log("🔄 CALLING updateSystemInfo() IMMEDIATELY...");
     this.updateSystemInfo();
-    
-    if (RENDERER_DEBUG) console.log("🔄 CALLING updateDatabaseStats() IMMEDIATELY...");
     this.updateDatabaseStats();
     
     // Add manual refresh function for testing
     window.forceRefreshStats = () => {
-      if (RENDERER_DEBUG) console.log("🔄 Force refreshing stats...");
       this.updateSystemInfo();
       this.updateDatabaseStats();
     };
@@ -4339,68 +4335,38 @@ class TelegramUtilities {
 
     async updateSystemInfo() {
     try {
-      if (RENDERER_DEBUG) console.log("🔄 updateSystemInfo() CALLED - Starting...");
-      if (RENDERER_DEBUG) console.log("🌐 Making API request to /api/health...");
       const health = await this.apiRequest("GET", "/api/health");
-      if (RENDERER_DEBUG) console.log("📊 Backend status response:", health);
-      if (RENDERER_DEBUG) console.log("📊 Response success:", health?.success);
-      if (RENDERER_DEBUG) console.log("📊 Response data:", health?.data);
-      
-      if (RENDERER_DEBUG) console.log("📊 FULL Health Response:", JSON.stringify(health, null, 2));
-      if (RENDERER_DEBUG) console.log("📊 Response data:", health?.data);
-      if (RENDERER_DEBUG) console.log("📊 Health Success:", health?.success);
-      if (RENDERER_DEBUG) console.log("📊 Health Status:", health?.status);
       
       // Update Backend Status - just show Connected/Disconnected
-      if (RENDERER_DEBUG) console.log("🔍 Looking for backend status elements...");
       const backendStatusEl = document.getElementById("backend-status-text");
       const backendStatusContainer = document.getElementById("backend-status");
-      if (RENDERER_DEBUG) console.log("🔍 backendStatusEl found:", !!backendStatusEl);
-      if (RENDERER_DEBUG) console.log("🔍 backendStatusContainer found:", !!backendStatusContainer);
       
       // More robust backend status detection
       const isBackendHealthy = health && 
         (health.success === true || 
          (health.status && health.status.toLowerCase().includes('connected')));
       
-      if (RENDERER_DEBUG) console.log("📊 Backend Health Check:", {
-        success: health?.success,
-        status: health?.status,
-        isHealthy: isBackendHealthy
-      });
       
       if (backendStatusEl && backendStatusContainer) {
         if (isBackendHealthy) {
-          if (RENDERER_DEBUG) console.log("✅ Health check successful - setting Connected");
           backendStatusEl.textContent = "Connected";
           backendStatusContainer.className = "status-item connected";
-          if (RENDERER_DEBUG) console.log("✅ Backend status updated: Connected");
           
           // Also update the settings page backend status
-          const settingsBackendStatus = document.getElementById("backend-status-text");
+          const settingsBackendStatus = document.getElementById("settings-backend-status");
           if (settingsBackendStatus) {
             settingsBackendStatus.textContent = "Connected";
-            if (RENDERER_DEBUG) console.log("✅ Settings backend status updated: Connected");
-          } else {
-            if (RENDERER_DEBUG) console.log("❌ settingsBackendStatus not found");
           }
         } else {
-          if (RENDERER_DEBUG) console.log("❌ Health check failed - setting Disconnected");
           backendStatusEl.textContent = "Disconnected";
           backendStatusContainer.className = "status-item disconnected";
-          if (RENDERER_DEBUG) console.log("❌ Backend status failed:", health);
           
           // Also update the settings page backend status
-          const settingsBackendStatus = document.getElementById("backend-status-text");
+          const settingsBackendStatus = document.getElementById("settings-backend-status");
           if (settingsBackendStatus) {
             settingsBackendStatus.textContent = "Disconnected";
-            if (RENDERER_DEBUG) console.log("✅ Settings backend status updated: Disconnected");
-          } else {
-            if (RENDERER_DEBUG) console.log("❌ settingsBackendStatus not found");
           }
         }
-      } else {
-        if (RENDERER_DEBUG) console.log("❌ Backend status elements not found!");
       }
 
       // Update FFmpeg Status - get real status from API
@@ -4409,14 +4375,12 @@ class TelegramUtilities {
         const ffmpegAvailable = health.data.ffmpeg_available;
         ffmpegStatusEl.textContent = ffmpegAvailable ? "Available" : "Not Available";
         ffmpegStatusEl.style.color = ffmpegAvailable ? "#28a745" : "#dc3545";
-        if (RENDERER_DEBUG) console.log(`✅ FFmpeg status set to: ${ffmpegAvailable ? 'Available' : 'Not Available'}`);
       } else if (ffmpegStatusEl) {
         ffmpegStatusEl.textContent = "Unknown";
         ffmpegStatusEl.style.color = "#6c757d";
-        if (RENDERER_DEBUG) console.log("⚠️ FFmpeg status unknown - no data from API");
       }
     } catch (error) {
-      if (RENDERER_DEBUG) console.error("❌ updateSystemInfo failed:", error);
+      console.error("updateSystemInfo failed:", error);
       
       // If backend is not available, show disconnected state
       const backendStatusEl = document.getElementById("backend-status-text");
@@ -4424,14 +4388,18 @@ class TelegramUtilities {
       if (backendStatusEl && backendStatusContainer) {
         backendStatusEl.textContent = "Disconnected";
         backendStatusContainer.className = "status-item disconnected";
-        if (RENDERER_DEBUG) console.log("❌ Backend status set to: Disconnected (API call failed)");
+      }
+      
+      // Also update settings panel backend status
+      const settingsBackendStatus = document.getElementById("settings-backend-status");
+      if (settingsBackendStatus) {
+        settingsBackendStatus.textContent = "Disconnected";
       }
       
       const ffmpegStatusEl = document.getElementById("ffmpeg-status");
       if (ffmpegStatusEl) {
         ffmpegStatusEl.textContent = "Unknown";
         ffmpegStatusEl.style.color = "#6c757d";
-        if (RENDERER_DEBUG) console.log("❌ FFmpeg status set to: Unknown (API call failed)");
       }
     }
     
