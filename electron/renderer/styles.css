@@ -1237,6 +1237,37 @@ html {
   justify-content: flex-end;
 }
 
+/* Warning Box for Kill Processes Modal */
+.warning-box {
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid rgba(255, 107, 107, 0.3);
+  border-radius: var(--border-radius);
+  padding: 1.5rem;
+  margin: 1rem 0;
+}
+
+.warning-box p {
+  margin-bottom: 1rem;
+  color: var(--text-primary);
+}
+
+.warning-box p:last-child {
+  margin-bottom: 0;
+}
+
+.warning-box ul {
+  margin: 0.5rem 0 1rem 1.5rem;
+  color: var(--text-secondary);
+}
+
+.warning-box li {
+  margin-bottom: 0.25rem;
+}
+
+.warning-box strong {
+  color: #ff6b6b;
+}
+
 /* Animations */
 @keyframes pulse {
   0% {
