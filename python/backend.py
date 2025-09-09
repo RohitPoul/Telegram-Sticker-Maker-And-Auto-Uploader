@@ -185,16 +185,26 @@ def cleanup_telegram_and_sessions():
         # sticker_bot may not be imported
         pass
 
-    # Remove any leftover session files
+    # Smart session cleanup - only remove temporary sessions
     try:
-        for p in Path('.').glob('session_*.session*'):
+        # Only remove temporary sessions, keep persistent ones
+        for p in Path('.').glob('temp_session_*.session*'):
             try:
                 p.unlink()
-                logger.info(f"[CLEANUP] Deleted session file: {p}")
+                logger.info(f"[CLEANUP] Deleted temporary session file: {p}")
             except Exception as e:
-                logger.warning(f"[CLEANUP] Could not delete session file {p}: {e}")
+                logger.warning(f"[CLEANUP] Could not delete temp session file {p}: {e}")
+        
+        # Clean up lock files that might cause issues
+        for p in Path('.').glob('*.session-journal'):
+            try:
+                p.unlink()
+                logger.info(f"[CLEANUP] Deleted session journal: {p}")
+            except Exception as e:
+                logger.warning(f"[CLEANUP] Could not delete session journal {p}: {e}")
+                
     except Exception as e:
-        logger.warning(f"[CLEANUP] Session file sweep failed: {e}")
+        logger.warning(f"[CLEANUP] Smart session cleanup failed: {e}")
 
 # Register cleanup handlers
 atexit.register(cleanup_processes)
@@ -229,9 +239,14 @@ def graceful_shutdown(signum=None, frame=None):
         logger.error(f"Error during shutdown: {e}")
         sys.exit(1)
 
-# Register signal handlers
-signal.signal(signal.SIGINT, graceful_shutdown)
-signal.signal(signal.SIGTERM, graceful_shutdown)
+# Register signal handlers only in main thread
+try:
+    signal.signal(signal.SIGINT, graceful_shutdown)
+    signal.signal(signal.SIGTERM, graceful_shutdown)
+except ValueError as e:
+    # Signal handlers can only be registered in the main thread
+    logger.warning(f"Could not register signal handlers: {e}")
+    logger.warning("Signal handlers will not be available in this thread")
 
 def validate_file_access(file_paths):
     """Validate that files exist and are accessible"""
@@ -631,14 +646,28 @@ def clear_session():
     if request.method == 'OPTIONS':
         return '', 200
     try:
-        # Clear any session files
-        session_files = Path('.').glob('*.session')
-        for session_file in session_files:
+        # Smart session clearing - only clear temporary sessions
+        temp_session_files = Path('.').glob('temp_session_*.session*')
+        cleared_count = 0
+        for session_file in temp_session_files:
             try:
                 session_file.unlink()
-                logger.info(f"Deleted session file: {session_file}")
+                logger.info(f"Deleted temporary session file: {session_file}")
+                cleared_count += 1
             except Exception as e:
-                logger.warning(f"Failed to delete session file {session_file}: {e}")
+                logger.warning(f"Failed to delete temp session file {session_file}: {e}")
+        
+        # Also clear lock files
+        lock_files = Path('.').glob('*.session-journal')
+        for lock_file in lock_files:
+            try:
+                lock_file.unlink()
+                logger.info(f"Deleted session lock file: {lock_file}")
+                cleared_count += 1
+            except Exception as e:
+                logger.warning(f"Failed to delete lock file {lock_file}: {e}")
+        
+        logger.info(f"Cleared {cleared_count} temporary session files")
         
         # Clear any temp files
         if os.path.exists(Config.TEMP_DIR):
@@ -946,10 +975,14 @@ def get_conversion_progress(process_id):
     with process_lock:
         proc = active_processes.get(process_id)
         if not proc:
-            logger.warning(f"[PROGRESS] Process {process_id} not found")
+            # Provide detailed debugging information
+            available_processes = list(active_processes.keys())
+            logger.warning(f"[PROGRESS] Process {process_id} not found. Available processes: {available_processes}")
             return jsonify({
                 "success": False,
-                "error": "Process not found",
+                "error": f"Process {process_id} not found. Available processes: {available_processes}",
+                "available_processes": available_processes,
+                "process_count": len(active_processes),
                 "status": 404
             }), 404
         
@@ -1469,6 +1502,48 @@ def not_found(error):
 def internal_error(error):
     logger.error(f"500 error: {error}")
     return jsonify({"success": False, "error": "Internal server error"}), 500
+
+@app.route('/api/telegram/session-status', methods=['GET', 'OPTIONS'], strict_slashes=False)
+def telegram_session_status():
+    """Get Telegram session file status"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    try:
+        from sticker_bot import sticker_bot
+        session_info = {
+            "session_file": None,
+            "session_exists": False,
+            "session_valid": False
+        }
+        
+        # Check both sticker_bot and telegram_connection_handler for session file
+        session_file = None
+        if sticker_bot and hasattr(sticker_bot, 'session_file') and sticker_bot.session_file:
+            session_file = sticker_bot.session_file
+        else:
+            # Check telegram_connection_handler
+            try:
+                from telegram_connection_handler import current_session_file
+                if current_session_file:
+                    session_file = current_session_file
+            except:
+                pass
+        
+        if session_file:
+            session_info["session_file"] = session_file
+            session_info["session_exists"] = os.path.exists(session_file)
+            session_info["session_valid"] = session_info["session_exists"] and os.path.getsize(session_file) > 0
+        
+        return jsonify({
+            "success": True,
+            "data": session_info
+        })
+    except Exception as e:
+        logger.error(f"Error checking session status: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 
 if __name__ == '__main__':
     # Check FFmpeg availability
