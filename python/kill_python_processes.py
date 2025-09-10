@@ -18,9 +18,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def kill_python_processes():
+def kill_python_processes(target_our_app_only=True):
     """
-    Kill all Python processes except the current one
+    Kill Python processes - either all or only our app's processes
+    Args:
+        target_our_app_only: If True, only kill processes related to our app
     Returns: dict with results
     """
     results = {
@@ -34,14 +36,39 @@ def kill_python_processes():
         current_pid = os.getpid()
         python_processes = []
         
-        # Find all Python processes
-        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+        # Find Python processes
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'cwd']):
             try:
                 # Check if it's a Python process
                 if proc.info['name'] and 'python' in proc.info['name'].lower():
                     # Skip current process
                     if proc.info['pid'] != current_pid:
-                        python_processes.append(proc)
+                        # If targeting only our app, check if it's related to our app
+                        if target_our_app_only:
+                            is_our_app = False
+                            cmdline = ' '.join(proc.info['cmdline']) if proc.info['cmdline'] else ''
+                            cwd = proc.info['cwd'] or ''
+                            
+                            # Check if it's running our backend, sticker_bot, or related scripts
+                            our_app_indicators = [
+                                'backend.py',
+                                'sticker_bot.py', 
+                                'telegram_connection_handler.py',
+                                'video_converter.py',
+                                'gpu_manager.py',
+                                'Complete Sticker'  # Our app directory
+                            ]
+                            
+                            for indicator in our_app_indicators:
+                                if indicator in cmdline or indicator in cwd:
+                                    is_our_app = True
+                                    break
+                            
+                            if is_our_app:
+                                python_processes.append(proc)
+                        else:
+                            # Kill all Python processes
+                            python_processes.append(proc)
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 continue
         
@@ -94,6 +121,20 @@ def kill_python_processes():
         results["errors"].append(error_msg)
     
     return results
+
+def kill_our_app_processes():
+    """
+    Kill only Python processes related to our app
+    Returns: dict with results
+    """
+    return kill_python_processes(target_our_app_only=True)
+
+def kill_all_python_processes():
+    """
+    Kill all Python processes (original behavior)
+    Returns: dict with results
+    """
+    return kill_python_processes(target_our_app_only=False)
 
 def main():
     """Main function for command line usage"""
