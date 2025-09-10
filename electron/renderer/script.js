@@ -40,7 +40,7 @@ class TelegramUtilities {
     this.loadSettings();
     await this.detectAccelerationMode();
     this.startSystemStatsMonitoring();
-    this.initializeTelegramConnection();
+    await this.initializeTelegramConnection();
     
     // Update stats immediately on startup (only once)
     this.updateSystemInfo();
@@ -1295,10 +1295,17 @@ class TelegramUtilities {
               this.updateSystemInfo();
     }, 5000); // Update every 5 seconds
             
-    // Update database stats every 2 seconds for immediate updates
+    // Update database stats every 1 second for more responsive updates
             setInterval(() => {
               this.updateDatabaseStats();
-    }, 2000); // Update every 2 seconds
+    }, 1000); // Update every 1 second for immediate feedback
+    
+    // More frequent updates during active operations
+    this.activeOperationInterval = setInterval(() => {
+      if (this.currentProcessId || this.currentOperation) {
+        this.forceUpdateDatabaseStats();
+      }
+    }, 500); // Update every 500ms during active operations
     
     // Monitor memory usage
     this.monitorPerformance();
@@ -1437,7 +1444,7 @@ class TelegramUtilities {
           const connectBtnIdle = document.getElementById("connect-telegram");
           if (connectBtnIdle) {
             connectBtnIdle.disabled = false;
-            connectBtnIdle.innerHTML = '<i class="fas fa-plug"></i> Connect';
+            connectBtnIdle.innerHTML = '<i class="fas fa-plug"></i> Connect to Telegram';
           }
           this.telegramConnected = false;
           break;
@@ -1898,6 +1905,9 @@ class TelegramUtilities {
       return;
     }
     
+    // Force immediate database stats update when starting conversion
+    await this.forceUpdateDatabaseStats();
+    
     if (!this.currentVideoOutput) {
       this.showToast("error", "No Output Folder", "Please select an output directory.");
       await this.browseVideoOutput();
@@ -2067,6 +2077,9 @@ class TelegramUtilities {
     
     this.progressInterval = setInterval(async () => {
       try {
+        // Update database stats during active monitoring for immediate feedback
+        await this.forceUpdateDatabaseStats();
+        
         // Check timeout
         const processInfo = this.activeProcesses.get(processId);
         if (!processInfo || Date.now() - processInfo.startTime > MAX_OPERATION_TIME) {
@@ -2140,6 +2153,10 @@ class TelegramUtilities {
     if (this.progressInterval) {
       clearInterval(this.progressInterval);
       this.progressInterval = null;
+    }
+    if (this.activeOperationInterval) {
+      clearInterval(this.activeOperationInterval);
+      this.activeOperationInterval = null;
     }
   }
 
@@ -2313,6 +2330,9 @@ class TelegramUtilities {
       this.showToast("warning", "Operation in Progress", "Another operation is already running");
       return;
     }
+    
+    // Force immediate database stats update when starting hex edit
+    await this.forceUpdateDatabaseStats();
     
     if (this.videoFiles.length === 0) {
       this.showToast("warning", "No Files", "Please add files first");
@@ -2516,6 +2536,9 @@ class TelegramUtilities {
     this.checkHexProgressImmediately(processId);
     
     this.progressInterval = setInterval(async () => {
+      // Update database stats during hex edit monitoring for immediate feedback
+      await this.forceUpdateDatabaseStats();
+      
       // Timeout guard
       if (Date.now() - startTs > LONG_OPERATION_TIMEOUT) {
         if (RENDERER_DEBUG) console.warn(`[HEX] monitor:timeout - stopping polling`);
@@ -2800,7 +2823,7 @@ class TelegramUtilities {
     this.updateVideoFileList();
     
     // Force immediate stats refresh to show updated counters
-    await this.updateDatabaseStats();
+    await this.forceUpdateDatabaseStats();
   }
 
   updateOverallProgress(progress) {
@@ -3211,11 +3234,14 @@ class TelegramUtilities {
       
       this.showToast('error', 'Connection Error', errorMsg);
     } finally {
-      if (RENDERER_DEBUG) console.log('[DEBUG] Resetting connection button');
-      const connectBtn = document.getElementById("connect-telegram");
-      if (connectBtn) {
-        connectBtn.disabled = false;
-        connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect to Telegram';
+      if (RENDERER_DEBUG) console.log('[DEBUG] Checking if button needs reset');
+      // Only reset the button if connection failed (not if it succeeded)
+      if (!this.telegramConnected) {
+        const connectBtn = document.getElementById("connect-telegram");
+        if (connectBtn) {
+          connectBtn.disabled = false;
+          connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect to Telegram';
+        }
       }
     }
   }
@@ -3397,6 +3423,20 @@ class TelegramUtilities {
         return;
       }
       
+      // Validate files before processing
+      const validFiles = files.filter(file => {
+        if (!file || typeof file !== 'string') {
+          console.warn('Invalid file path:', file);
+          return false;
+        }
+        return true;
+      });
+      
+      if (validFiles.length === 0) {
+        this.showToast("warning", "No Valid Files", "No valid image files were selected");
+        return;
+      }
+      
       let addedCount = 0;
       let skippedCount = 0;
       
@@ -3440,11 +3480,21 @@ class TelegramUtilities {
       }
     } catch (error) {
       if (RENDERER_DEBUG) console.error("Error adding images:", error);
-      this.showToast(
-        "error",
-        "Error",
-        "Failed to add image files: " + error.message
-      );
+      
+      // Handle specific Windows file system errors
+      if (error.message && error.message.includes('Errno 22')) {
+        this.showToast(
+          "error",
+          "File Selection Error",
+          "Invalid file path or file access denied. Please check file names and try again."
+        );
+      } else {
+        this.showToast(
+          "error",
+          "Error",
+          "Failed to add image files: " + error.message
+        );
+      }
     }
   }
 
@@ -3458,6 +3508,20 @@ class TelegramUtilities {
       });
       
       if (!files || files.length === 0) {
+        return;
+      }
+      
+      // Validate files before processing
+      const validFiles = files.filter(file => {
+        if (!file || typeof file !== 'string') {
+          console.warn('Invalid file path:', file);
+          return false;
+        }
+        return true;
+      });
+      
+      if (validFiles.length === 0) {
+        this.showToast("warning", "No Valid Files", "No valid video files were selected");
         return;
       }
       
@@ -3504,11 +3568,21 @@ class TelegramUtilities {
       }
     } catch (error) {
       if (RENDERER_DEBUG) console.error("Error adding videos:", error);
-      this.showToast(
-        "error",
-        "Error",
-        "Failed to add video files: " + error.message
-      );
+      
+      // Handle specific Windows file system errors
+      if (error.message && error.message.includes('Errno 22')) {
+        this.showToast(
+          "error",
+          "File Selection Error",
+          "Invalid file path or file access denied. Please check file names and try again."
+        );
+      } else {
+        this.showToast(
+          "error",
+          "Error",
+          "Failed to add video files: " + error.message
+        );
+      }
     }
   }
 
@@ -3795,9 +3869,14 @@ class TelegramUtilities {
     
     try {
       const processId = "sticker_" + Date.now();
+      console.log(`🔧 [FRONTEND] Creating sticker pack with process ID: ${processId}`);
+      console.log(`🔧 [FRONTEND] Pack name: ${packName}`);
+      console.log(`🔧 [FRONTEND] Sticker type: ${stickerType}`);
+      console.log(`🔧 [FRONTEND] Media files count: ${this.mediaFiles.length}`);
+      
       this.showLoadingOverlay("Starting sticker pack creation...");
       
-      const response = await this.apiRequest("POST", "/api/sticker/create-pack", {
+      const requestData = {
         pack_name: packName,
         sticker_type: stickerType,
         media_files: this.mediaFiles.filter((f) => {
@@ -3806,11 +3885,18 @@ class TelegramUtilities {
           return true;
         }),
         process_id: processId,
-      });
+      };
+      
+      console.log(`🔧 [FRONTEND] Sending request data:`, requestData);
+      
+      const response = await this.apiRequest("POST", "/api/sticker/create-pack", requestData);
+      
+      console.log(`🔧 [FRONTEND] Received response:`, response);
       
       this.hideLoadingOverlay();
       
       if (response.success) {
+        console.log(`🔧 [FRONTEND] Creation queued successfully, process ID: ${response.process_id || processId}`);
         this.showToast(
           "success",
           "Creation Queued",
@@ -3825,8 +3911,11 @@ class TelegramUtilities {
         }
         
         // Start monitoring progress
-        this.startStickerProgressMonitoring(response.process_id || processId);
+        const finalProcessId = response.process_id || processId;
+        console.log(`🔧 [FRONTEND] Starting progress monitoring for: ${finalProcessId}`);
+        this.startStickerProgressMonitoring(finalProcessId);
       } else {
+        console.log(`🔧 [FRONTEND] Creation failed:`, response.error);
         this.showToast(
           "error",
           "Creation Failed",
@@ -3835,6 +3924,7 @@ class TelegramUtilities {
       }
     } catch (error) {
       this.hideLoadingOverlay();
+      console.error(`🔧 [FRONTEND] Error creating sticker pack:`, error);
       if (RENDERER_DEBUG) console.error("Error creating sticker pack:", error);
       this.showToast(
         "error",
@@ -3849,12 +3939,28 @@ class TelegramUtilities {
       clearInterval(this.stickerProgressInterval);
     }
     
+    console.log(`🔧 [FRONTEND] Starting progress monitoring for process: ${processId}`);
+    console.log(`🔧 [FRONTEND] Process ID type: ${typeof processId}`);
+    console.log(`🔧 [FRONTEND] Process ID value: "${processId}"`);
+    
     this.stickerProgressInterval = setInterval(async () => {
       try {
-        const response = await this.apiRequest("GET", `/api/conversion-progress/${processId}`);
+        console.log(`🔧 [FRONTEND] Checking status for process: ${processId}`);
         
-        if (response.success) {
-          const progress = response.data.progress;
+        // First, let's check what processes are available
+        try {
+          const debugResponse = await this.apiRequest("GET", "/api/debug/active-processes");
+          console.log(`🔧 [FRONTEND] Debug - Available processes:`, debugResponse);
+        } catch (debugError) {
+          console.log(`🔧 [FRONTEND] Debug endpoint error:`, debugError);
+        }
+        
+        const response = await this.apiRequest("GET", `/api/process-status/${processId}`);
+        console.log(`🔧 [FRONTEND] Process status response:`, response);
+        
+        if (response.success && response.data) {
+          const progress = response.data;
+          console.log(`🔧 [FRONTEND] Progress data:`, progress);
           this.updateStickerProgressDisplay(progress);
           
           // Update individual media file statuses
@@ -3871,18 +3977,34 @@ class TelegramUtilities {
           }
           
           if (progress.status === "completed") {
+            console.log(`🔧 [FRONTEND] Process ${processId} completed successfully`);
             clearInterval(this.stickerProgressInterval);
             this.onStickerProcessCompleted(true, progress);
           } else if (progress.status === "error") {
+            console.log(`🔧 [FRONTEND] Process ${processId} failed with error`);
             clearInterval(this.stickerProgressInterval);
             this.onStickerProcessCompleted(false, progress);
           }
         } else {
+          console.log(`🔧 [FRONTEND] Process ${processId} not found or error:`, response);
           if (RENDERER_DEBUG) console.error("Sticker progress monitoring failed:", response.error);
           clearInterval(this.stickerProgressInterval);
           this.onStickerProcessCompleted(false, { error: response.error });
         }
       } catch (error) {
+        console.error(`🔧 [FRONTEND] Error monitoring progress for ${processId}:`, error);
+        
+        // If we get a database lock error, try to force cleanup
+        if (error && error.message && error.message.includes('database is locked')) {
+          console.log(`🔧 [FRONTEND] Database lock detected, attempting force cleanup...`);
+          try {
+            const cleanupResponse = await this.apiRequest("POST", "/api/force-cleanup-sessions");
+            console.log(`🔧 [FRONTEND] Force cleanup response:`, cleanupResponse);
+          } catch (cleanupError) {
+            console.log(`🔧 [FRONTEND] Force cleanup error:`, cleanupError);
+          }
+        }
+        
         if (RENDERER_DEBUG) console.error("Error monitoring sticker progress:", error);
         clearInterval(this.stickerProgressInterval);
         this.onStickerProcessCompleted(false, { error: error.message });
@@ -4479,6 +4601,16 @@ class TelegramUtilities {
     }
   }
 
+  // Force immediate database stats update - useful during active operations
+  async forceUpdateDatabaseStats() {
+    try {
+      await this.updateDatabaseStats();
+      if (RENDERER_DEBUG) console.log('🔄 Database stats force updated');
+    } catch (e) {
+      console.error('❌ forceUpdateDatabaseStats failed:', e);
+    }
+  }
+
   updateStats() {
     // Do NOT touch database info fields here to avoid overwriting with zeros
     // Keep only non-database UI refresh (e.g., local cache size)
@@ -4940,6 +5072,8 @@ This action cannot be undone. Are you sure?
         const response = await this.apiRequest("POST", "/api/reset-stats");
         if (response.success) {
           this.showToast("success", "Statistics Reset", "All statistics have been reset");
+          // Force immediate database stats update after reset
+          await this.forceUpdateDatabaseStats();
           // Update the display
           await this.updateDatabaseStats();
         } else {
@@ -5930,12 +6064,39 @@ This action cannot be undone. Are you sure?
     });
   }
 
+  // Check for existing Telegram session on startup
+  async checkExistingConnection() {
+    try {
+      if (RENDERER_DEBUG) console.log('[DEBUG] Checking for existing Telegram session...');
+      
+      const response = await this.apiRequest("GET", "/api/telegram/session-status");
+      
+      if (response && response.success && response.data) {
+        const { session_exists, session_valid } = response.data;
+        
+        if (session_exists && session_valid) {
+          if (RENDERER_DEBUG) console.log('[DEBUG] Found valid existing session - setting connected status');
+          this.updateTelegramStatus("connected");
+          return;
+        }
+      }
+      
+      if (RENDERER_DEBUG) console.log('[DEBUG] No valid session found - setting disconnected status');
+      this.updateTelegramStatus("disconnected");
+      
+    } catch (error) {
+      if (RENDERER_DEBUG) console.error('[DEBUG] Error checking session status:', error);
+      // Default to disconnected if we can't check
+      this.updateTelegramStatus("disconnected");
+    }
+  }
+
   // Modify initialization to include input handlers
-  initializeTelegramConnection() {
+  async initializeTelegramConnection() {
     this.logDebug('initializeTelegramConnection()');
     
-    // Check for existing connection status
-    this.updateTelegramStatus("disconnected");
+    // Check for existing connection status first
+    await this.checkExistingConnection();
     
     // Verify all required elements exist
     const apiIdInput = document.getElementById("telegram-api-id");
@@ -6072,12 +6233,16 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
     app = new TelegramUtilities();
     window.app = app;
+    // Force immediate database stats update on app startup
+    app.forceUpdateDatabaseStats();
     if (RENDERER_DEBUG) console.log("✅ App initialized after DOM ready");
   });
 } else {
   // DOM is already loaded (shouldn't happen in normal flow but just in case)
   app = new TelegramUtilities();
   window.app = app;
+  // Force immediate database stats update on app startup
+  app.forceUpdateDatabaseStats();
   if (RENDERER_DEBUG) console.log("✅ App initialized (DOM was already ready)");
 }
 
@@ -6099,6 +6264,8 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && window.app) {
     // Refresh status when page becomes visible
     window.app.updateSystemInfo();
+    // Force immediate database stats update when page becomes visible
+    window.app.forceUpdateDatabaseStats();
   }
 });
 
