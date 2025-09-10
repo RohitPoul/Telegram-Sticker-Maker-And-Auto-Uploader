@@ -16,13 +16,36 @@ const BACKEND_URL = `http://${BACKEND_HOST}:${BACKEND_PORT}`;
 
 function cleanupPythonProcess() {
     if (pythonProcess) {
-        pythonProcess.kill('SIGTERM');
-        setTimeout(() => {
-            if (pythonProcess && !pythonProcess.killed) {
-                pythonProcess.kill('SIGKILL');
-            }
-        }, 5000);
+        console.log("Cleaning up Python process...");
+        try {
+            pythonProcess.kill('SIGTERM');
+            setTimeout(() => {
+                if (pythonProcess && !pythonProcess.killed) {
+                    console.log("Force killing Python process...");
+                    pythonProcess.kill('SIGKILL');
+                }
+            }, 3000); // Reduced timeout for faster cleanup
+        } catch (error) {
+            console.error("Error during Python process cleanup:", error);
+        }
         pythonProcess = null;
+    }
+    
+    // Also try to kill our app's Python processes using the kill script
+    try {
+        const { exec } = require('child_process');
+        const pythonPath = path.join(__dirname, "..", "python");
+        const killScript = path.join(pythonPath, "kill_python_processes.py");
+        
+        exec(`python "${killScript}"`, { cwd: pythonPath }, (error, stdout, stderr) => {
+            if (error) {
+                console.log("Kill script error (expected if no processes to kill):", error.message);
+            } else {
+                console.log("Kill script output:", stdout);
+            }
+        });
+    } catch (error) {
+        console.error("Error running kill script:", error);
     }
 }
 
@@ -55,13 +78,30 @@ function createWindow() {
         // no noisy log
     });
 
-    mainWindow.on('close', async () => {
+    mainWindow.on('close', async (event) => {
         try {
+            console.log("Window closing, starting cleanup...");
+            
+            // Set a timeout to force close if cleanup takes too long
+            const cleanupTimeout = setTimeout(() => {
+                console.log("Cleanup timeout reached, forcing close...");
+                cleanupPythonProcess();
+                mainWindow.destroy();
+            }, 10000); // 10 second timeout
+            
             // Orderly shutdown: release Telegram, stop processes, clear sessions
-            await axios.post(`${BACKEND_URL}/api/sticker/reset-connection`).catch(() => {});
-            await axios.post(`${BACKEND_URL}/api/stop-process`, { process_id: 'ALL' }).catch(() => {});
-            await axios.post(`${BACKEND_URL}/api/clear-session`).catch(() => {});
-            await new Promise(r => setTimeout(r, 1000));
+            await Promise.allSettled([
+                axios.post(`${BACKEND_URL}/api/sticker/reset-connection`, {}, { timeout: 3000 }),
+                axios.post(`${BACKEND_URL}/api/stop-process`, { process_id: 'ALL' }, { timeout: 3000 }),
+                axios.post(`${BACKEND_URL}/api/clear-session`, {}, { timeout: 3000 }),
+                axios.post(`${BACKEND_URL}/api/force-cleanup-sessions`, {}, { timeout: 3000 }),
+                axios.post(`${BACKEND_URL}/api/kill-our-processes`, {}, { timeout: 3000 })
+            ]);
+            
+            clearTimeout(cleanupTimeout);
+            console.log("Cleanup completed successfully");
+        } catch (error) {
+            console.error("Error during cleanup:", error);
         } finally {
             cleanupPythonProcess();
         }
@@ -155,11 +195,52 @@ async function waitForBackend() {
 
 // IPC HANDLERS
 ipcMain.handle("select-files", async (event, options) => {
-    const result = await dialog.showOpenDialog(mainWindow, {
-        properties: ["openFile", "multiSelections"],
-        filters: options.filters || [{ name: "All Files", extensions: ["*"] }],
-    });
-    return result.filePaths;
+    try {
+        const result = await dialog.showOpenDialog(mainWindow, {
+            properties: ["openFile", "multiSelections"],
+            filters: options.filters || [{ name: "All Files", extensions: ["*"] }],
+        });
+        
+        // Check if dialog was cancelled
+        if (result.canceled) {
+            return [];
+        }
+        
+        // Validate file paths and handle Windows-specific issues
+        const validPaths = result.filePaths.filter(filePath => {
+            try {
+                // Check if file exists and is accessible
+                if (!fs.existsSync(filePath)) {
+                    console.warn(`File does not exist: ${filePath}`);
+                    return false;
+                }
+                
+                // Check file path length (Windows limit is ~260 characters)
+                if (filePath.length > 250) {
+                    console.warn(`File path too long: ${filePath}`);
+                    return false;
+                }
+                
+                // Check for invalid characters in filename
+                const fileName = path.basename(filePath);
+                const invalidChars = /[<>:"|?*]/;
+                if (invalidChars.test(fileName)) {
+                    console.warn(`File name contains invalid characters: ${fileName}`);
+                    return false;
+                }
+                
+                return true;
+            } catch (error) {
+                console.warn(`Error validating file path ${filePath}:`, error.message);
+                return false;
+            }
+        });
+        
+        return validPaths;
+    } catch (error) {
+        console.error("Error in select-files handler:", error);
+        return [];
+    }
 });
 
 ipcMain.handle("select-directory", async () => {
@@ -403,10 +484,15 @@ app.on("before-quit", () => {
 process.on("uncaughtException", (error) => {
     console.error("Uncaught Exception:", error?.message || error);
     cleanupPythonProcess();
+    // Force exit after cleanup to prevent hanging
+    setTimeout(() => {
+        process.exit(1);
+    }, 5000);
 });
 
 process.on("unhandledRejection", (reason) => {
     console.error("Unhandled Rejection:", (reason && reason.message) || reason);
+    // Don't exit on unhandled rejections, just log them
 });
 
 process.on('SIGINT', () => {
