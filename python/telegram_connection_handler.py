@@ -6,10 +6,15 @@ Solves the 'no current event loop in thread' issue
 import asyncio
 import threading
 import logging
+import traceback
 import time
 import re
+import os
+import glob
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any
+from flask import jsonify
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -19,8 +24,7 @@ current_session_file = None
 
 class TelegramConnectionHandler:
     """
-    Thread-safe wrapper for Telegram operations.
-    Uses a dedicated thread with its own event loop.
+    Thread-safe wrapper for Telegram operations with simplified event loop management.
     """
     
     def __init__(self):
@@ -36,48 +40,43 @@ class TelegramConnectionHandler:
     
     def _start_event_loop(self):
         """Start a dedicated thread with event loop for Telegram operations"""
-        def run_loop():
-            # Create and set the event loop for this thread
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            self._loop = loop
+        try:
+            # Create a new event loop in a separate thread
+            self._loop = asyncio.new_event_loop()
+            self._thread = threading.Thread(
+                target=self._run_event_loop, 
+                name="TelegramEventLoopThread", 
+                daemon=True
+            )
+            self._thread.start()
             self._running = True
-            
-            try:
-                # Keep the loop running
-                loop.run_forever()
-            finally:
-                loop.close()
-                self._running = False
-        
-        self._thread = threading.Thread(target=run_loop, name="TelegramEventLoop", daemon=True)
-        self._thread.start()
-        
-        # Wait for loop to be ready
-        while self._loop is None or not self._running:
-            time.sleep(0.01)
-        
-        logger.info("Telegram event loop started successfully")
+        except Exception as e:
+            logger.error(f"Failed to start event loop: {e}")
+            self._running = False
+    
+    def _run_event_loop(self):
+        """Run the event loop in a separate thread"""
+        asyncio.set_event_loop(self._loop)
+        try:
+            self._loop.run_forever()
+        except Exception as e:
+            logger.error(f"Event loop error: {e}")
+        finally:
+            self._running = False
     
     def run_async(self, coro):
         """
         Run an async coroutine from any thread safely.
-        Returns the result or raises an exception.
+        Uses the dedicated event loop thread.
         """
-        if not self._loop or not self._running:
+        if not self._running or not self._loop:
             raise RuntimeError("Event loop is not running")
         
-        # Schedule the coroutine in the event loop thread
-        future = asyncio.run_coroutine_threadsafe(coro, self._loop)
-        
         try:
-            # Wait for result with timeout
-            result = future.result(timeout=30)
-            return result
+            future = asyncio.run_coroutine_threadsafe(coro, self._loop)
+            return future.result(timeout=30)
         except Exception as e:
             logger.error(f"Error running async operation: {e}")
-            logger.error(f"Error type: {type(e)}")
-            logger.error(f"Error details: {str(e)}")
             raise
     
     def _validate_inputs(self, api_id: str, api_hash: str, phone_param: str) -> Dict[str, Any]:
@@ -122,11 +121,9 @@ class TelegramConnectionHandler:
 
     def connect_telegram_FIXED(self, api_id: str, api_hash: str, phone_param: str) -> Dict:
         """
-        Connect to Telegram (thread-safe wrapper)
+        Connect to Telegram (thread-safe wrapper) — unified and loop-safe
         """
         from telethon import TelegramClient
-        
-        # DEBUGGING: Log function entry
         logger.critical(f"🔧 HANDLER CALLED WITH PARAMS: api_id={api_id}, api_hash={api_hash}, phone_param={phone_param}")
 
         # Initialize phone_number at the very beginning to prevent scoping issues
@@ -135,7 +132,7 @@ class TelegramConnectionHandler:
         try:
             logger.critical(f"[CRITICAL] Input parameters:")
             logger.critical(f"[CRITICAL] api_id: {api_id} (type: {type(api_id)})")
-            logger.critical(f"[CRITICAL] api_hash: {api_hash[:5]}... (type: {type(api_hash)})")
+            logger.critical(f"[CRITICAL] api_hash: {str(api_hash)[:5]}... (type: {type(api_hash)})")
             logger.critical(f"[CRITICAL] phone_number: {safe_phone_number} (type: {type(safe_phone_number)})")
 
             # Perform input validation
@@ -154,104 +151,53 @@ class TelegramConnectionHandler:
                     'validation_errors': validation_result['errors'],
                     'needs_code': False,
                     'needs_password': False,
-                    'phone_number': safe_phone_number  # Use safe_phone_number here
+                    'phone_number': safe_phone_number
                 }
 
             # Use normalized phone number from validation
             safe_phone_number = validation_result['normalized_phone']
             logger.critical(f"[CRITICAL] Using normalized phone: {safe_phone_number}")
-            
-            # Define the async function with explicit context passing
-            async def _connect():
+
+            # Unify everything on the handler's event loop with a single persistent session
+            async def _connect_on_handler_loop():
                 try:
-                    logger.critical(f"[CRITICAL] _connect() started")
-                    logger.critical(f"[CRITICAL] Using phone_number: {safe_phone_number}")
-                    
-                    # Validate phone number again inside async function
-                    if not safe_phone_number:
-                        logger.critical("[CRITICAL] phone_number is empty in _connect()")
-                        return {
-                            'success': False,
-                            'error': "Phone number is required",
-                            'needs_code': False,
-                            'needs_password': False,
-                            'phone_number': safe_phone_number
-                        }
-                    
-                    # Create client with persistent session
-                    logger.critical(f"[CRITICAL] Creating TelegramClient with API ID: {api_id}")
-                    
-                    # Check for existing persistent session
-                    import glob
-                    persistent_session = None
-                    session_dirs = ['.', 'python', '..']
-                    
-                    for session_dir in session_dirs:
-                        session_pattern = os.path.join(session_dir, 'session_*.session')
-                        for session_file in glob.glob(session_pattern):
-                            if os.path.exists(session_file):
-                                persistent_session = session_file.replace('.session', '')
-                                logger.critical(f"[SESSION] Found existing persistent session: {persistent_session}")
-                                break
-                        if persistent_session:
-                            break
-                    
-                    if not persistent_session:
-                        # Create new persistent session
-                        import uuid
-                        session_name = f"session_{uuid.uuid4().hex[:8]}"
-                        if not os.path.exists('python'):
-                            os.makedirs('python', exist_ok=True)
-                        persistent_session = os.path.join('python', session_name)
-                        logger.critical(f"[SESSION] Creating new persistent session: {persistent_session}")
-                    
-                    client = TelegramClient(persistent_session, int(api_id), api_hash)
-                    
-                    # Store session file for monitoring
+                    import os
                     global current_session_file
-                    current_session_file = persistent_session
-                    logger.critical(f"[SESSION] Tracking session file: {current_session_file}")
-                    
-                    # Connect
-                    logger.critical("[CRITICAL] Connecting to Telegram...")
-                    await client.connect()
-                    logger.critical("[CRITICAL] Connected successfully")
-                    
-                    # Check if authorized
-                    logger.critical("[CRITICAL] Checking authorization...")
-                    is_authorized = await client.is_user_authorized()
+
+                    # Stable persistent session in the python/ directory (no more UUID spam)
+                    base_dir = os.path.dirname(__file__)
+                    session_path = os.path.join(base_dir, 'session_main')
+                    current_session_file = session_path  # tracked by backend session-status
+                    logger.critical(f"[CRITICAL] Using persistent session: {session_path}")
+
+                    # Create client ON THIS LOOP and keep it for future calls
+                    self._client = TelegramClient(session_path, int(api_id), api_hash)
+                    await self._client.connect()
+                    logger.critical("[CRITICAL] Connected successfully on handler loop")
+
+                    is_authorized = await self._client.is_user_authorized()
                     logger.critical(f"[CRITICAL] Authorization status: {is_authorized}")
-                    
+
                     if not is_authorized:
-                        # Send code request
-                        logger.critical(f"[CRITICAL] Sending code request to phone: {safe_phone_number}")
-                        await client.send_code_request(safe_phone_number)
+                        await self._client.send_code_request(safe_phone_number)
                         logger.critical("[CRITICAL] Code request sent successfully")
-                        self._client = client
                         return {
                             'success': True,
                             'needs_code': True,
                             'needs_password': False,
                             'phone_number': safe_phone_number
                         }
-                    
-                    # Already authorized
-                    logger.critical("[CRITICAL] User already authorized, setting up bot interaction")
-                    self._client = client
+
+                    # Already authorized — good to go
                     return {
                         'success': True,
                         'needs_code': False,
                         'needs_password': False,
                         'phone_number': safe_phone_number
                     }
-                    
+
                 except Exception as e:
-                    # Comprehensive error logging
-                    logger.critical(f"[CRITICAL] Connection error in _connect(): {e}")
-                    logger.critical(f"[CRITICAL] Error type: {type(e)}")
-                    logger.critical(f"[CRITICAL] Phone number: {safe_phone_number}")
-                    logger.critical(f"[CRITICAL] Full traceback:\n{traceback.format_exc()}")
-                    
+                    logger.critical(f"[CRITICAL] Connection error on handler loop: {e}")
                     return {
                         'success': False,
                         'error': str(e),
@@ -259,11 +205,10 @@ class TelegramConnectionHandler:
                         'needs_password': False,
                         'phone_number': safe_phone_number
                     }
-            
-            # Run in the event loop thread
-            logger.critical("[CRITICAL] Running _connect() in event loop thread")
-            return self.run_async(_connect())
-            
+
+            # Run everything on our dedicated event loop (no extra threads)
+            return self.run_async(_connect_on_handler_loop())
+
         except Exception as e:
             logger.critical(f"[CRITICAL] Connection error: {e}")
             return {
@@ -271,7 +216,7 @@ class TelegramConnectionHandler:
                 'error': str(e),
                 'needs_code': False,
                 'needs_password': False,
-                'phone_number': safe_phone_number  # This is now always defined
+                'phone_number': safe_phone_number
             }
     
     def connect_telegram(self, api_id: str, api_hash: str, phone_number: str) -> Dict:
@@ -281,7 +226,7 @@ class TelegramConnectionHandler:
     
     def verify_code(self, code: str) -> Dict:
         """
-        Verify the Telegram code (thread-safe)
+        Verify the Telegram code (thread-safe) - uses same event loop as connection
         """
         async def _verify():
             try:
@@ -324,7 +269,7 @@ class TelegramConnectionHandler:
     
     def verify_password(self, password: str) -> Dict:
         """
-        Verify 2FA password (thread-safe)
+        Verify 2FA password (thread-safe) - uses same event loop as connection
         """
         async def _verify_password():
             try:
@@ -348,15 +293,16 @@ class TelegramConnectionHandler:
         return self.run_async(_verify_password())
     
     def cleanup(self):
-        """Clean up resources"""
+        """Clean up resources - properly disconnects client on same event loop"""
         if self._client:
             try:
                 async def _disconnect():
                     await self._client.disconnect()
                 
                 self.run_async(_disconnect())
-            except:
-                pass
+                self._client = None  # Clear reference after disconnect
+            except Exception as e:
+                logger.warning(f"Error during client cleanup: {e}")
         
         if self._loop and self._running:
             self._loop.call_soon_threadsafe(self._loop.stop)
@@ -373,5 +319,10 @@ def get_telegram_handler():
     """Get or create the global telegram handler"""
     global telegram_handler
     if telegram_handler is None:
-        telegram_handler = TelegramConnectionHandler()
+        try:
+            telegram_handler = TelegramConnectionHandler()
+            logger.info("Telegram handler created successfully")
+        except Exception as e:
+            logger.error(f"Failed to create telegram handler: {e}")
+            raise
     return telegram_handler
