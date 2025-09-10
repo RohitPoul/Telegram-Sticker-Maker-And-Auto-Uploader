@@ -7,6 +7,9 @@ import re
 import threading
 import json
 import queue
+import glob
+import uuid
+import traceback
 from typing import Optional, Dict, List
 from enum import Enum
 from dataclasses import dataclass
@@ -392,7 +395,7 @@ class StickerBotCore:
         Initialize StickerBotCore with enhanced connection management
         """
         thread_name = threading.current_thread().name
-        telegram_logger.info(f"[DEBUG] StickerBotCore.__init__ called from thread: {thread_name}")
+        logging.info(f"[DEBUG] StickerBotCore.__init__ called from thread: {thread_name}")
         
         # Existing initialization
         self.logger = logger or logging.getLogger(__name__)
@@ -405,16 +408,16 @@ class StickerBotCore:
         self._last_connection_attempt = None
         self.session_file = None  # Track current session file
         
-        telegram_logger.info(f"[DEBUG] StickerBotCore initialized successfully in thread: {thread_name}")
+        logging.info(f"[DEBUG] StickerBotCore initialized successfully in thread: {thread_name}")
     
     def monitor_session_file(self):
         """Monitor session file and log if it gets deleted"""
         if self.session_file and os.path.exists(self.session_file):
-            telegram_logger.info(f"[SESSION] Session file exists: {self.session_file}")
+            logging.info(f"[SESSION] Session file exists: {self.session_file}")
         elif self.session_file:
-            telegram_logger.warning(f"[SESSION] Session file DELETED: {self.session_file}")
+            logging.warning(f"[SESSION] Session file DELETED: {self.session_file}")
         else:
-            telegram_logger.info(f"[SESSION] No session file tracked")
+            logging.info(f"[SESSION] No session file tracked")
     
     def cleanup_connection(self):
         """
@@ -422,72 +425,115 @@ class StickerBotCore:
         Ensures all resources are properly released
         """
         thread_name = threading.current_thread().name
-        telegram_logger.info(f"[DEBUG] cleanup_connection called from thread: {thread_name}")
+        logging.info(f"[DEBUG] cleanup_connection called from thread: {thread_name}")
         
         with self._connection_lock:
-            telegram_logger.info(f"[DEBUG] Connection lock acquired in thread: {thread_name}")
+            logging.info(f"[DEBUG] Connection lock acquired in thread: {thread_name}")
             try:
                 # Disconnect and log out if client exists
                 if self.client:
-                    telegram_logger.info(f"[DEBUG] Cleaning up client in thread: {thread_name}")
+                    logging.info(f"[DEBUG] Cleaning up client in thread: {thread_name}")
                     # Use run_telegram_coroutine to ensure thread-safety
                     try:
-                        telegram_logger.info(f"[DEBUG] Logging out client in thread: {thread_name}")
+                        logging.info(f"[DEBUG] Logging out client in thread: {thread_name}")
                         run_telegram_coroutine(self.client.log_out())
-                        telegram_logger.info(f"[DEBUG] Client logged out successfully in thread: {thread_name}")
+                        logging.info(f"[DEBUG] Client logged out successfully in thread: {thread_name}")
                     except Exception as e:
-                        telegram_logger.warning(f"[DEBUG] Error logging out client in thread {thread_name}: {e}")
+                        logging.warning(f"[DEBUG] Error logging out client in thread {thread_name}: {e}")
                     try:
-                        telegram_logger.info(f"[DEBUG] Disconnecting client in thread: {thread_name}")
+                        logging.info(f"[DEBUG] Disconnecting client in thread: {thread_name}")
                         run_telegram_coroutine(self.client.disconnect())
-                        telegram_logger.info(f"[DEBUG] Client disconnected successfully in thread: {thread_name}")
+                        logging.info(f"[DEBUG] Client disconnected successfully in thread: {thread_name}")
                     except Exception as e:
-                        telegram_logger.warning(f"[DEBUG] Error disconnecting client in thread {thread_name}: {e}")
+                        logging.warning(f"[DEBUG] Error disconnecting client in thread {thread_name}: {e}")
                     
                     # Clear client reference
                     self.client = None
-                    telegram_logger.info(f"[DEBUG] Client reference cleared in thread: {thread_name}")
+                    logging.info(f"[DEBUG] Client reference cleared in thread: {thread_name}")
                 
                 # Reset conversation manager
                 if self.conversation_manager:
-                    telegram_logger.info(f"[DEBUG] Cleaning up conversation manager in thread: {thread_name}")
+                    logging.info(f"[DEBUG] Cleaning up conversation manager in thread: {thread_name}")
                     try:
                         run_telegram_coroutine(self.conversation_manager.stop_listening())
-                        telegram_logger.info(f"[DEBUG] Conversation manager stopped successfully in thread: {thread_name}")
+                        logging.info(f"[DEBUG] Conversation manager stopped successfully in thread: {thread_name}")
                     except Exception as e:
-                        telegram_logger.warning(f"[DEBUG] Error stopping conversation manager in thread {thread_name}: {e}")
+                        logging.warning(f"[DEBUG] Error stopping conversation manager in thread {thread_name}: {e}")
                     self.conversation_manager = None
-                    telegram_logger.info(f"[DEBUG] Conversation manager reference cleared in thread: {thread_name}")
+                    logging.info(f"[DEBUG] Conversation manager reference cleared in thread: {thread_name}")
                 
                 # Reset bot peer
                 self.bot_peer = None
-                telegram_logger.info(f"[DEBUG] Bot peer reference cleared in thread: {thread_name}")
+                logging.info(f"[DEBUG] Bot peer reference cleared in thread: {thread_name}")
                 
                 # Smart session cleanup - only remove temporary/invalid sessions
                 try:
-                    telegram_logger.info(f"[DEBUG] Smart session cleanup in thread: {thread_name}")
+                    logging.info(f"[DEBUG] Smart session cleanup in thread: {thread_name}")
                     # Only remove temporary sessions, keep persistent ones
                     temp_session_pattern = f'temp_session_*.session*'
                     for session_file in glob.glob(temp_session_pattern):
                         try:
                             os.remove(session_file)
-                            telegram_logger.info(f"[DEBUG] Removed temporary session file: {session_file}")
+                            logging.info(f"[DEBUG] Removed temporary session file: {session_file}")
                         except Exception as e:
-                            telegram_logger.warning(f"[DEBUG] Could not remove temp session file {session_file}: {e}")
+                            logging.warning(f"[DEBUG] Could not remove temp session file {session_file}: {e}")
                             
                     # Force garbage collection to release any lingering connections
                     import gc
                     gc.collect()
-                    telegram_logger.info(f"[DEBUG] Forced garbage collection in thread: {thread_name}")
+                    logging.info(f"[DEBUG] Forced garbage collection in thread: {thread_name}")
                     
                 except Exception as e:
-                    telegram_logger.error(f"[DEBUG] Error during session cleanup in thread {thread_name}: {e}")
+                    logging.error(f"[DEBUG] Error during session cleanup in thread {thread_name}: {e}")
                 
-                telegram_logger.info(f"[DEBUG] Connection cleaned up successfully in thread: {thread_name}")
+                logging.info(f"[DEBUG] Connection cleaned up successfully in thread: {thread_name}")
             except Exception as e:
-                telegram_logger.error(f"[DEBUG] Error during connection cleanup in thread {thread_name}: {e}")
-                telegram_logger.error(f"[DEBUG] Error type: {type(e)}")
-                telegram_logger.error(f"[DEBUG] Full traceback: {traceback.format_exc()}")
+                logging.error(f"[DEBUG] Error during connection cleanup in thread {thread_name}: {e}")
+                logging.error(f"[DEBUG] Error type: {type(e)}")
+                logging.error(f"[DEBUG] Full traceback: {traceback.format_exc()}")
+
+    def is_connected(self):
+        """Check if Telegram connection is available"""
+        try:
+            self.logger.info("[STICKER] Checking connection status...")
+            
+            # First check if we have a conversation manager
+            if self.conversation_manager:
+                self.logger.info("[STICKER] Connection status: TRUE (conversation_manager exists)")
+                return True
+            
+            self.logger.info("[STICKER] No conversation_manager found, checking handler...")
+            
+            # If not, check if we can get a client from the handler
+            from telegram_connection_handler import get_telegram_handler
+            handler = get_telegram_handler()
+            
+            if not handler:
+                self.logger.info("[STICKER] Connection status: FALSE (no handler)")
+                return False
+                
+            self.logger.info(f"[STICKER] Handler found: {handler}")
+            
+            if not handler._client:
+                self.logger.info("[STICKER] Connection status: FALSE (no client in handler)")
+                return False
+                
+            self.logger.info(f"[STICKER] Client found in handler: {handler._client}")
+            
+            # Try to check if the client is connected
+            try:
+                # This is a simple check - if we can access the client, it's likely connected
+                self.logger.info("[STICKER] Connection status: TRUE (client accessible)")
+                return True
+            except Exception as e:
+                self.logger.info(f"[STICKER] Connection status: FALSE (client not accessible: {e})")
+                return False
+            
+        except Exception as e:
+            self.logger.error(f"[STICKER] Error checking connection status: {e}")
+            self.logger.error(f"[STICKER] Error type: {type(e)}")
+            self.logger.error(f"[STICKER] Full traceback: {traceback.format_exc()}")
+            return False
 
     def __del__(self):
         # Best-effort cleanup on interpreter shutdown
@@ -498,7 +544,7 @@ class StickerBotCore:
     
     def connect_telegram(self, api_id: str, api_hash: str, phone_param: str, process_id: str, retry_count: int = 0) -> Dict:
         """
-        Simplified Telegram connection method with robust error handling
+        Simplified Telegram connection method - delegates to handler for consistency
         
         :param api_id: Telegram API ID
         :param api_hash: Telegram API Hash
@@ -508,7 +554,7 @@ class StickerBotCore:
         :return: Connection result dictionary
         """
         # DEBUG: Log function entry
-        telegram_logger.critical(f"🚀 STICKER_BOT.connect_telegram CALLED WITH: api_id={api_id}, api_hash={api_hash}, phone_param={phone_param}, process_id={process_id}")
+        logging.critical(f"🚀 STICKER_BOT.connect_telegram CALLED WITH: api_id={api_id}, api_hash={api_hash}, phone_param={phone_param}, process_id={process_id}")
         
         # Initialize safe variables to prevent scoping issues
         safe_phone_number = phone_param if phone_param else ''
@@ -517,12 +563,12 @@ class StickerBotCore:
         safe_process_id = process_id if process_id else ''
         
         thread_name = threading.current_thread().name
-        telegram_logger.info(f"[DEBUG] connect_telegram called from thread: {thread_name}")
-        telegram_logger.info(f"[DEBUG] API ID: {safe_api_id}, API Hash: {safe_api_hash[:10]}..., Phone: {safe_phone_number}")
+        logging.info(f"[DEBUG] connect_telegram called from thread: {thread_name}")
+        logging.info(f"[DEBUG] API ID: {safe_api_id}, API Hash: {safe_api_hash[:10]}..., Phone: {safe_phone_number}")
         
         # Validate inputs
         if not all([safe_api_id, safe_api_hash, safe_phone_number]):
-            telegram_logger.warning(f"[DEBUG] Missing required fields in thread: {thread_name}")
+            logging.warning(f"[DEBUG] Missing required fields in thread: {thread_name}")
             return {
                 "success": False, 
                 "error": "Missing required connection details",
@@ -532,161 +578,56 @@ class StickerBotCore:
             }
         
         try:
-            telegram_logger.info(f"[DEBUG] Starting connection process in thread: {thread_name}")
+            # Use the handler for connection to ensure single event loop
+            from telegram_connection_handler import get_telegram_handler
+            handler = get_telegram_handler()
             
-            # Smart session management - reuse existing sessions when possible
-            try:
-                telegram_logger.info(f"[DEBUG] Checking for existing sessions in thread: {thread_name}")
-                # Look for existing persistent sessions
-                persistent_sessions = glob.glob('session_*.session')
-                if persistent_sessions:
-                    telegram_logger.info(f"[DEBUG] Found existing persistent sessions: {persistent_sessions}")
-                    # Only clean up temporary sessions
-                    temp_sessions = glob.glob('temp_session_*.session*')
-                    for temp_file in temp_sessions:
-                        try:
-                            os.remove(temp_file)
-                            telegram_logger.info(f"[DEBUG] Removed temporary session: {temp_file}")
-                        except Exception as e:
-                            telegram_logger.warning(f"[DEBUG] Could not remove temp session {temp_file}: {e}")
-                else:
-                    telegram_logger.info(f"[DEBUG] No existing persistent sessions found")
-            except Exception as e:
-                telegram_logger.warning(f"[DEBUG] Error during session check: {e}")
-            
-            # Normalize phone number
-            safe_phone_number = safe_phone_number.strip()
-            if not safe_phone_number.startswith('+'):
-                safe_phone_number = f'+{safe_phone_number}'
-            
-            # Validate API ID
-            try:
-                safe_api_id = int(str(safe_api_id).strip())
-                telegram_logger.info(f"[DEBUG] API ID validated: {safe_api_id}")
-            except ValueError:
-                telegram_logger.error(f"[DEBUG] Invalid API ID: {safe_api_id}")
+            if not handler:
+                logging.error("[DEBUG] No telegram handler available")
                 return {
                     "success": False, 
-                    "error": "Invalid API ID: Must be numeric",
+                    "error": "Telegram handler not available",
                     "needs_code": False,
                     "needs_password": False,
                     "phone_number": safe_phone_number
                 }
             
-            # Smart session creation - reuse existing or create persistent session
-            telegram_logger.info(f"[DEBUG] Creating TelegramClient in thread: {thread_name}")
+            # Delegate to handler for consistent event loop usage
+            result = handler.connect_telegram(safe_api_id, safe_api_hash, safe_phone_number)
             
-            # Check for existing persistent session in current directory and python directory
-            persistent_session = None
-            session_dirs = ['.', 'python', '..']
-            
-            for session_dir in session_dirs:
-                session_pattern = os.path.join(session_dir, 'session_*.session')
-                for session_file in glob.glob(session_pattern):
-                    if os.path.exists(session_file):
-                        persistent_session = session_file.replace('.session', '')
-                        telegram_logger.info(f"[SESSION] Found existing persistent session: {persistent_session}")
-                        break
-                if persistent_session:
-                    break
-            
-            if persistent_session:
-                # Reuse existing session
+            # If connection successful, set up bot interaction
+            if result.get('success') and not result.get('needs_code') and not result.get('needs_password'):
                 try:
-                    self.client = TelegramClient(persistent_session, safe_api_id, safe_api_hash)
-                    self.session_file = persistent_session
-                    telegram_logger.info(f"[SESSION] Reusing persistent session: {persistent_session}")
+                    # Get the client from the handler
+                    self.client = handler._client
+                    self.session_file = handler._client.session.filename if hasattr(handler._client, 'session') else None
+                    
+                    # Set up bot interaction using the handler's event loop
+                    async def setup_bot_interaction():
+                        self.bot_peer = await self.client.get_entity('@stickers')
+                        self.conversation_manager = SimpleConversationManager(
+                            self.client, 
+                            self.bot_peer, 
+                            self.logger
+                        )
+                        await self.conversation_manager.start_listening()
+                        return True
+                    
+                    # Run setup on handler's event loop
+                    handler.run_async(setup_bot_interaction())
+                    logging.info(f"[DEBUG] Bot interaction set up successfully")
+                    
                 except Exception as e:
-                    telegram_logger.warning(f"[SESSION] Failed to reuse session {persistent_session}: {e}, creating new")
-                    persistent_session = None
+                    logging.error(f"[DEBUG] Error setting up bot interaction: {e}")
+                    # Don't fail the connection, just log the error
             
-            if not persistent_session:
-                # Create new persistent session in python directory
-                import uuid
-                session_name = f"session_{uuid.uuid4().hex[:8]}"
-                # Ensure session is created in python directory
-                if not os.path.exists('python'):
-                    os.makedirs('python', exist_ok=True)
-                session_path = os.path.join('python', session_name)
-                self.client = TelegramClient(session_path, safe_api_id, safe_api_hash)
-                self.session_file = session_path
-                telegram_logger.info(f"[SESSION] Created new persistent session: {session_path}")
-            
-            # Connect to Telegram
-            telegram_logger.info(f"[TELEGRAM] Connecting to Telegram...")
-            try:
-                run_telegram_coroutine(self.client.connect())
-                telegram_logger.info(f"[DEBUG] Connected to Telegram successfully in thread: {thread_name}")
-            except Exception as e:
-                telegram_logger.error(f"[DEBUG] Connection error in thread {thread_name}: {e}")
-                telegram_logger.error(f"[DEBUG] Connection error type: {type(e)}")
-                telegram_logger.error(f"[DEBUG] Connection error traceback: {traceback.format_exc()}")
-                raise
-            
-            # Check authorization status
-            telegram_logger.info(f"[DEBUG] Checking authorization status in thread: {thread_name}")
-            try:
-                is_authorized = run_telegram_coroutine(self.client.is_user_authorized())
-                telegram_logger.info(f"[DEBUG] Authorization status: {is_authorized}")
-            except Exception as e:
-                telegram_logger.error(f"[DEBUG] Authorization check error in thread {thread_name}: {e}")
-                telegram_logger.error(f"[DEBUG] Authorization error type: {type(e)}")
-                telegram_logger.error(f"[DEBUG] Authorization error traceback: {traceback.format_exc()}")
-                raise
-            
-            if not is_authorized:
-                # Send code request if not authorized
-                telegram_logger.info(f"[DEBUG] Sending code request in thread: {thread_name}")
-                run_telegram_coroutine(self.client.send_code_request(safe_phone_number))
-                telegram_logger.info(f"[DEBUG] Code request sent successfully")
-                
-                return {
-                    'success': True,
-                    'needs_code': True,
-                    'needs_password': False,
-                    'phone_number': safe_phone_number
-                }
-            
-            # If already authorized, set up bot interaction
-            telegram_logger.info(f"[DEBUG] Getting bot peer in thread: {thread_name}")
-            self.bot_peer = run_telegram_coroutine(self.client.get_entity('@stickers'))
-            telegram_logger.info(f"[DEBUG] Bot peer obtained: {self.bot_peer}")
-            
-            telegram_logger.info(f"[DEBUG] Creating conversation manager in thread: {thread_name}")
-            self.conversation_manager = SimpleConversationManager(
-                self.client, 
-                self.bot_peer, 
-                self.logger
-            )
-            
-            telegram_logger.info(f"[DEBUG] Starting conversation manager in thread: {thread_name}")
-            run_telegram_coroutine(self.conversation_manager.start_listening())
-            telegram_logger.info(f"[DEBUG] Conversation manager started successfully")
-            
-            telegram_logger.info(f"[DEBUG] Connection completed successfully in thread: {thread_name}")
-            return {
-                'success': True,
-                'needs_code': False,
-                'needs_password': False,
-                'phone_number': safe_phone_number
-            }
+            return result
         
         except Exception as e:
             # Log the error
-            telegram_logger.error(f"[DEBUG] Telegram connection error in thread {thread_name}: {e}")
-            telegram_logger.error(f"[DEBUG] Error type: {type(e)}")
-            telegram_logger.error(f"[DEBUG] Full traceback: {traceback.format_exc()}")
-            
-            # Handle database lock errors specifically
-            if "database is locked" in str(e).lower() or "database is locked" in str(e):
-                telegram_logger.error(f"[DATABASE LOCK] Attempting recovery for connection error")
-                handle_database_lock_error(e, "telegram connection")
-                
-                # Attempt retry after cleanup
-                if retry_count < 2:
-                    telegram_logger.info(f"[RETRY] Attempting connection retry {retry_count + 1}/2")
-                    time.sleep(1)  # Brief wait before retry
-                    return self.connect_telegram(safe_api_id, safe_api_hash, safe_phone_number, safe_process_id, retry_count + 1)
+            logging.error(f"[DEBUG] Telegram connection error in thread {thread_name}: {e}")
+            logging.error(f"[DEBUG] Error type: {type(e)}")
+            logging.error(f"[DEBUG] Full traceback: {traceback.format_exc()}")
             
             return {
                 "success": False, 
@@ -698,58 +639,52 @@ class StickerBotCore:
 
     def verify_code(self, code: str) -> Dict:
         """
-        Verify the Telegram verification code with enhanced error handling
+        Verify the Telegram verification code - delegates to handler for consistency
         
         :param code: Verification code from user
         :return: Verification result
         """
         try:
-            # Verify code using the current client
-            if not self.client:
-                return {"success": False, "error": "No active Telegram client"}
+            # Use the handler for verification to ensure single event loop
+            from telegram_connection_handler import get_telegram_handler
+            handler = get_telegram_handler()
             
-            # Use run_telegram_coroutine for thread-safe execution
-            result = run_telegram_coroutine(self.client.sign_in(code=code))
+            if not handler:
+                return {"success": False, "error": "Telegram handler not available"}
             
-            # Check if 2FA is required
-            if isinstance(result, bool) and result:
-                # Setup bot interaction after successful sign-in
-                self.bot_peer = run_telegram_coroutine(self.client.get_entity('@stickers'))
-                self.conversation_manager = SimpleConversationManager(
-                    self.client, 
-                    self.bot_peer, 
-                    self.logger
-                )
-                run_telegram_coroutine(self.conversation_manager.start_listening())
-                
-                return {
-                    "success": True,
-                    "needs_password": False
-                }
+            # Delegate to handler
+            result = handler.verify_code(code)
             
-            # If 2FA is needed
-            return {
-                "success": True,
-                "needs_password": True
-            }
+            # If verification successful, set up bot interaction
+            if result.get('success') and not result.get('needs_password'):
+                try:
+                    # Get the client from the handler
+                    self.client = handler._client
+                    self.session_file = handler._client.session.filename if hasattr(handler._client, 'session') else None
+                    
+                    # Set up bot interaction using the handler's event loop
+                    async def setup_bot_interaction():
+                        self.bot_peer = await self.client.get_entity('@stickers')
+                        self.conversation_manager = SimpleConversationManager(
+                            self.client, 
+                            self.bot_peer, 
+                            self.logger
+                        )
+                        await self.conversation_manager.start_listening()
+                        return True
+                    
+                    # Run setup on handler's event loop
+                    handler.run_async(setup_bot_interaction())
+                    self.logger.info(f"[DEBUG] Bot interaction set up after code verification")
+                    
+                except Exception as e:
+                    self.logger.error(f"[DEBUG] Error setting up bot interaction after code verification: {e}")
+                    # Don't fail the verification, just log the error
+            
+            return result
                 
         except Exception as e:
-            error_str = str(e)
-            error_type = type(e).__name__
-            
-            self.logger.error(f"[TELEGRAM] Code verification error: {error_type}: {error_str}")
-            self.logger.error(f"[TELEGRAM] Error details - type: {type(e)}, module: {type(e).__module__}")
-            
-            # Check for SessionPasswordNeededError more robustly
-            if ('SessionPasswordNeededError' in error_str or 
-                'SessionPasswordNeededError' in error_type or
-                'password' in error_str.lower() and 'required' in error_str.lower()):
-                self.logger.info("Detected 2FA requirement - returning needs_password=True")
-                return {
-                    "success": True,
-                    "needs_password": True
-                }
-            
+            self.logger.error(f"[TELEGRAM] Code verification error: {e}")
             return {
                 "success": False,
                 "error": str(e),
@@ -758,38 +693,49 @@ class StickerBotCore:
 
     def verify_password(self, password: str) -> Dict:
         """
-        Verify two-factor authentication password
+        Verify two-factor authentication password - delegates to handler for consistency
         
         :param password: User's 2FA password
         :return: Password verification result
         """
         try:
-            if not self.client:
-                return {"success": False, "error": "No active Telegram client"}
+            # Use the handler for verification to ensure single event loop
+            from telegram_connection_handler import get_telegram_handler
+            handler = get_telegram_handler()
             
-            # Use run_telegram_coroutine for thread-safe execution
-            result = run_telegram_coroutine(self.client.sign_in(password=password))
+            if not handler:
+                return {"success": False, "error": "Telegram handler not available"}
             
-            if result:
-                # Setup bot interaction after successful 2FA
-                self.bot_peer = run_telegram_coroutine(self.client.get_entity('@stickers'))
-                self.conversation_manager = SimpleConversationManager(
-                    self.client, 
-                    self.bot_peer, 
-                    self.logger
-                )
-                run_telegram_coroutine(self.conversation_manager.start_listening())
-                
-                return {
-                    "success": True,
-                    "needs_password": False
-                }
+            # Delegate to handler
+            result = handler.verify_password(password)
             
-            return {
-                "success": False,
-                "error": "Invalid password",
-                "needs_password": True
-            }
+            # If verification successful, set up bot interaction
+            if result.get('success') and not result.get('needs_password'):
+                try:
+                    # Get the client from the handler
+                    self.client = handler._client
+                    self.session_file = handler._client.session.filename if hasattr(handler._client, 'session') else None
+                    
+                    # Set up bot interaction using the handler's event loop
+                    async def setup_bot_interaction():
+                        self.bot_peer = await self.client.get_entity('@stickers')
+                        self.conversation_manager = SimpleConversationManager(
+                            self.client, 
+                            self.bot_peer, 
+                            self.logger
+                        )
+                        await self.conversation_manager.start_listening()
+                        return True
+                    
+                    # Run setup on handler's event loop
+                    handler.run_async(setup_bot_interaction())
+                    self.logger.info(f"[DEBUG] Bot interaction set up after password verification")
+                    
+                except Exception as e:
+                    self.logger.error(f"[DEBUG] Error setting up bot interaction after password verification: {e}")
+                    # Don't fail the verification, just log the error
+            
+            return result
             
         except Exception as e:
             self.logger.error(f"[TELEGRAM] Password verification error: {e}")
@@ -803,6 +749,66 @@ class StickerBotCore:
     def create_sticker_pack(self, pack_name: str, sticker_type: str, media_files: List[Dict], process_id: str):
         """REAL sticker pack creation with EXACT advanced logic from Python version"""
         try:
+            self.logger.info(f"[STICKER] Starting create_sticker_pack with process_id: {process_id}")
+            self.logger.info(f"[STICKER] Pack name: {pack_name}")
+            self.logger.info(f"[STICKER] Sticker type: {sticker_type}")
+            self.logger.info(f"[STICKER] Media files count: {len(media_files)}")
+            
+            # Check current connection status
+            self.logger.info(f"[STICKER] Current conversation_manager: {self.conversation_manager}")
+            self.logger.info(f"[STICKER] Current client: {self.client}")
+            self.logger.info(f"[STICKER] Current bot_peer: {self.bot_peer}")
+            
+            # Check if we have a conversation manager, if not try to set it up from existing connection
+            if not self.conversation_manager:
+                self.logger.info("[STICKER] No conversation manager found, attempting to set up from existing connection")
+                try:
+                    # Try to get the client from the telegram handler
+                    from telegram_connection_handler import get_telegram_handler
+                    handler = get_telegram_handler()
+                    if handler and handler._client:
+                        self.logger.info("[STICKER] Found existing client in handler, setting up conversation manager")
+                        
+                        # Use the handler's event loop to get the bot peer
+                        async def setup_conversation_manager():
+                            try:
+                                # Get bot peer using the handler's event loop
+                                bot_peer = await handler._client.get_entity('@stickers')
+                                self.logger.info(f"[STICKER] Bot peer obtained: {bot_peer}")
+                                
+                                # Set up the client and bot peer
+                                self.client = handler._client
+                                self.bot_peer = bot_peer
+                                
+                                # Create conversation manager
+                                self.conversation_manager = SimpleConversationManager(
+                                    self.client, 
+                                    self.bot_peer, 
+                                    self.logger
+                                )
+                                
+                                # Start listening
+                                await self.conversation_manager.start_listening()
+                                self.logger.info("[STICKER] Conversation manager set up successfully")
+                                return True
+                            except Exception as e:
+                                self.logger.error(f"[STICKER] Error setting up conversation manager: {e}")
+                                self.logger.error(f"[STICKER] Error type: {type(e)}")
+                                self.logger.error(f"[STICKER] Full traceback: {traceback.format_exc()}")
+                                return False
+                        
+                        # Run the setup in the handler's event loop
+                        success = handler.run_async(setup_conversation_manager())
+                        if not success:
+                            raise RuntimeError("Failed to set up conversation manager")
+                    else:
+                        raise RuntimeError("No existing Telegram connection found")
+                except Exception as e:
+                    self.logger.error(f"[STICKER] Failed to set up conversation manager: {e}")
+                    self.logger.error(f"[STICKER] Error type: {type(e)}")
+                    self.logger.error(f"[STICKER] Full traceback: {traceback.format_exc()}")
+                    raise RuntimeError("Not connected to Telegram")
+            
             if not self.conversation_manager:
                 raise RuntimeError("Not connected to Telegram")
 
@@ -816,24 +822,30 @@ class StickerBotCore:
                 )
                 media_items.append(media_item)
 
-            # Run creation in asyncio thread
-            future = self.asyncio_thread.run_coroutine(
+            self.logger.info(f"[STICKER] Created {len(media_items)} media items for process {process_id}")
+
+            # Run creation using the existing run_telegram_coroutine function
+            result = run_telegram_coroutine(
                 self._create_sticker_pack_async(pack_name, sticker_type, media_items, process_id)
             )
 
-            result = future.result(timeout=600.0)  # 10 minute timeout
+            self.logger.info(f"[STICKER] Pack creation completed for process {process_id}")
             return result
 
         except Exception as e:
-            self.logger.error(f"[STICKER] Pack creation error: {e}")
+            self.logger.error(f"[STICKER] Pack creation error for process {process_id}: {e}")
             raise
 
     async def _create_sticker_pack_async(self, pack_name: str, sticker_type: str, media_items: List[MediaItem], process_id: str):
         """EXACT STICKER CREATION LOGIC FROM PYTHON VERSION"""
         try:
-            from backend import active_processes
+            # Import active_processes from shared state
+            from shared_state import active_processes, process_lock, add_process, update_process
+            self.logger.info(f"[STICKER] Successfully imported active_processes, current processes: {list(active_processes.keys())}")
 
             self.logger.info(f"[STICKER] Starting pack creation: {pack_name}")
+            self.logger.info(f"[STICKER] Process ID: {process_id}")
+            self.logger.info(f"[STICKER] Available processes: {list(active_processes.keys())}")
 
             # Step 1: Create new sticker pack
             command = "/newvideo" if sticker_type == "video" else "/newpack"
@@ -935,66 +947,52 @@ class StickerBotCore:
 
 def run_telegram_coroutine(coro):
     """
-    Safely run a Telegram coroutine with proper event loop handling.
-    Works correctly in Flask request threads.
+    Safely run a Telegram coroutine using the handler's dedicated event loop.
     
     :param coro: Coroutine to run
     :return: Result of the coroutine
     """
     thread_name = threading.current_thread().name
-    telegram_logger.info(f"[DEBUG] run_telegram_coroutine called from thread: {thread_name}")
-    telegram_logger.info(f"[DEBUG] Coroutine type: {type(coro)}")
     
-    # Check if we're in the main thread or a Flask thread
     try:
-        # Try to get the current event loop
+        # Try to use the handler's event loop first
+        try:
+            from telegram_connection_handler import get_telegram_handler
+            handler = get_telegram_handler()
+            if handler and handler._loop and handler._running:
+                # Use the handler's dedicated event loop
+                future = asyncio.run_coroutine_threadsafe(coro, handler._loop)
+                return future.result(timeout=30)
+        except Exception as e:
+            logging.warning(f"Could not use handler's event loop: {e}")
+        
+        # Fallback to creating a new event loop if handler is not available
         try:
             loop = asyncio.get_event_loop()
             if loop.is_closed():
-                raise RuntimeError("Event loop is closed")
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
         except RuntimeError:
             # No event loop in this thread, create a new one
-            telegram_logger.info(f"[DEBUG] No event loop in thread {thread_name}, creating new one")
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            telegram_logger.info(f"[DEBUG] New event loop created and set in thread: {thread_name}")
         
         # Use locks to prevent concurrent access
-        telegram_logger.info(f"[DEBUG] Acquiring locks from thread: {thread_name}")
         with telegram_global_lock, database_global_lock:
-            telegram_logger.info(f"[DEBUG] Locks acquired in thread: {thread_name}")
-            
-            try:
-                telegram_logger.info(f"[DEBUG] Running coroutine in thread: {thread_name}")
-                
-                # Check if the loop is already running (nested call)
-                if loop.is_running():
-                    telegram_logger.info(f"[DEBUG] Event loop already running, using run_coroutine_threadsafe")
-                    import concurrent.futures
-                    future = asyncio.run_coroutine_threadsafe(coro, loop)
-                    result = future.result(timeout=30)  # 30 second timeout
-                else:
-                    # Run the coroutine in the event loop
-                    result = loop.run_until_complete(coro)
-                
-                telegram_logger.info(f"[DEBUG] Coroutine completed successfully in thread: {thread_name}")
-                return result
-                
-            except Exception as e:
-                # Log any coroutine execution errors
-                telegram_logger.error(f"[DEBUG] Coroutine execution error in thread {thread_name}: {e}")
-                telegram_logger.error(f"[DEBUG] Error type: {type(e)}")
-                telegram_logger.error(f"[DEBUG] Full traceback: {traceback.format_exc()}")
-                
-                # Handle database lock errors specifically
-                if "database is locked" in str(e).lower():
-                    handle_database_lock_error(e, "coroutine execution")
-                
-                raise
-                
+            # Check if the loop is already running (nested call)
+            if loop.is_running():
+                future = asyncio.run_coroutine_threadsafe(coro, loop)
+                return future.result(timeout=30)
+            else:
+                # Run the coroutine in the event loop
+                return loop.run_until_complete(coro)
+    
     except Exception as e:
-        telegram_logger.error(f"[DEBUG] Critical error in run_telegram_coroutine: {e}")
-        telegram_logger.error(f"[DEBUG] Traceback: {traceback.format_exc()}")
+        # Handle specific database lock errors
+        if "database is locked" in str(e).lower():
+            handle_database_lock_error(e, "coroutine execution")
+        
+        # Re-raise the original exception
         raise
 
 # Flask routes for sticker bot
@@ -1017,50 +1015,126 @@ telegram_logger = logging.getLogger('TelegramOperations')
 telegram_logger.setLevel(logging.INFO)
 
 def handle_database_lock_error(e, operation_name):
-    """Handle database lock errors with recovery attempts"""
+    """Handle database lock errors with aggressive recovery attempts"""
     thread_name = threading.current_thread().name
-    telegram_logger.error(f"[DATABASE] Lock error during {operation_name} in thread {thread_name}: {e}")
+    logging.error(f"[DATABASE] Lock error during {operation_name} in thread {thread_name}: {e}")
   
     # Try to clean up any lingering connections
     try:
         import gc
         gc.collect()
-        telegram_logger.info(f"[DATABASE] Forced garbage collection in thread: {thread_name}")
+        logging.info(f"[DATABASE] Forced garbage collection in thread: {thread_name}")
         
         # Log active threads for debugging
         active_threads = [t.name for t in threading.enumerate()]
-        telegram_logger.info(f"[DATABASE] Active threads during lock: {active_threads}")
+        logging.info(f"[DATABASE] Active threads during lock: {active_threads}")
         
-        # Smart lock file cleanup - only remove temporary lock files
-        lock_patterns = ['*.session-journal', '*.session-wal', 'temp_session_*.session*']
+        # Aggressive lock file cleanup - remove ALL lock files
+        lock_patterns = [
+            '*.session-journal', 
+            '*.session-wal', 
+            'temp_session_*.session*',
+            'session_*.session-journal',
+            'session_*.session-wal'
+        ]
+        
+        cleaned_count = 0
         for pattern in lock_patterns:
             for lock_file in glob.glob(pattern):
                 try:
                     os.remove(lock_file)
-                    telegram_logger.info(f"[DATABASE] Removed temporary lock file: {lock_file}")
+                    logging.info(f"[DATABASE] Removed lock file: {lock_file}")
+                    cleaned_count += 1
                 except Exception as le:
-                    telegram_logger.warning(f"[DATABASE] Could not remove lock file {lock_file}: {le}")
+                    logging.warning(f"[DATABASE] Could not remove lock file {lock_file}: {le}")
+        
+        # Also clean up in python subdirectory
+        python_dir = 'python'
+        if os.path.exists(python_dir):
+            for pattern in lock_patterns:
+                for lock_file in glob.glob(os.path.join(python_dir, pattern)):
+                    try:
+                        os.remove(lock_file)
+                        logging.info(f"[DATABASE] Removed lock file from python/: {lock_file}")
+                        cleaned_count += 1
+                    except Exception as le:
+                        logging.warning(f"[DATABASE] Could not remove lock file {lock_file}: {le}")
+        
+        logging.info(f"[DATABASE] Cleaned up {cleaned_count} lock files")
+        
+        # Wait for file handles to be released
+        import time
+        time.sleep(1.0)
+        
     except Exception as cleanup_error:
-        telegram_logger.error(f"[DATABASE] Error during lock recovery in thread {thread_name}: {cleanup_error}")
+        logging.error(f"[DATABASE] Error during lock recovery in thread {thread_name}: {cleanup_error}")
 
 def sticker_pack_worker():
     """Background worker to process sticker pack creation tasks"""
+    global sticker_bot  # Make sticker_bot global to avoid UnboundLocalError
+    logging.info(f"[WORKER] Sticker pack worker thread started and waiting for tasks")
     while True:
         try:
             # Block and wait for a task
+            logging.info(f"[WORKER] Waiting for task from queue...")
             task = sticker_pack_queue.get()
+            logging.info(f"[WORKER] Received task from queue")
             
             # Unpack task parameters
             pack_name, sticker_type, media_files, process_id = task
+            logging.info(f"[WORKER] Processing task: pack_name={pack_name}, process_id={process_id}")
+            
+            # Import active_processes from shared state
+            from shared_state import active_processes, process_lock, update_process
+            print(f"🔧 [WORKER] Successfully imported active_processes")
+            print(f"🔧 [WORKER] Current processes: {list(active_processes.keys())}")
+            print(f"🔧 [WORKER] Looking for process: {process_id}")
+            print(f"🔧 [WORKER] Process exists: {process_id in active_processes}")
+            logging.info(f"[WORKER] Successfully imported active_processes, current processes: {list(active_processes.keys())}")
             
             # Update process status to processing
-            from backend import active_processes, process_lock
             with process_lock:
+                print(f"🔧 [WORKER] Acquired process_lock for process {process_id}")
+                print(f"🔧 [WORKER] Looking for process {process_id} in active_processes")
+                print(f"🔧 [WORKER] Current active_processes keys: {list(active_processes.keys())}")
+                print(f"🔧 [WORKER] Process {process_id} exists: {process_id in active_processes}")
+                
+                logging.info(f"[WORKER] Looking for process {process_id} in active_processes")
+                logging.info(f"[WORKER] Current active_processes keys: {list(active_processes.keys())}")
+                logging.info(f"[WORKER] Process {process_id} exists: {process_id in active_processes}")
+                
                 if process_id in active_processes:
+                    print(f"🔧 [WORKER] Found process {process_id}, updating to processing")
                     active_processes[process_id]['status'] = 'processing'
                     active_processes[process_id]['current_stage'] = 'Starting sticker pack creation...'
+                    logging.info(f"[WORKER] Updated process {process_id} to processing status")
+                else:
+                    print(f"🔧 [WORKER] Process {process_id} NOT FOUND! Creating fallback entry")
+                    print(f"🔧 [WORKER] Available processes: {list(active_processes.keys())}")
+                    logging.error(f"[WORKER] Process {process_id} not found in active_processes!")
+                    logging.error(f"[WORKER] Available processes: {list(active_processes.keys())}")
+                    # Create the process entry if it doesn't exist
+                    active_processes[process_id] = {
+                        'status': 'processing',
+                        'current_stage': 'Starting sticker pack creation...',
+                        'progress': 0,
+                        'total_files': len(media_files),
+                        'completed_files': 0,
+                        'start_time': time.time(),
+                        'type': 'sticker_pack',
+                        'pack_name': pack_name,
+                        'sticker_type': sticker_type
+                    }
+                    print(f"🔧 [WORKER] Created fallback process entry for {process_id}")
+                    logging.info(f"[WORKER] Created missing process entry for {process_id}")
             
             try:
+                # Ensure sticker_bot is initialized
+                if sticker_bot is None:
+                    logging.error(f"[WORKER] sticker_bot is None, initializing...")
+                    sticker_bot = StickerBotCore()
+                    logging.info(f"[WORKER] sticker_bot initialized in worker thread")
+                
                 # Perform sticker pack creation
                 result = sticker_bot.create_sticker_pack(pack_name, sticker_type, media_files, process_id)
                 
@@ -1071,49 +1145,77 @@ def sticker_pack_worker():
                         active_processes[process_id]['status'] = 'completed'
                         active_processes[process_id]['current_stage'] = 'Sticker pack created successfully'
                         active_processes[process_id]['progress'] = 100
+                        logging.info(f"[WORKER] Process {process_id} completed successfully")
             
             except Exception as e:
+                # Log detailed error information
+                error_msg = str(e)
+                error_type = type(e).__name__
+                print(f"🔧 [WORKER] Process {process_id} failed with {error_type}: {error_msg}")
+                print(f"🔧 [WORKER] Full traceback:")
+                import traceback
+                traceback.print_exc()
+                
                 # Log error and update process status
                 with process_lock:
                     if process_id in active_processes:
                         active_processes[process_id]['status'] = 'error'
-                        active_processes[process_id]['current_stage'] = f'Error: {str(e)}'
-                        active_processes[process_id]['error'] = str(e)
+                        active_processes[process_id]['current_stage'] = f'Error: {error_msg}'
+                        active_processes[process_id]['error'] = error_msg
+                        active_processes[process_id]['error_type'] = error_type
+                        logging.error(f"[WORKER] Process {process_id} failed with error: {e}")
                 
-                sticker_bot.logger.error(f"Background sticker pack creation error: {e}")
+                if sticker_bot:
+                    sticker_bot.logger.error(f"Background sticker pack creation error: {e}")
+                else:
+                    logging.error(f"Background sticker pack creation error: {e}")
             
             finally:
                 # Mark task as done
                 sticker_pack_queue.task_done()
         
         except Exception as e:
-            sticker_bot.logger.error(f"Sticker pack worker error: {e}")
+            error_msg = str(e)
+            error_type = type(e).__name__
+            print(f"🔧 [WORKER] Worker thread error: {error_type}: {error_msg}")
+            print(f"🔧 [WORKER] Full traceback:")
+            import traceback
+            traceback.print_exc()
+            
+            if sticker_bot:
+                sticker_bot.logger.error(f"Sticker pack worker error: {e}")
+            else:
+                logging.error(f"Sticker pack worker error: {e}")
 
 def start_sticker_pack_worker():
     """Start the background worker thread"""
     global sticker_pack_thread
     if sticker_pack_thread is None or not sticker_pack_thread.is_alive():
+        logging.info(f"[WORKER] Starting sticker pack worker thread")
         sticker_pack_thread = threading.Thread(target=sticker_pack_worker, daemon=True)
         sticker_pack_thread.start()
+        logging.info(f"[WORKER] Sticker pack worker thread started: {sticker_pack_thread.is_alive()}")
+    else:
+        logging.info(f"[WORKER] Sticker pack worker thread already running")
 
 def register_sticker_routes(app):
     """Register sticker bot routes with the Flask app"""
     global sticker_bot
     thread_name = threading.current_thread().name
-    telegram_logger.info(f"[DEBUG] register_sticker_routes called from thread: {thread_name}")
-    telegram_logger.info(f"[DEBUG] Registering routes with Flask app: {app}")
+    logging.info(f"[DEBUG] register_sticker_routes called from thread: {thread_name}")
+    logging.info(f"[DEBUG] Registering routes with Flask app: {app}")
     
     # Initialize sticker_bot if not already done
     if sticker_bot is None:
-        telegram_logger.info(f"[DEBUG] Initializing sticker_bot in register_sticker_routes")
+        logging.info(f"[DEBUG] Initializing sticker_bot in register_sticker_routes")
         sticker_bot = StickerBotCore()
-        telegram_logger.info(f"[DEBUG] sticker_bot initialized successfully")
+        logging.info(f"[DEBUG] sticker_bot initialized successfully")
     
     @app.route('/api/sticker/connect', methods=['POST', 'OPTIONS'], strict_slashes=False)
     def connect_sticker_bot():
         """ULTIMATE FIX - This function is guaranteed to work without scoping errors"""
         thread_name = threading.current_thread().name
-        telegram_logger.info(f"[DEBUG] Flask route /api/sticker/connect called from thread: {thread_name}")
+        logging.info(f"[DEBUG] Flask route /api/sticker/connect called from thread: {thread_name}")
         
         # Initialize ALL variables at the very beginning to prevent ANY scoping issues
         safe_phone_number = ''
@@ -1126,23 +1228,23 @@ def register_sticker_routes(app):
         needs_password = False
         
         if request.method == 'OPTIONS':
-            telegram_logger.info(f"[DEBUG] OPTIONS request, returning 200")
+            logging.info(f"[DEBUG] OPTIONS request, returning 200")
             return '', 200
             
         try:
-            telegram_logger.info(f"[DEBUG] Processing POST request in thread: {thread_name}")
+            logging.info(f"[DEBUG] Processing POST request in thread: {thread_name}")
             
             # Safe data extraction with null checks
             try:
                 # Log raw request data for debugging
                 raw_data = request.get_data(as_text=True)
-                telegram_logger.info(f"[TRACE] Raw request data: {raw_data}")
+                logging.info(f"[TRACE] Raw request data: {raw_data}")
 
                 data = request.get_json()
-                telegram_logger.info(f"[TRACE] Parsed JSON data: {data}")
+                logging.info(f"[TRACE] Parsed JSON data: {data}")
 
                 if not data:
-                    telegram_logger.warning(f"[DEBUG] No JSON data received in thread: {thread_name}")
+                    logging.warning(f"[DEBUG] No JSON data received in thread: {thread_name}")
                     return jsonify({
                         "success": False, 
                         "error": "No data provided", 
@@ -1152,17 +1254,17 @@ def register_sticker_routes(app):
                     }), 400
                 
                 # Explicitly log each field for tracing
-                telegram_logger.info(f"[TRACE] Extracting fields: {list(data.keys())}")
+                logging.info(f"[TRACE] Extracting fields: {list(data.keys())}")
                 safe_api_id = data.get('api_id', '')
                 safe_api_hash = data.get('api_hash', '')
                 safe_phone_number = data.get('phone_number', '')
                 safe_process_id = data.get('process_id', '')
 
-                telegram_logger.info(f"[TRACE] Extracted values: api_id={safe_api_id}, api_hash={safe_api_hash}, phone_number={safe_phone_number}, process_id={safe_process_id}")
+                logging.info(f"[TRACE] Extracted values: api_id={safe_api_id}, api_hash={safe_api_hash}, phone_number={safe_phone_number}, process_id={safe_process_id}")
                 
             except Exception as data_error:
-                telegram_logger.error(f"[DEBUG] Error parsing JSON data in thread {thread_name}: {data_error}")
-                telegram_logger.error(f"[DEBUG] Error details: {traceback.format_exc()}")
+                logging.error(f"[DEBUG] Error parsing JSON data in thread {thread_name}: {data_error}")
+                logging.error(f"[DEBUG] Error details: {traceback.format_exc()}")
                 return jsonify({
                     "success": False, 
                     "error": f"Invalid JSON data: {str(data_error)}", 
@@ -1171,11 +1273,11 @@ def register_sticker_routes(app):
                     "needs_password": False
                 }), 400
             
-            telegram_logger.info(f"[DEBUG] Request data - API ID: {safe_api_id}, Phone: {safe_phone_number}, Process ID: {safe_process_id}")
+            logging.info(f"[DEBUG] Request data - API ID: {safe_api_id}, Phone: {safe_phone_number}, Process ID: {safe_process_id}")
 
             # Early validation to prevent processing with missing data
             if not all([safe_api_id, safe_api_hash, safe_phone_number]):
-                telegram_logger.warning(f"[DEBUG] Missing required fields in thread: {thread_name}")
+                logging.warning(f"[DEBUG] Missing required fields in thread: {thread_name}")
                 return jsonify({
                     "success": False, 
                     "error": "Missing required fields", 
@@ -1185,17 +1287,17 @@ def register_sticker_routes(app):
                 }), 400
 
             # ULTIMATE FIX - Now implement the actual working logic
-            telegram_logger.critical(f"🚀 ULTIMATE FIX: Processing connection with api_id={safe_api_id}, phone={safe_phone_number}")
+            logging.critical(f"🚀 ULTIMATE FIX: Processing connection with api_id={safe_api_id}, phone={safe_phone_number}")
             
             # Use the thread-safe handler for actual connection
             try:
                 from telegram_connection_handler import get_telegram_handler
                 handler = get_telegram_handler()
                 result = handler.connect_telegram(safe_api_id, safe_api_hash, safe_phone_number)
-                telegram_logger.info(f"[DEBUG] Handler result: {result}")
+                logging.info(f"[DEBUG] Handler result: {result}")
                 return jsonify(result)
             except Exception as handler_error:
-                telegram_logger.error(f"[DEBUG] Handler error: {handler_error}")
+                logging.error(f"[DEBUG] Handler error: {handler_error}")
                 # Fallback to working response
                 return jsonify({
                     "success": False,
@@ -1206,9 +1308,9 @@ def register_sticker_routes(app):
                 })
 
         except Exception as e:
-            telegram_logger.error(f"[DEBUG] Flask route error in thread {thread_name}: {e}")
-            telegram_logger.error(f"[DEBUG] Error type: {type(e)}")
-            telegram_logger.error(f"[DEBUG] Full traceback: {traceback.format_exc()}")
+            logging.error(f"[DEBUG] Flask route error in thread {thread_name}: {e}")
+            logging.error(f"[DEBUG] Error type: {type(e)}")
+            logging.error(f"[DEBUG] Full traceback: {traceback.format_exc()}")
             # Use safe_phone_number which is always defined
             return jsonify({
                 "success": False, 
@@ -1286,8 +1388,12 @@ def register_sticker_routes(app):
             media_files = data.get('media_files', []) if data else []
             process_id = data.get('process_id', f'sticker_{int(time.time())}') if data else f'sticker_{int(time.time())}'
 
-            # Import active_processes from backend
-            from backend import active_processes, process_lock
+            # Import active_processes from shared state
+            from shared_state import active_processes, process_lock, add_process, get_next_process_id
+            print(f"🔧 [STICKER_API] Imported active_processes from shared state")
+            print(f"🔧 [STICKER_API] active_processes type: {type(active_processes)}")
+            print(f"🔧 [STICKER_API] active_processes id: {id(active_processes)}")
+            print(f"🔧 [STICKER_API] Current processes before creation: {list(active_processes.keys())}")
 
             # Check for existing process
             with process_lock:
@@ -1310,21 +1416,56 @@ def register_sticker_routes(app):
             start_sticker_pack_worker()
 
             # Add process to active_processes immediately for tracking
-            with process_lock:
-                active_processes[process_id] = {
-                    "status": "queued",
-                    "current_stage": "Waiting in queue...",
-                    "progress": 0,
-                    "total_files": len(media_files),
-                    "completed_files": 0,
-                    "start_time": time.time(),
-                    "type": "sticker_pack",
-                    "pack_name": pack_name,
-                    "sticker_type": sticker_type
-                }
+            process_data = {
+                "status": "queued",
+                "current_stage": "Waiting in queue...",
+                "progress": 0,
+                "total_files": len(media_files),
+                "completed_files": 0,
+                "start_time": time.time(),
+                "type": "sticker_pack",
+                "pack_name": pack_name,
+                "sticker_type": sticker_type
+            }
+            
+            print(f"🔧 [DEBUG] Creating process {process_id} in active_processes")
+            print(f"🔧 [DEBUG] Before creation - active_processes keys: {list(active_processes.keys())}")
+            print(f"🔧 [DEBUG] Before creation - active_processes type: {type(active_processes)}")
+            print(f"🔧 [DEBUG] Before creation - active_processes id: {id(active_processes)}")
+            
+            add_process(process_id, process_data)
+            
+            print(f"🔧 [DEBUG] After creation - active_processes keys: {list(active_processes.keys())}")
+            print(f"🔧 [DEBUG] After creation - active_processes type: {type(active_processes)}")
+            print(f"🔧 [DEBUG] After creation - active_processes id: {id(active_processes)}")
+            print(f"🔧 [DEBUG] Process {process_id} exists: {process_id in active_processes}")
+            print(f"🔧 [DEBUG] Process {process_id} data: {active_processes.get(process_id, 'NOT_FOUND')}")
+            
+            # Verify the process was actually added
+            if process_id in active_processes:
+                print(f"🔧 [DEBUG] ✅ Process {process_id} successfully added to active_processes")
+            else:
+                print(f"🔧 [DEBUG] ❌ Process {process_id} FAILED to be added to active_processes!")
+            
+            # Double-check by importing shared state again
+            from shared_state import active_processes as ss_active_processes
+            print(f"🔧 [DEBUG] Shared state active_processes keys: {list(ss_active_processes.keys())}")
+            print(f"🔧 [DEBUG] Shared state active_processes id: {id(ss_active_processes)}")
+            print(f"🔧 [DEBUG] Are they the same object? {active_processes is ss_active_processes}")
 
             # Add task to queue
+            print(f"🔧 [DEBUG] Adding task to queue: {process_id}")
             sticker_pack_queue.put((pack_name, sticker_type, media_files, process_id))
+            print(f"🔧 [DEBUG] Task added to queue successfully")
+            
+            # Verify process still exists after queue operation
+            print(f"🔧 [DEBUG] Verifying process still exists after queue operation...")
+            print(f"🔧 [DEBUG] Process {process_id} exists: {process_id in active_processes}")
+            print(f"🔧 [DEBUG] Current active_processes keys: {list(active_processes.keys())}")
+            
+            # Log the process creation for debugging
+            logging.info(f"[API] Process {process_id} added to queue and active_processes")
+            logging.info(f"[API] Current active_processes: {list(active_processes.keys())}")
 
             # Immediately return process ID for tracking
             return jsonify({
@@ -1333,6 +1474,24 @@ def register_sticker_routes(app):
                 "message": "Sticker pack creation queued"
             })
 
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route('/api/sticker/connection-status', methods=['GET', 'OPTIONS'], strict_slashes=False)
+    def connection_status():
+        """
+        Check the current Telegram connection status
+        """
+        if request.method == 'OPTIONS':
+            return '', 200
+            
+        try:
+            is_connected = sticker_bot.is_connected()
+            return jsonify({
+                "success": True, 
+                "connected": is_connected,
+                "message": "Connected to Telegram" if is_connected else "Not connected to Telegram"
+            })
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500
 
@@ -1352,23 +1511,7 @@ def register_sticker_routes(app):
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500
 
-import os
-import sys
-import traceback
-import logging
-import sqlite3
-import threading
-import time
-import re
-import glob
-import json
-
 # Enhanced logging configuration
-import logging
-import os
-
-# Ensure logs directory exists with absolute path
-import os
 import sys
 
 # Get the absolute path to the project root
