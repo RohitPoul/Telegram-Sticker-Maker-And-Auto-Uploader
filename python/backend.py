@@ -121,11 +121,13 @@ CORS(app, resources={
     }
 })
 
-# Global variables for tracking processes
-active_processes = {}
-process_counter = 0
-process_lock = threading.Lock()
-conversion_threads = {}
+# Import shared state
+from shared_state import (
+    active_processes, process_lock, process_counter, 
+    conversion_threads, get_next_process_id, add_process, 
+    get_process, update_process, remove_process, get_all_processes,
+    set_sticker_bot, get_sticker_bot, set_telegram_handler, get_telegram_handler
+)
 
 # Inject dependencies into video converter after global variables are declared
 if VIDEO_CONVERTER_AVAILABLE and video_converter:
@@ -175,34 +177,71 @@ def cleanup_processes():
 def cleanup_telegram_and_sessions():
     """Ensure Telegram disconnect and session files are released on exit."""
     try:
-        from sticker_bot import sticker_bot
-        try:
-            sticker_bot.cleanup_connection()
-            logger.info("[CLEANUP] Telegram connection cleaned up")
-        except Exception as e:
-            logger.warning(f"[CLEANUP] Telegram cleanup error: {e}")
-    except Exception:
-        # sticker_bot may not be imported
-        pass
-
-    # Smart session cleanup - only remove temporary sessions
-    try:
-        # Only remove temporary sessions, keep persistent ones
-        for p in Path('.').glob('temp_session_*.session*'):
-            try:
-                p.unlink()
-                logger.info(f"[CLEANUP] Deleted temporary session file: {p}")
-            except Exception as e:
-                logger.warning(f"[CLEANUP] Could not delete temp session file {p}: {e}")
+        logger.info("[CLEANUP] Starting comprehensive Telegram cleanup...")
         
-        # Clean up lock files that might cause issues
-        for p in Path('.').glob('*.session-journal'):
-            try:
-                p.unlink()
-                logger.info(f"[CLEANUP] Deleted session journal: {p}")
-            except Exception as e:
-                logger.warning(f"[CLEANUP] Could not delete session journal {p}: {e}")
-                
+        # Clean up sticker bot
+        try:
+            from sticker_bot import sticker_bot
+            if sticker_bot:
+                sticker_bot.cleanup_connection()
+                logger.info("[CLEANUP] Sticker bot connection cleaned up")
+        except Exception as e:
+            logger.warning(f"[CLEANUP] Error cleaning up sticker bot: {e}")
+        
+        # Clean up telegram_connection_handler
+        try:
+            from telegram_connection_handler import telegram_handler
+            if telegram_handler:
+                telegram_handler.cleanup()
+                logger.info("[CLEANUP] Telegram handler cleaned up")
+        except Exception as e:
+            logger.warning(f"[CLEANUP] Error cleaning up telegram handler: {e}")
+        
+        # Force cleanup of all Telegram clients
+        try:
+            import gc
+            gc.collect()
+            logger.info("[CLEANUP] Forced garbage collection")
+        except Exception as e:
+            logger.warning(f"[CLEANUP] Error during garbage collection: {e}")
+        
+        # Clean up ALL session files and lock files
+        session_patterns = [
+            'temp_session_*.session*',
+            '*.session-journal',
+            '*.session-wal',
+            'session_*.session-journal',
+            'session_*.session-wal'
+        ]
+        
+        cleaned_count = 0
+        for pattern in session_patterns:
+            for p in Path('.').glob(pattern):
+                try:
+                    p.unlink()
+                    logger.info(f"[CLEANUP] Deleted {pattern}: {p}")
+                    cleaned_count += 1
+                except Exception as e:
+                    logger.warning(f"[CLEANUP] Could not delete {p}: {e}")
+        
+        # Also clean up in python subdirectory
+        python_dir = Path('python')
+        if python_dir.exists():
+            for pattern in session_patterns:
+                for p in python_dir.glob(pattern):
+                    try:
+                        p.unlink()
+                        logger.info(f"[CLEANUP] Deleted {pattern} from python/: {p}")
+                        cleaned_count += 1
+                    except Exception as e:
+                        logger.warning(f"[CLEANUP] Could not delete {p}: {e}")
+        
+        logger.info(f"[CLEANUP] Cleaned up {cleaned_count} session/lock files")
+        
+        # Wait a moment for file handles to be released
+        import time
+        time.sleep(0.5)
+        
     except Exception as e:
         logger.warning(f"[CLEANUP] Smart session cleanup failed: {e}")
 
@@ -1015,6 +1054,96 @@ def get_conversion_progress(process_id):
         
         return jsonify(response_data)
 
+@app.route('/api/process-status/<process_id>', methods=['GET', 'OPTIONS'])
+def get_process_status(process_id):
+    """
+    Returns JSON with current status for any process (conversion, hex-edit, or sticker pack).
+    """
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    try:
+        print(f"🔧 [API] Getting status for process: {process_id}")
+        print(f"🔧 [API] active_processes type: {type(active_processes)}")
+        print(f"🔧 [API] active_processes id: {id(active_processes)}")
+        
+        with process_lock:
+            print(f"🔧 [API] Current active_processes keys: {list(active_processes.keys())}")
+            print(f"🔧 [API] Process {process_id} exists: {process_id in active_processes}")
+            
+            if process_id not in active_processes:
+                print(f"🔧 [API] Process {process_id} not found!")
+                print(f"🔧 [API] Available processes: {list(active_processes.keys())}")
+                print(f"🔧 [API] Process count: {len(active_processes)}")
+                for pid, pdata in active_processes.items():
+                    print(f"🔧 [API] Process {pid}: {pdata.get('type', 'unknown')} - {pdata.get('status', 'unknown')}")
+                return jsonify({"success": False, "error": "Process not found"}), 404
+            
+            process_data = active_processes[process_id]
+            print(f"🔧 [API] Process data: {process_data}")
+            
+            # Calculate progress percentage
+            total_files = process_data.get('total_files', 1)
+            completed_files = process_data.get('completed_files', 0)
+            failed_files = process_data.get('failed_files', 0)
+            
+            # Calculate progress percentage
+            if total_files > 0:
+                progress_percentage = ((completed_files + failed_files) / total_files) * 100
+            else:
+                progress_percentage = 0
+            
+            response_data = {
+                "process_id": process_id,
+                "status": process_data.get('status', 'unknown'),
+                "current_stage": process_data.get('current_stage', 'Unknown'),
+                "progress": round(progress_percentage, 2),
+                "total_files": total_files,
+                "completed_files": completed_files,
+                "failed_files": failed_files,
+                "current_file": process_data.get('current_file', ''),
+                "start_time": process_data.get('start_time', 0),
+                "type": process_data.get('type', 'unknown'),
+                "file_statuses": process_data.get('file_statuses', {}),
+                "paused": process_data.get('paused', False)
+            }
+            
+            print(f"🔧 [API] Returning response data: {response_data}")
+            
+            return jsonify({
+                "success": True,
+                "data": response_data
+            })
+    except Exception as e:
+        print(f"🔧 [API] Error getting process status: {e}")
+        logger.error(f"Error getting process status: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/debug/active-processes', methods=['GET', 'OPTIONS'])
+def debug_active_processes():
+    """Debug endpoint to check active processes"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    try:
+        with process_lock:
+            print(f"🔧 [DEBUG_API] Current active_processes: {list(active_processes.keys())}")
+            print(f"🔧 [DEBUG_API] Process count: {len(active_processes)}")
+            for pid, pdata in active_processes.items():
+                print(f"🔧 [DEBUG_API] Process {pid}: {pdata.get('type', 'unknown')} - {pdata.get('status', 'unknown')}")
+            
+            return jsonify({
+                "success": True,
+                "data": {
+                    "processes": list(active_processes.keys()),
+                    "count": len(active_processes),
+                    "details": {pid: {"type": pdata.get('type', 'unknown'), "status": pdata.get('status', 'unknown')} for pid, pdata in active_processes.items()}
+                }
+            })
+    except Exception as e:
+        print(f"🔧 [DEBUG_API] Error: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 # New route to stop a process
 @app.route('/api/stop-process', methods=['POST','OPTIONS'], strict_slashes=False)
 def stop_process():
@@ -1491,6 +1620,69 @@ def kill_python_processes():
             "success": False,
             "error": str(e)
         }), 500
+
+@app.route('/api/force-cleanup-sessions', methods=['POST', 'OPTIONS'], strict_slashes=False)
+def force_cleanup_sessions():
+    """Force cleanup of all session files and lock files"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    try:
+        logger.info("Force cleanup sessions requested")
+        
+        # Call the cleanup function
+        cleanup_telegram_and_sessions()
+        
+        # Also try to kill any lingering Python processes (only our app's processes)
+        try:
+            from kill_python_processes import kill_our_app_processes
+            kill_results = kill_our_app_processes()
+            logger.info(f"Kill results: {kill_results}")
+        except Exception as e:
+            logger.warning(f"Could not kill Python processes: {e}")
+        
+        return jsonify({
+            "success": True, 
+            "message": "Force cleanup completed - all session files and lock files removed"
+        })
+        
+    except Exception as e:
+        logger.error(f"Error during force cleanup: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/kill-our-processes', methods=['POST', 'OPTIONS'], strict_slashes=False)
+def kill_our_processes():
+    """Kill only Python processes related to our app"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    try:
+        logger.info("Kill our app processes requested")
+        
+        # Import the kill script
+        from kill_python_processes import kill_our_app_processes
+        
+        results = kill_our_app_processes()
+        
+        if results['success']:
+            message = f"Killed {results['killed_count']} of our app's Python processes"
+            if results['errors']:
+                message += f" (with {len(results['errors'])} warnings)"
+            
+            return jsonify({
+                "success": True,
+                "message": message,
+                "killed_count": results['killed_count'],
+                "errors": results['errors']
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Failed to kill our app's processes",
+                "details": results['errors']
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Error killing our app's processes: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 # Error handlers
 @app.errorhandler(404)
