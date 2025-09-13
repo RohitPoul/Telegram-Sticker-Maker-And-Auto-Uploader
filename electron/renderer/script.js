@@ -28,6 +28,7 @@ class TelegramUtilities {
       failedConversions: 0,
       totalStickers: 0
     };
+    this.autoScrollEnabled = true; // Initialize auto-scroll
     this.init();
     this.initializeNavigation(); // Add this line to initialize navigation
     this.initializeTelegramForm(); // Add this to load saved Telegram credentials
@@ -769,6 +770,46 @@ class TelegramUtilities {
     document.getElementById("clear-media").addEventListener("click", () => this.clearMedia());
     document.getElementById("create-sticker-pack").addEventListener("click", () => this.createStickerPack());
     
+    // Icon Selection Modal Events
+    document.getElementById("upload-icon-btn").addEventListener("click", () => this.selectIconFile());
+    document.getElementById("skip-icon-btn").addEventListener("click", () => this.skipIconSelection());
+    document.getElementById("confirm-icon-upload").addEventListener("click", () => this.confirmIconUpload());
+    document.getElementById("change-icon-file").addEventListener("click", () => this.selectIconFile());
+    document.getElementById("cancel-icon-selection").addEventListener("click", () => this.hideIconModal());
+    
+    // Auto-skip icon setting
+    document.getElementById("auto-skip-icon").addEventListener("change", () => {
+      this.saveSettings();
+      this.updateToggleText();
+    });
+    
+    // Help button for auto-skip
+    document.getElementById("auto-skip-help").addEventListener("click", () => {
+      this.showAutoSkipHelp();
+    });
+    
+    // Success modal buttons
+    document.getElementById("copy-link-btn").addEventListener("click", () => this.copyShareableLink());
+    document.getElementById("open-telegram-btn").addEventListener("click", () => this.openTelegramLink());
+    document.getElementById("create-another-btn").addEventListener("click", () => this.createAnotherPack());
+    
+    // Real-time validation for pack name and URL name
+    document.getElementById("pack-name").addEventListener("input", (e) => {
+      const validation = this.validatePackName(e.target.value);
+      this.updateValidationDisplay("pack-name", validation);
+    });
+    
+    document.getElementById("pack-url-name").addEventListener("input", (e) => {
+      const validation = this.validateUrlName(e.target.value);
+      this.updateValidationDisplay("pack-url-name", validation);
+    });
+    
+    // Update toggle text on page load
+    this.updateToggleText();
+    
+    // Initialize validation display (empty state - no validation shown)
+    // Validation will show as user types
+    
     // Media type selection
     const selectImageBtn = document.getElementById("select-image-type");
     const selectVideoBtn = document.getElementById("select-video-type");
@@ -999,6 +1040,9 @@ class TelegramUtilities {
     
     // Advanced settings
     this.setupAdvancedSettings();
+    
+    // Status list controls
+    this.setupStatusControls();
     
     // Keyboard shortcuts
     this.setupKeyboardShortcuts();
@@ -1254,6 +1298,27 @@ class TelegramUtilities {
     }
   }
 
+  setupStatusControls() {
+    // Clear status history button
+    const clearBtn = document.getElementById("clear-status-history");
+    if (clearBtn) {
+      clearBtn.addEventListener("click", () => {
+        this.clearStatusHistory();
+        this.showToast("info", "Status History", "Status history cleared");
+      });
+    }
+    
+    // Toggle auto-scroll button
+    const toggleBtn = document.getElementById("toggle-auto-scroll");
+    if (toggleBtn) {
+      toggleBtn.addEventListener("click", () => {
+        this.toggleAutoScroll();
+        this.showToast("info", "Auto Scroll", 
+          this.autoScrollEnabled ? "Auto scroll enabled" : "Auto scroll disabled");
+      });
+    }
+  }
+
   setupKeyboardShortcuts() {
     document.addEventListener("keydown", (e) => {
       // Ctrl/Cmd + N: Add new files
@@ -1459,6 +1524,7 @@ class TelegramUtilities {
     const savedPhone = localStorage.getItem("telegram_phone");
     const savedOutputDir = localStorage.getItem("video_output_dir");
     const savedTheme = localStorage.getItem("app_theme");
+    const savedAutoSkipIcon = localStorage.getItem("auto_skip_icon");
     
     if (savedApiId) {
       const apiIdInput = document.getElementById("api-id");
@@ -1480,6 +1546,12 @@ class TelegramUtilities {
     if (savedTheme) {
       this.applyTheme(savedTheme);
     }
+    if (savedAutoSkipIcon !== null) {
+      const autoSkipIconCheckbox = document.getElementById("auto-skip-icon");
+      if (autoSkipIconCheckbox) {
+        autoSkipIconCheckbox.checked = savedAutoSkipIcon === "true";
+      }
+    }
   }
 
   saveSettings() {
@@ -1487,13 +1559,191 @@ class TelegramUtilities {
     const apiIdInput = document.getElementById("api-id");
     const apiHashInput = document.getElementById("api-hash");
     const phoneInput = document.getElementById("phone-number");
+    const autoSkipIconCheckbox = document.getElementById("auto-skip-icon");
     
     if (apiIdInput) localStorage.setItem("telegram_api_id", apiIdInput.value);
     if (apiHashInput) localStorage.setItem("telegram_api_hash", apiHashInput.value);
     if (phoneInput) localStorage.setItem("telegram_phone", phoneInput.value);
+    if (autoSkipIconCheckbox) localStorage.setItem("auto_skip_icon", autoSkipIconCheckbox.checked.toString());
     if (this.currentVideoOutput) {
       localStorage.setItem("video_output_dir", this.currentVideoOutput);
     }
+  }
+
+  updateToggleText() {
+    const autoSkipIconCheckbox = document.getElementById("auto-skip-icon");
+    const toggleTitle = document.getElementById("toggle-title");
+    const toggleSubtitle = document.getElementById("toggle-subtitle");
+    
+    if (autoSkipIconCheckbox && toggleTitle && toggleSubtitle) {
+      if (autoSkipIconCheckbox.checked) {
+        toggleTitle.textContent = "Auto-skip Icon Selection";
+        toggleSubtitle.textContent = "Icon step will be automatically skipped";
+      } else {
+        toggleTitle.textContent = "Auto-skip Icon Selection";
+        toggleSubtitle.textContent = "You'll be prompted to upload an icon file";
+      }
+    }
+  }
+
+  showAutoSkipHelp() {
+    const helpText = `
+      <div style="text-align: left; line-height: 1.6;">
+        <h4 style="margin: 0 0 1rem 0; color: var(--text-primary);">
+          <i class="fas fa-magic" style="color: var(--accent-color); margin-right: 0.5rem;"></i>
+          Auto-skip Icon Selection
+        </h4>
+        <div style="margin-bottom: 1rem;">
+          <strong style="color: var(--accent-color);">When enabled:</strong>
+          <p style="margin: 0.5rem 0; color: var(--text-secondary);">
+            The bot will automatically skip the icon selection step and use the first sticker as the pack icon.
+          </p>
+        </div>
+        <div>
+          <strong style="color: var(--accent-color);">When disabled:</strong>
+          <p style="margin: 0.5rem 0; color: var(--text-secondary);">
+            You'll be prompted to upload a custom icon file (WEBM format, up to 32 KB, 100x100 px).
+          </p>
+        </div>
+      </div>
+    `;
+    
+    this.showToast("info", "Auto-skip Icon Selection", helpText, 8000);
+  }
+
+  showSuccessModal(shareableLink) {
+    const modal = document.getElementById("success-modal");
+    const linkInput = document.getElementById("shareable-link");
+    
+    if (linkInput && shareableLink) {
+      linkInput.value = shareableLink;
+    }
+    
+    if (modal) {
+      modal.style.display = "flex";
+    }
+  }
+
+  hideSuccessModal() {
+    const modal = document.getElementById("success-modal");
+    if (modal) {
+      modal.style.display = "none";
+    }
+  }
+
+  async copyShareableLink() {
+    const linkInput = document.getElementById("shareable-link");
+    if (linkInput && linkInput.value) {
+      try {
+        await navigator.clipboard.writeText(linkInput.value);
+        this.showToast("success", "Link Copied", "Shareable link copied to clipboard!");
+      } catch (err) {
+        // Fallback for older browsers
+        linkInput.select();
+        document.execCommand('copy');
+        this.showToast("success", "Link Copied", "Shareable link copied to clipboard!");
+      }
+    }
+  }
+
+  openTelegramLink() {
+    const linkInput = document.getElementById("shareable-link");
+    if (linkInput && linkInput.value) {
+      window.open(linkInput.value, '_blank');
+    }
+  }
+
+  createAnotherPack() {
+    this.hideSuccessModal();
+    // Clear the form and reset to initial state
+    document.getElementById("pack-name").value = "";
+    document.getElementById("pack-url-name").value = "";
+    this.mediaFiles = [];
+    this.updateMediaList();
+    this.updatePackActions();
+    
+    // Reset validation display (clear any existing validation)
+    const packNameInput = document.getElementById("pack-name");
+    const urlNameInput = document.getElementById("pack-url-name");
+    const packNameValidation = document.getElementById("pack-name-validation");
+    const urlNameValidation = document.getElementById("pack-url-name-validation");
+    
+    if (packNameInput && packNameValidation) {
+      packNameInput.classList.remove('valid', 'invalid');
+      packNameValidation.classList.remove('valid', 'invalid');
+      packNameValidation.textContent = '';
+    }
+    
+    if (urlNameInput && urlNameValidation) {
+      urlNameInput.classList.remove('valid', 'invalid');
+      urlNameValidation.classList.remove('valid', 'invalid');
+      urlNameValidation.textContent = '';
+    }
+  }
+
+  validatePackName(packName) {
+    // Length validation (1-64 characters)
+    if (packName.length === 0) {
+      return { valid: false, error: "Pack name is required" };
+    }
+    if (packName.length > 64) {
+      return { valid: false, error: "Pack name must be no more than 64 characters long" };
+    }
+
+    // Basic validation (no special characters that might cause issues)
+    const invalidChars = /[<>\"'&]/;
+    if (invalidChars.test(packName)) {
+      return { valid: false, error: "Pack name contains invalid characters" };
+    }
+
+    return { valid: true };
+  }
+
+  validateUrlName(urlName) {
+    // Length validation (5-32 characters)
+    if (urlName.length < 5) {
+      return { valid: false, error: "URL name must be at least 5 characters long" };
+    }
+    if (urlName.length > 32) {
+      return { valid: false, error: "URL name must be no more than 32 characters long" };
+    }
+
+    // Character validation (only letters, numbers, underscores)
+    const validPattern = /^[a-zA-Z0-9_]+$/;
+    if (!validPattern.test(urlName)) {
+      return { valid: false, error: "URL name can only contain letters, numbers, and underscores" };
+    }
+
+    // Starting character validation (must start with letter)
+    if (!/^[a-zA-Z]/.test(urlName)) {
+      return { valid: false, error: "URL name must start with a letter" };
+    }
+
+    return { valid: true };
+  }
+
+  updateValidationDisplay(inputId, validation) {
+    const input = document.getElementById(inputId);
+    const validationDiv = document.getElementById(`${inputId}-validation`);
+    
+    if (!input || !validationDiv) return;
+
+    // Remove existing validation classes
+    input.classList.remove('valid', 'invalid');
+    validationDiv.classList.remove('valid', 'invalid');
+    validationDiv.textContent = '';
+
+    if (validation.valid) {
+      input.classList.add('valid');
+      validationDiv.classList.add('valid');
+      validationDiv.textContent = '✓ Valid';
+    } else if (input.value.length > 0) {
+      // Only show invalid state if user has typed something
+      input.classList.add('invalid');
+      validationDiv.classList.add('invalid');
+      validationDiv.textContent = validation.error;
+    }
+    // If input is empty, don't show any validation state
   }
 
   // =============================================
@@ -3846,13 +4096,31 @@ class TelegramUtilities {
   async createStickerPack() {
     const packNameEl = document.getElementById("pack-name");
     const packName = (packNameEl && typeof packNameEl.value === 'string') ? packNameEl.value.trim() : "";
+    const packUrlNameEl = document.getElementById("pack-url-name");
+    const packUrlName = (packUrlNameEl && typeof packUrlNameEl.value === 'string') ? packUrlNameEl.value.trim() : "";
     const stickerTypeEl = document.querySelector('input[name="sticker-type"]:checked');
     const stickerType = stickerTypeEl ? stickerTypeEl.value : 'image';
 
-    if (!packName) {
-      this.showToast("error", "Invalid Input", "Please enter a pack name");
+    // Validate pack name
+    const packNameValidation = this.validatePackName(packName);
+    if (!packNameValidation.valid) {
+      this.showToast("error", "Invalid Pack Name", packNameValidation.error);
+      this.addStatusItem(`Error: ${packNameValidation.error}`, "error");
+      this.updateValidationDisplay("pack-name", packNameValidation);
       return;
     }
+
+    // Validate URL name
+    const urlValidation = this.validateUrlName(packUrlName);
+    if (!urlValidation.valid) {
+      this.showToast("error", "Invalid URL Name", urlValidation.error);
+      this.addStatusItem(`Error: ${urlValidation.error}`, "error");
+      this.updateValidationDisplay("pack-url-name", urlValidation);
+      return;
+    }
+
+    // Add initial status
+    this.addStatusItem(`Starting sticker pack creation: "${packName}"`, "info");
     
     const incompatibleFiles = this.mediaFiles.filter((f) => {
       if (stickerType === "video" && f.type !== "video") return true;
@@ -3861,23 +4129,35 @@ class TelegramUtilities {
     });
     
     if (incompatibleFiles.length > 0) {
+      this.addStatusItem(`Warning: ${incompatibleFiles.length} files don't match sticker type`, "warning");
       const proceed = confirm(
         `${incompatibleFiles.length} files don't match the sticker type (${stickerType}). Continue with compatible files only?`
       );
-      if (!proceed) return;
+      if (!proceed) {
+        this.addStatusItem("Creation cancelled by user", "info");
+        return;
+      }
     }
+
+    this.addStatusItem(`Validating ${this.mediaFiles.length} media files...`, "info");
     
     try {
       const processId = "sticker_" + Date.now();
       console.log(`🔧 [FRONTEND] Creating sticker pack with process ID: ${processId}`);
+      // Get auto-skip setting first
+      const autoSkipIconEl = document.getElementById("auto-skip-icon");
+      const autoSkipIcon = autoSkipIconEl ? autoSkipIconEl.checked : true; // Default to true if not found
+      
       console.log(`🔧 [FRONTEND] Pack name: ${packName}`);
       console.log(`🔧 [FRONTEND] Sticker type: ${stickerType}`);
       console.log(`🔧 [FRONTEND] Media files count: ${this.mediaFiles.length}`);
+      console.log(`🔧 [FRONTEND] Auto-skip icon: ${autoSkipIcon}`);
       
       this.showLoadingOverlay("Starting sticker pack creation...");
       
       const requestData = {
         pack_name: packName,
+        pack_url_name: packUrlName,
         sticker_type: stickerType,
         media_files: this.mediaFiles.filter((f) => {
           if (stickerType === "video") return f.type === "video";
@@ -3885,6 +4165,7 @@ class TelegramUtilities {
           return true;
         }),
         process_id: processId,
+        auto_skip_icon: autoSkipIcon,
       };
       
       console.log(`🔧 [FRONTEND] Sending request data:`, requestData);
@@ -3903,6 +4184,8 @@ class TelegramUtilities {
           "Sticker pack creation started in background"
         );
         
+        this.addStatusItem("Sticker pack creation queued successfully", "completed");
+        
         const createBtn = document.getElementById("create-sticker-pack");
         if (createBtn) {
           createBtn.disabled = true;
@@ -3916,6 +4199,7 @@ class TelegramUtilities {
         this.startStickerProgressMonitoring(finalProcessId);
       } else {
         console.log(`🔧 [FRONTEND] Creation failed:`, response.error);
+        this.addStatusItem(`Error: ${response.error || "Failed to start creation"}`, "error");
         this.showToast(
           "error",
           "Creation Failed",
@@ -3926,6 +4210,7 @@ class TelegramUtilities {
       this.hideLoadingOverlay();
       console.error(`🔧 [FRONTEND] Error creating sticker pack:`, error);
       if (RENDERER_DEBUG) console.error("Error creating sticker pack:", error);
+      this.addStatusItem(`Error: Failed to create sticker pack - ${error.message}`, "error");
       this.showToast(
         "error",
         "Creation Error",
@@ -3938,6 +4223,10 @@ class TelegramUtilities {
     if (this.stickerProgressInterval) {
       clearInterval(this.stickerProgressInterval);
     }
+    
+    // Reset auto-skip flag for this process
+    this.autoSkipAttempted = false;
+    this.lastStage = null;
     
     console.log(`🔧 [FRONTEND] Starting progress monitoring for process: ${processId}`);
     console.log(`🔧 [FRONTEND] Process ID type: ${typeof processId}`);
@@ -3955,13 +4244,20 @@ class TelegramUtilities {
           console.log(`🔧 [FRONTEND] Debug endpoint error:`, debugError);
         }
         
-        const response = await this.apiRequest("GET", `/api/process-status/${processId}`);
+        const safePid = encodeURIComponent(String(processId ?? ""));
+        const response = await this.apiRequest("GET", `/api/process-status/${safePid}`);
         console.log(`🔧 [FRONTEND] Process status response:`, response);
         
         if (response.success && response.data) {
           const progress = response.data;
           console.log(`🔧 [FRONTEND] Progress data:`, progress);
           this.updateStickerProgressDisplay(progress);
+          
+          // Add status updates for different stages
+          if (progress.current_stage && progress.current_stage !== this.lastStage) {
+            this.addStatusItem(progress.current_stage, "info");
+            this.lastStage = progress.current_stage;
+          }
           
           // Update individual media file statuses
           if (progress.current_file) {
@@ -3976,7 +4272,44 @@ class TelegramUtilities {
             }
           }
           
-          if (progress.status === "completed") {
+          // Check if process is waiting for icon selection
+          if (progress.waiting_for_user && progress.icon_request_message) {
+            console.log(`🔧 [FRONTEND] Process ${processId} waiting for icon selection`);
+            
+            // Check auto-skip setting
+            const autoSkipIcon = document.getElementById("auto-skip-icon");
+            const shouldAutoSkip = autoSkipIcon && autoSkipIcon.checked;
+            
+            if (shouldAutoSkip && !this.autoSkipAttempted) {
+              // Auto-skip: send skip command automatically (only once)
+              this.autoSkipAttempted = true;
+              this.addStatusItem("Auto-skipping icon selection...", "info");
+              try {
+                const response = await this.apiRequest("POST", "/api/sticker/skip-icon", {
+                  process_id: processId
+                });
+                if (response.success) {
+                  this.addStatusItem("Icon step auto-skipped", "completed");
+                  // Continue monitoring without clearing interval - let it process the next step
+                  console.log(`🔧 [FRONTEND] Icon skipped, continuing to monitor for next step...`);
+                } else {
+                  this.addStatusItem(`Error auto-skipping icon: ${response.error}`, "error");
+                  // Show manual modal as fallback
+                  clearInterval(this.stickerProgressInterval);
+                  this.showIconModal(processId, progress.icon_request_message);
+                }
+              } catch (error) {
+                this.addStatusItem(`Error auto-skipping icon: ${error.message}`, "error");
+                // Show manual modal as fallback
+                clearInterval(this.stickerProgressInterval);
+                this.showIconModal(processId, progress.icon_request_message);
+              }
+            } else {
+              // Manual mode: show icon selection modal
+              clearInterval(this.stickerProgressInterval);
+              this.showIconModal(processId, progress.icon_request_message);
+            }
+          } else if (progress.status === "completed") {
             console.log(`🔧 [FRONTEND] Process ${processId} completed successfully`);
             clearInterval(this.stickerProgressInterval);
             this.onStickerProcessCompleted(true, progress);
@@ -3992,10 +4325,17 @@ class TelegramUtilities {
           this.onStickerProcessCompleted(false, { error: response.error });
         }
       } catch (error) {
+        // Treat certain backend I/O errors as transient; keep polling
+        const message = (error && error.message) ? String(error.message) : "";
+        if (message.includes('[Errno 22]') || message.includes('Invalid argument')) {
+          if (RENDERER_DEBUG) console.warn(`🔧 [FRONTEND] Transient invalid argument while monitoring ${processId}; retrying...`);
+          return; // skip logging loudly and clearing interval; try again next cycle
+        }
+
         console.error(`🔧 [FRONTEND] Error monitoring progress for ${processId}:`, error);
-        
+
         // If we get a database lock error, try to force cleanup
-        if (error && error.message && error.message.includes('database is locked')) {
+        if (message.includes('database is locked')) {
           console.log(`🔧 [FRONTEND] Database lock detected, attempting force cleanup...`);
           try {
             const cleanupResponse = await this.apiRequest("POST", "/api/force-cleanup-sessions");
@@ -4004,22 +4344,21 @@ class TelegramUtilities {
             console.log(`🔧 [FRONTEND] Force cleanup error:`, cleanupError);
           }
         }
-        
+
         if (RENDERER_DEBUG) console.error("Error monitoring sticker progress:", error);
         clearInterval(this.stickerProgressInterval);
-        this.onStickerProcessCompleted(false, { error: error.message });
+        this.onStickerProcessCompleted(false, { error: message || 'Unknown error' });
       }
     }, 2000);
   }
 
   updateStickerProgressDisplay(progress) {
-    const statusElement = document.getElementById("sticker-status");
+    // Update the new status list
+    this.addStatusItem(progress.current_stage || "Processing...", "processing");
+    
+    // Keep the old progress bar functionality for the progress section
     const progressBar = document.getElementById("sticker-progress-bar");
     const progressText = document.getElementById("sticker-progress-text");
-    
-    if (statusElement && progress.current_stage) {
-      statusElement.textContent = progress.current_stage;
-    }
     
     if (progressBar && progress.progress !== undefined) {
       progressBar.style.width = `${progress.progress}%`;
@@ -4031,6 +4370,76 @@ class TelegramUtilities {
       progress.total_files !== undefined
     ) {
       progressText.textContent = `${progress.completed_files}/${progress.total_files} files processed`;
+    }
+  }
+
+  // New status list functionality
+  addStatusItem(message, type = "info", timestamp = null) {
+    const statusList = document.getElementById("sticker-status-list");
+    if (!statusList) return;
+
+    const time = timestamp || new Date();
+    const timeString = time.toLocaleTimeString();
+    
+    const statusItem = document.createElement('div');
+    statusItem.className = `status-item ${type}`;
+    
+    const iconClass = this.getStatusIconClass(type);
+    
+    statusItem.innerHTML = `
+      <div class="status-time">${timeString}</div>
+      <div class="status-message">${message}</div>
+      <div class="status-icon"><i class="${iconClass}"></i></div>
+    `;
+    
+    // Add to the top of the list (latest first)
+    statusList.insertBefore(statusItem, statusList.firstChild);
+    
+    // Auto-scroll if enabled
+    if (this.autoScrollEnabled) {
+      statusList.scrollTop = 0;
+    }
+    
+    // Limit to 50 items to prevent memory issues
+    const items = statusList.querySelectorAll('.status-item');
+    if (items.length > 50) {
+      statusList.removeChild(items[items.length - 1]);
+    }
+  }
+
+  getStatusIconClass(type) {
+    const iconMap = {
+      'ready': 'fas fa-check-circle',
+      'processing': 'fas fa-spinner fa-spin',
+      'completed': 'fas fa-check-circle',
+      'error': 'fas fa-exclamation-circle',
+      'warning': 'fas fa-exclamation-triangle',
+      'info': 'fas fa-info-circle'
+    };
+    return iconMap[type] || 'fas fa-info-circle';
+  }
+
+  clearStatusHistory() {
+    const statusList = document.getElementById("sticker-status-list");
+    if (!statusList) return;
+    
+    statusList.innerHTML = `
+      <div class="status-item ready">
+        <div class="status-time">Ready</div>
+        <div class="status-message">Ready to create sticker pack</div>
+        <div class="status-icon"><i class="fas fa-check-circle"></i></div>
+      </div>
+    `;
+  }
+
+  toggleAutoScroll() {
+    this.autoScrollEnabled = !this.autoScrollEnabled;
+    const button = document.getElementById("toggle-auto-scroll");
+    if (button) {
+      button.classList.toggle("active", this.autoScrollEnabled);
+      button.innerHTML = this.autoScrollEnabled 
+        ? '<i class="fas fa-arrow-down"></i>' 
+        : '<i class="fas fa-pause"></i>';
     }
   }
 
@@ -4060,6 +4469,14 @@ class TelegramUtilities {
     // Update stats
     if (success) {
       this.sessionStats.totalStickers += this.mediaFiles.length;
+      this.addStatusItem("Sticker pack created successfully!", "completed");
+      
+      // Show success modal with shareable link if available
+      if (progressData && progressData.shareable_link) {
+        this.showSuccessModal(progressData.shareable_link);
+      }
+    } else {
+      this.addStatusItem(`Sticker pack creation failed: ${progressData.error || "Unknown error"}`, "error");
     }
     this.updateStats();
     
@@ -4191,6 +4608,143 @@ class TelegramUtilities {
     
     // Clear modal inputs
     this.clearModalInputs();
+  }
+
+  // Icon Selection Modal Functions
+  showIconModal(processId, iconRequestMessage) {
+    this.currentIconProcessId = processId;
+    this.currentIconRequestMessage = iconRequestMessage;
+    
+    const modal = document.getElementById("icon-modal");
+    const overlay = document.getElementById("modal-overlay");
+    
+    if (modal && overlay) {
+      modal.style.display = "block";
+      overlay.classList.add("active");
+      
+      // Update the modal content with the actual message from Telegram
+      const iconInfo = modal.querySelector(".icon-info p");
+      if (iconInfo && iconRequestMessage) {
+        iconInfo.textContent = iconRequestMessage;
+      }
+      
+      // Reset file selection
+      this.resetIconFileSelection();
+    }
+  }
+
+  hideIconModal() {
+    const modal = document.getElementById("icon-modal");
+    const overlay = document.getElementById("modal-overlay");
+    
+    if (modal && overlay) {
+      modal.style.display = "none";
+      overlay.classList.remove("active");
+    }
+    
+    this.currentIconProcessId = null;
+    this.currentIconRequestMessage = null;
+    this.selectedIconFile = null;
+  }
+
+  resetIconFileSelection() {
+    this.selectedIconFile = null;
+    const fileInfo = document.getElementById("icon-file-info");
+    const fileName = document.getElementById("icon-file-name");
+    
+    if (fileInfo) fileInfo.style.display = "none";
+    if (fileName) fileName.textContent = "No file selected";
+  }
+
+  async selectIconFile() {
+    try {
+      const result = await window.electronAPI.selectFile({
+        title: "Select Icon File",
+        filters: [
+          { name: "WEBM Files", extensions: ["webm"] },
+          { name: "All Files", extensions: ["*"] }
+        ]
+      });
+      
+      if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
+        const filePath = result.filePaths[0];
+        const fileName = filePath.split(/[\\/]/).pop();
+        
+        this.selectedIconFile = filePath;
+        
+        // Show file info
+        const fileInfo = document.getElementById("icon-file-info");
+        const fileNameElement = document.getElementById("icon-file-name");
+        
+        if (fileInfo) fileInfo.style.display = "block";
+        if (fileNameElement) fileNameElement.textContent = fileName;
+        
+        this.addStatusItem(`Selected icon file: ${fileName}`, "info");
+      }
+    } catch (error) {
+      console.error("Error selecting icon file:", error);
+      this.addStatusItem(`Error selecting icon file: ${error.message}`, "error");
+    }
+  }
+
+  async skipIconSelection() {
+    if (!this.currentIconProcessId) {
+      this.addStatusItem("No active process found", "error");
+      return;
+    }
+    
+    try {
+      this.addStatusItem("Sending skip command...", "info");
+      
+      const response = await this.apiRequest("POST", "/api/sticker/skip-icon", {
+        process_id: this.currentIconProcessId
+      });
+      
+      if (response.success) {
+        this.addStatusItem("Icon step skipped successfully", "completed");
+        this.hideIconModal();
+        // Restart monitoring to continue with the process
+        this.startStickerProgressMonitoring(this.currentIconProcessId);
+      } else {
+        this.addStatusItem(`Error skipping icon: ${response.error}`, "error");
+      }
+    } catch (error) {
+      console.error("Error skipping icon:", error);
+      this.addStatusItem(`Error skipping icon: ${error.message}`, "error");
+    }
+  }
+
+  async confirmIconUpload() {
+    if (!this.currentIconProcessId) {
+      this.addStatusItem("No active process found", "error");
+      return;
+    }
+    
+    if (!this.selectedIconFile) {
+      this.addStatusItem("No icon file selected", "error");
+      return;
+    }
+    
+    try {
+      this.addStatusItem("Uploading icon file...", "info");
+      
+      const response = await this.apiRequest("POST", "/api/sticker/upload-icon", {
+        process_id: this.currentIconProcessId,
+        icon_file_path: this.selectedIconFile
+      });
+      
+      if (response.success) {
+        this.addStatusItem("Icon file uploaded successfully", "completed");
+        this.hideIconModal();
+        // Restart monitoring to continue with the process
+        this.startStickerProgressMonitoring(this.currentIconProcessId);
+      } else {
+        this.addStatusItem(`Error uploading icon: ${response.error}`, "error");
+      }
+    } catch (error) {
+      console.error("Error uploading icon:", error);
+      this.addStatusItem(`Error uploading icon: ${error.message}`, "error");
+    }
   }
 
   clearModalInputs() {
@@ -5591,10 +6145,10 @@ This action cannot be undone. Are you sure?
           url = 'https://paypal.me/'; // Replace with your actual link
           break;
         case 'github':
-          url = 'https://github.com/RohitPoul'; // Your GitHub profile
+          url = 'https://github.com/JoonJelly'; // Your GitHub profile
           break;
         case 'star':
-          url = 'https://github.com/RohitPoul?tab=repositories'; // Your repositories
+          url = 'https://github.com/JoonJelly?tab=repositories'; // Your repositories
           break;
       }
       
@@ -6300,3 +6854,44 @@ document.addEventListener("click", (event) => {
 
 if (RENDERER_DEBUG) console.log("Telegram Utilities application loaded successfully!");
 if (RENDERER_DEBUG) console.log("Telegram Utilities application loaded successfully!");
+
+// ===== TRACE BOOT BANNER =====
+(function () {
+  try {
+    console.info('[TRACE] boot hook executing');
+    const banner = () => console.info('[TRACE] Frontend tracing active');
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', banner, { once: true });
+    } else {
+      banner();
+    }
+  } catch (e) { console.warn('TRACE boot failed', e); }
+})();
+
+// ===== Aggressive apiRequest patch (poll until app exists) =====
+(function () {
+  try {
+    const install = () => {
+      if (!window.app || !window.app.apiRequest || window.app.apiRequest.__traced) return false;
+      const original = window.app.apiRequest.bind(window.app);
+      window.app.apiRequest = async function (...args) {
+        const rid = Math.random().toString(36).slice(2, 8);
+        console.groupCollapsed(`[TRACE] apiRequest (${rid})`, ...args);
+        try {
+          const res = await original(...args);
+          try { console.info('apiResponse =', res); } catch {}
+          console.groupEnd();
+          return res;
+        } catch (err) {
+          console.error('apiError =', err);
+          console.groupEnd();
+          throw err;
+        }
+      };
+      window.app.apiRequest.__traced = true;
+      console.info('[TRACE] apiRequest patched');
+      return true;
+    };
+    const timer = setInterval(() => { if (install()) clearInterval(timer); }, 300);
+  } catch (e) { console.warn('TRACE apiRequest patch failed', e); }
+})();
