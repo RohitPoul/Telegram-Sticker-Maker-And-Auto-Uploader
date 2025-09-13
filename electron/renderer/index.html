@@ -192,7 +192,7 @@
           </div>
 
           <div class="sticker-container">
-            <div class="sticker-grid">
+            <div class="sticker-grid expanded">
               <!-- Telegram Connection -->
               <div class="card">
                 <div class="card-header">
@@ -350,6 +350,23 @@
                     maxlength="64"
                   />
                   <small class="help-text">Pack name (max 64 characters)</small>
+                  <div class="validation-message" id="pack-name-validation"></div>
+                </div>
+                <div class="form-group">
+                  <label>URL Name</label>
+                  <div class="input-group">
+                    <span class="input-prefix">t.me/addstickers/</span>
+                    <input
+                      type="text"
+                      id="pack-url-name"
+                      class="form-control"
+                      placeholder="my_awesome_pack_2025"
+                      maxlength="32"
+                      pattern="[a-zA-Z][a-zA-Z0-9_]*"
+                    />
+                  </div>
+                  <small class="help-text">URL name (5-32 chars, start with letter, use letters/numbers/underscores only)</small>
+                  <div class="validation-message" id="pack-url-name-validation"></div>
                 </div>
                 <div class="form-group">
                   <label>Sticker Type</label>
@@ -369,6 +386,30 @@
                     </label>
                   </div>
                 </div>
+                <div class="form-group">
+                  <div class="toggle-setting">
+                    <div class="toggle-header">
+                      <div class="toggle-info">
+                        <i class="fas fa-magic"></i>
+                        <div class="toggle-text">
+                          <span class="toggle-title" id="toggle-title">Auto-skip Icon Selection</span>
+                          <span class="toggle-subtitle" id="toggle-subtitle">Automatically skip icon step during pack creation</span>
+                        </div>
+                      </div>
+                      <div class="toggle-switch">
+                        <input type="checkbox" id="auto-skip-icon" checked>
+                        <label for="auto-skip-icon" class="toggle-slider">
+                          <span class="toggle-handle"></span>
+                        </label>
+                      </div>
+                    </div>
+                    <div class="toggle-description">
+                      <button class="help-button" id="auto-skip-help" title="Click for more information">
+                        <i class="fas fa-question-circle"></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
                 <div class="pack-actions">
                   <button
                     class="btn btn-success btn-large"
@@ -382,12 +423,28 @@
             </div>
 
             <!-- Creation Status -->
-            <div class="card">
+            <div class="card creation-status-card">
               <div class="card-header">
                 <h3><i class="fas fa-chart-line"></i> Creation Status</h3>
+                <div class="status-controls">
+                  <button class="btn btn-sm btn-secondary" id="clear-status-history" title="Clear History">
+                    <i class="fas fa-trash"></i>
+                  </button>
+                  <button class="btn btn-sm btn-secondary active" id="toggle-auto-scroll" title="Auto Scroll">
+                    <i class="fas fa-arrow-down"></i>
+                  </button>
+                </div>
               </div>
               <div class="card-body">
-                <div id="sticker-status">Ready to create sticker pack</div>
+                <div class="status-list-container">
+                  <div class="status-list" id="sticker-status-list">
+                    <div class="status-item ready">
+                      <div class="status-time">Ready</div>
+                      <div class="status-message">Ready to create sticker pack</div>
+                      <div class="status-icon"><i class="fas fa-check-circle"></i></div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
             </div>
@@ -520,6 +577,7 @@
               </div>
             </div>
 
+
             <div class="card">
               <div class="card-header">
                 <h3><i class="fas fa-database"></i> Data Management</h3>
@@ -565,14 +623,14 @@
             <div class="hero-section">
               <div class="profile-card">
                 <div class="profile-avatar">
-                  <img src="Avatar.jpeg" alt="Rohit Poul" class="avatar-image">
+                  <img src="Avatar.jpeg" alt="Joon Jelly" class="avatar-image">
                   <div class="status-badge">
                     <i class="fas fa-circle"></i>
                     <span>Available for Collaboration</span>
                   </div>
                 </div>
                 <div class="profile-info">
-                  <h1 class="profile-name">Rohit Poul</h1>
+                  <h1 class="profile-name">Joon Jelly</h1>
                   <p class="profile-tagline">AI Enthusiast • Open Source Developer • Tech Creator</p>
                   <div class="profile-stats">
                     <div class="stat-item">
@@ -645,7 +703,7 @@
                     <span class="feature-tag">Telegram Bot</span>
                   </div>
                   <div class="project-links">
-                    <a href="https://github.com/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader" target="_blank" class="project-link">
+                    <a href="https://github.com/JoonJelly/Telegram-Sticker-Maker-And-Auto-Uploader" target="_blank" class="project-link">
                       <i class="fab fa-github"></i>
                       View on GitHub
                     </a>
@@ -666,7 +724,7 @@
                     <span class="feature-tag">Video Processing</span>
                   </div>
                   <div class="project-links">
-                    <a href="https://github.com/RohitPoul/Background-Remover-Ai" target="_blank" class="project-link">
+                    <a href="https://github.com/JoonJelly/Background-Remover-Ai" target="_blank" class="project-link">
                       <i class="fab fa-github"></i>
                       View on GitHub
                     </a>
@@ -762,7 +820,7 @@
               </div>
               <div class="contact-content">
                 <div class="contact-methods">
-                  <a href="https://github.com/RohitPoul" target="_blank" class="contact-method">
+                  <a href="https://github.com/JoonJelly" target="_blank" class="contact-method">
                     <i class="fab fa-github"></i>
                     <span>GitHub</span>
                   </a>
@@ -853,6 +911,100 @@
             </button>
             <button class="btn btn-primary" id="submit-password">
               Authenticate
+            </button>
+          </div>
+        </div>
+
+        <!-- Icon Selection Modal -->
+        <div class="modal" id="icon-modal" style="display: none">
+          <div class="modal-header">
+            <h3><i class="fas fa-image"></i> Sticker Pack Icon</h3>
+            <button class="modal-close" onclick="window.app?.hideIconModal()">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="icon-selection-content">
+              <div class="icon-info">
+                <p>Telegram is asking for an icon for your sticker pack. You can:</p>
+                <ul>
+                  <li>Upload a WEBM file (up to 32 KB, 100x100 px)</li>
+                  <li>Skip this step (uses first sticker as icon)</li>
+                </ul>
+              </div>
+              
+              <div class="icon-options">
+                <div class="icon-option">
+                  <button class="btn btn-primary btn-large" id="upload-icon-btn">
+                    <i class="fas fa-upload"></i> Upload Icon File
+                  </button>
+                  <small class="help-text">Select a WEBM file from your computer</small>
+                </div>
+                
+                <div class="icon-option">
+                  <button class="btn btn-secondary btn-large" id="skip-icon-btn">
+                    <i class="fas fa-forward"></i> Skip Icon
+                  </button>
+                  <small class="help-text">Use the first sticker as the pack icon</small>
+                </div>
+              </div>
+              
+              <div class="icon-file-info" id="icon-file-info" style="display: none">
+                <div class="file-preview">
+                  <i class="fas fa-file-video"></i>
+                  <span id="icon-file-name">No file selected</span>
+                </div>
+                <div class="file-actions">
+                  <button class="btn btn-success" id="confirm-icon-upload">
+                    <i class="fas fa-check"></i> Upload This File
+                  </button>
+                  <button class="btn btn-secondary" id="change-icon-file">
+                    <i class="fas fa-edit"></i> Change File
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" id="cancel-icon-selection">
+              Cancel
+            </button>
+          </div>
+        </div>
+
+        <!-- Success Modal -->
+        <div class="modal" id="success-modal" style="display: none">
+          <div class="modal-header">
+            <h3><i class="fas fa-check-circle" style="color: var(--success-color);"></i> Sticker Pack Created!</h3>
+            <button class="modal-close" onclick="window.app?.hideSuccessModal()">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="success-content">
+              <div class="success-info">
+                <p><strong>Your sticker pack has been successfully created!</strong></p>
+                <p>You can now share it with other Telegram users using the link below:</p>
+              </div>
+              <div class="link-container">
+                <div class="link-display">
+                  <input type="text" id="shareable-link" class="form-control" readonly>
+                  <button class="btn btn-primary" id="copy-link-btn">
+                    <i class="fas fa-copy"></i>
+                    Copy Link
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-success" id="open-telegram-btn">
+              <i class="fas fa-external-link-alt"></i>
+              Open in Telegram
+            </button>
+            <button class="btn btn-secondary" id="create-another-btn">
+              <i class="fas fa-plus"></i>
+              Create Another Pack
             </button>
           </div>
         </div>
