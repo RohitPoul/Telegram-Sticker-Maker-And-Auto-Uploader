@@ -13,6 +13,9 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import traceback
 import queue
+import platform
+import shutil
+import uuid
 
 # Stats functions will be defined after logger is initialized
 
@@ -137,6 +140,13 @@ if VIDEO_CONVERTER_AVAILABLE and video_converter:
 else:
     logger.warning("[WARNING] Video converter not available, skipping dependency injection")
 
+# After creating the Flask app
+from telegram_connection_handler import get_telegram_handler
+
+# Initialize the Telegram handler early
+telegram_handler = get_telegram_handler()
+logger.info("Telegram connection handler initialized early in backend startup")
+
 # Configuration
 class Config:
     SUPPORTED_INPUT_FORMATS = ["*.mp4", "*.avi", "*.mov", "*.mkv", "*.flv", "*.webm"]
@@ -205,18 +215,32 @@ def cleanup_telegram_and_sessions():
         except Exception as e:
             logger.warning(f"[CLEANUP] Error during garbage collection: {e}")
         
-        # Clean up ALL session files and lock files
+        # Clean up ONLY temporary session files and database lock files
+        # DO NOT delete the main persistent session file (telegram_session.session)
         session_patterns = [
-            'temp_session_*.session*',
-            '*.session-journal',
-            '*.session-wal',
-            'session_*.session-journal',
-            'session_*.session-wal'
+            'temp_session_*.session*',  # Only temporary sessions
+            '*.session-journal',        # SQLite journal files (safe to delete)
+            '*.session-wal',           # SQLite WAL files (safe to delete)
+            'session_*.session-journal', # Session journal files (safe to delete)
+            'session_*.session-wal',    # Session WAL files (safe to delete)
+            'telegram_session.session-journal', # Our session's journal (safe to delete)
+            'telegram_session.session-wal'      # Our session's WAL (safe to delete)
+        ]
+        
+        # Explicitly protect our main session file
+        protected_files = [
+            'telegram_session.session',
+            'python/telegram_session.session'
         ]
         
         cleaned_count = 0
         for pattern in session_patterns:
             for p in Path('.').glob(pattern):
+                # Skip if this is a protected file
+                if str(p) in protected_files:
+                    logger.debug(f"[CLEANUP] Skipping protected file: {p}")
+                    continue
+                    
                 try:
                     p.unlink()
                     logger.info(f"[CLEANUP] Deleted {pattern}: {p}")
@@ -229,6 +253,11 @@ def cleanup_telegram_and_sessions():
         if python_dir.exists():
             for pattern in session_patterns:
                 for p in python_dir.glob(pattern):
+                    # Skip if this is a protected file
+                    if str(p) in protected_files:
+                        logger.debug(f"[CLEANUP] Skipping protected file: {p}")
+                        continue
+                        
                     try:
                         p.unlink()
                         logger.info(f"[CLEANUP] Deleted {pattern} from python/: {p}")
@@ -241,6 +270,14 @@ def cleanup_telegram_and_sessions():
         # Wait a moment for file handles to be released
         import time
         time.sleep(0.5)
+        
+        # Additionally, kill our app-related Python processes
+        try:
+            from kill_python_processes import kill_our_app_processes
+            kill_results = kill_our_app_processes()
+            logger.info(f"[CLEANUP] kill_our_app_processes results: {kill_results}")
+        except Exception as e:
+            logger.warning(f"[CLEANUP] Could not kill our app processes: {e}")
         
     except Exception as e:
         logger.warning(f"[CLEANUP] Smart session cleanup failed: {e}")
@@ -1734,6 +1771,60 @@ def telegram_session_status():
         logger.error(f"Error checking session status: {e}")
         return jsonify({
             "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/telegram/connect', methods=['POST', 'OPTIONS'], strict_slashes=False)
+def connect_telegram():
+    """Connect to Telegram using the simplified handler"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    try:
+        # Get JSON data
+        data = request.get_json()
+        logger.info(f"[TRACE][api/telegram/connect] payload keys={list(data.keys()) if data else None}")
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
+        
+        # Extract connection parameters
+        api_id = data.get('api_id')
+        api_hash = data.get('api_hash')
+        phone_number = data.get('phone_number')
+        process_id = data.get('process_id')
+        logger.info(f"[TRACE][api/telegram/connect] process_id={process_id} phone=***{str(phone_number)[-4:]}")
+        
+        # Validate inputs
+        if not all([api_id, api_hash, phone_number]):
+            return jsonify({
+                "success": False, 
+                "error": "Missing required connection details: api_id, api_hash, phone_number"
+            }), 400
+        
+        # Use the simplified Telegram connection handler
+        from telegram_connection_handler import get_telegram_handler
+        handler = get_telegram_handler()
+        logger.info(f"[TRACE][api/telegram/connect] health(before)={handler.health_status()}")
+        
+        # Ensure loop and log again
+        try:
+            handler.ensure_event_loop()
+            logger.info(f"[TRACE][api/telegram/connect] health(after ensure)={handler.health_status()}")
+        except Exception as e:
+            logger.error(f"[TRACE][api/telegram/connect] ensure_event_loop error: {e}")
+            raise
+        
+        # Attempt to connect
+        logger.info("[TRACE][api/telegram/connect] calling handler.connect_telegram()")
+        result = handler.connect_telegram(api_id, api_hash, phone_number)
+        logger.info(f"[TRACE][api/telegram/connect] result={result}")
+        
+        return jsonify(result)
+    
+    except Exception as e:
+        logger.error(f"Telegram connection error: {e}", exc_info=True)
+        return jsonify({
+            "success": False, 
             "error": str(e)
         }), 500
 
