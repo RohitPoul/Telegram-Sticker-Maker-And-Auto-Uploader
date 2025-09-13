@@ -18,7 +18,25 @@ from dataclasses import dataclass
 try:
     import fcntl  # noqa: F401
 except Exception:
-    fcntl = None
+    pass
+
+def validate_url_name(url_name):
+    """Validate URL name according to Telegram sticker pack rules"""
+    # Length validation (5-32 characters)
+    if len(url_name) < 5:
+        return {'valid': False, 'error': 'URL name must be at least 5 characters long'}
+    if len(url_name) > 32:
+        return {'valid': False, 'error': 'URL name must be no more than 32 characters long'}
+    
+    # Character validation (only letters, numbers, underscores)
+    if not re.match(r'^[a-zA-Z0-9_]+$', url_name):
+        return {'valid': False, 'error': 'URL name can only contain letters, numbers, and underscores'}
+    
+    # Starting character validation (must start with letter)
+    if not re.match(r'^[a-zA-Z]', url_name):
+        return {'valid': False, 'error': 'URL name must start with a letter'}
+    
+    return {'valid': True}
 
 try:
     from telethon import TelegramClient, events
@@ -188,9 +206,15 @@ class SecureCredentialManager:
 class BotResponseType(Enum):
     NEW_PACK_CREATED = "new_pack_created"
     PACK_NAME_ACCEPTED = "pack_name_accepted"
+    URL_NAME_REQUEST = "url_name_request"
+    URL_NAME_ACCEPTED = "url_name_accepted"
+    URL_NAME_TAKEN = "url_name_taken"
     FILE_UPLOADED = "file_uploaded"
     EMOJI_ACCEPTED = "emoji_accepted"
     PACK_PUBLISHED = "pack_published"
+    ICON_REQUEST = "icon_request"
+    ICON_ACCEPTED = "icon_accepted"
+    PACK_SUCCESS = "pack_success"
     ERROR_RESPONSE = "error_response"
     UNKNOWN = "unknown"
 
@@ -216,6 +240,23 @@ class AdvancedResponseMatcher:
                 r"now\s*send\s*me\s*the\s*(?:video\s*)?sticker",
                 r"send\s*me\s*the\s*(?:video\s*)?sticker",
             ],
+            BotResponseType.URL_NAME_REQUEST: [
+                r"please\s*provide\s*a\s*short\s*name\s*for\s*your\s*set",
+                r"please\s*provide\s*a\s*short\s*name",
+                r"short\s*name\s*for\s*your\s*set",
+                r"i'll\s*use\s*it\s*to\s*create\s*a\s*link",
+            ],
+            BotResponseType.URL_NAME_ACCEPTED: [
+                r"alright!\s*now\s*send\s*me\s*the\s*(?:video\s*)?sticker",
+                r"now\s*send\s*me\s*the\s*(?:video\s*)?sticker",
+                r"send\s*me\s*the\s*(?:video\s*)?sticker",
+            ],
+            BotResponseType.URL_NAME_TAKEN: [
+                r"sorry,\s*this\s*short\s*name\s*is\s*already\s*taken",
+                r"this\s*short\s*name\s*is\s*already\s*taken",
+                r"short\s*name\s*is\s*already\s*taken",
+                r"name\s*is\s*already\s*taken",
+            ],
             BotResponseType.FILE_UPLOADED: [
                 r"thanks!\s*now\s*send\s*me\s*an\s*emoji",
                 r"now\s*send\s*me\s*an\s*emoji\s*that\s*corresponds",
@@ -230,6 +271,24 @@ class AdvancedResponseMatcher:
                 r"your\s*(?:video\s*)?sticker\s*pack\s*has\s*been\s*published",
                 r"sticker\s*pack\s*has\s*been\s*published",
                 r"published\s*successfully",
+            ],
+            BotResponseType.ICON_REQUEST: [
+                r"you\s*can\s*set\s*an\s*icon\s*for\s*your\s*(?:video\s*)?sticker\s*set",
+                r"to\s*set\s*an\s*icon.*send\s*me\s*a\s*webm\s*file",
+                r"you\s*can\s*/skip\s*this\s*step",
+                r"send\s*me\s*a\s*webm\s*file\s*up\s*to\s*32\s*kb",
+            ],
+            BotResponseType.ICON_ACCEPTED: [
+                r"thanks!\s*stickers?\s*in\s*the\s*set:\s*\d+",
+                r"stickers?\s*in\s*the\s*set:\s*\d+",
+                r"your\s*(?:video\s*)?sticker\s*pack\s*has\s*been\s*published",
+                r"sticker\s*pack\s*has\s*been\s*published",
+            ],
+            BotResponseType.PACK_SUCCESS: [
+                r"kaboom!\s*i've\s*just\s*published\s*your\s*sticker\s*set",
+                r"here's\s*your\s*link:\s*https://t\.me/addstickers/",
+                r"you\s*can\s*share\s*it\s*with\s*other\s*telegram\s*users",
+                r"https://t\.me/addstickers/",
             ],
             BotResponseType.ERROR_RESPONSE: [
                 r"sorry,\s*i\s*don't\s*understand",
@@ -379,6 +438,25 @@ class SimpleConversationManager:
         response = await self.wait_for_response(expected_response, timeout)
         return response
 
+    async def send_file_and_wait(self, file_path: str, expected_response: BotResponseType, timeout: float = 60.0):
+        """Send a file and wait for the expected response"""
+        self.logger.info(f"[FILE] Sending file: {file_path}")
+        
+        # Clear pending responses
+        while not self.response_queue.empty():
+            try:
+                await self.response_queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+
+        # Send file
+        await self.client.send_file(self.bot_peer, file_path)
+        self.logger.info(f"[FILE] Sent file: {os.path.basename(file_path)}")
+
+        # Wait for response
+        response = await self.wait_for_response(expected_response, timeout)
+        return response
+
 
 class MediaItem:
     def __init__(self, file_path: str, media_type: str, emoji: str = "😀"):
@@ -492,8 +570,201 @@ class StickerBotCore:
                 logging.error(f"[DEBUG] Error type: {type(e)}")
                 logging.error(f"[DEBUG] Full traceback: {traceback.format_exc()}")
 
+    def create_sticker_pack(self, pack_name: str, pack_url_name: str, sticker_type: str, media_files: List[Dict], process_id: str, auto_skip_icon: bool = True):
+        """REAL sticker pack creation with EXACT advanced logic from Python version"""
+        try:
+            self.logger.info(f"[STICKER] Starting create_sticker_pack with process_id: {process_id}")
+            self.logger.info(f"[STICKER] Pack name: {pack_name}")
+            self.logger.info(f"[STICKER] Sticker type: {sticker_type}")
+            self.logger.info(f"[STICKER] Media files count: {len(media_files)}")
+            self.logger.info(f"[STICKER] Auto-skip icon: {auto_skip_icon}")
+            
+            # Check current connection status
+            self.logger.info(f"[STICKER] Current conversation_manager: {self.conversation_manager}")
+            self.logger.info(f"[STICKER] Current client: {self.client}")
+            self.logger.info(f"[STICKER] Current bot_peer: {self.bot_peer}")
+            
+            # Check if we have a conversation manager, if not try to set it up from existing connection
+            if not self.conversation_manager:
+                self.logger.info("[STICKER] No conversation manager found, attempting to set up from existing connection")
+                try:
+                    # Try to get the client from the telegram handler
+                    from telegram_connection_handler import get_telegram_handler
+                    handler = get_telegram_handler()
+                    if handler and handler._client:
+                        self.logger.info("[STICKER] Found existing client in handler, setting up conversation manager")
+                        
+                        # Use the handler's event loop to get the bot peer
+                        async def setup_conversation_manager():
+                            try:
+                                # Get bot peer using the handler's event loop
+                                bot_peer = await handler._client.get_entity('@stickers')
+                                self.logger.info(f"[STICKER] Bot peer obtained: {bot_peer}")
+                                
+                                # Set up the client and bot peer
+                                self.client = handler._client
+                                self.bot_peer = bot_peer
+                                
+                                # Create conversation manager
+                                self.conversation_manager = SimpleConversationManager(
+                                    self.client, 
+                                    self.bot_peer, 
+                                    self.logger
+                                )
+                                
+                                # Start listening
+                                await self.conversation_manager.start_listening()
+                                self.logger.info("[STICKER] Conversation manager set up successfully")
+                                return True
+                            except Exception as e:
+                                self.logger.error(f"[STICKER] Error setting up conversation manager: {e}")
+                                self.logger.error(f"[STICKER] Error type: {type(e)}")
+                                self.logger.error(f"[STICKER] Full traceback: {traceback.format_exc()}")
+                                return False
+                        
+                        # Run the setup in the handler's event loop
+                        success = handler.run_async(setup_conversation_manager())
+                        if not success:
+                            raise RuntimeError("Failed to set up conversation manager")
+                    else:
+                        raise RuntimeError("No existing Telegram connection found")
+                except Exception as e:
+                    self.logger.error(f"[STICKER] Failed to set up conversation manager: {e}")
+                    self.logger.error(f"[STICKER] Error type: {type(e)}")
+                    self.logger.error(f"[STICKER] Full traceback: {traceback.format_exc()}")
+                    raise RuntimeError("Not connected to Telegram")
+            
+            if not self.conversation_manager:
+                raise RuntimeError("Not connected to Telegram")
+            
+            # Verify conversation manager is properly set up
+            if not self.conversation_manager.listening:
+                self.logger.warning("[STICKER] Conversation manager not listening, attempting to restart...")
+                try:
+                    # Use run_telegram_coroutine to handle the async call
+                    run_telegram_coroutine(self.conversation_manager.start_listening())
+                    self.logger.info("[STICKER] Conversation manager restarted successfully")
+                except Exception as e:
+                    self.logger.error(f"[STICKER] Failed to restart conversation manager: {e}")
+                    raise RuntimeError("Failed to start conversation manager")
+
+            # Convert to MediaItem objects
+            media_items = []
+            for media_file in media_files:
+                media_item = MediaItem(
+                    media_file['file_path'],
+                    sticker_type,
+                    media_file.get('emoji', '😀')
+                )
+                media_items.append(media_item)
+
+            self.logger.info(f"[STICKER] Created {len(media_items)} media items for process {process_id}")
+
+            # Run creation using the existing run_telegram_coroutine function
+            result = run_telegram_coroutine(
+                self._create_sticker_pack_async(pack_name, pack_url_name, sticker_type, media_items, process_id, auto_skip_icon)
+            )
+
+            self.logger.info(f"[STICKER] Pack creation completed for process {process_id}")
+            return result
+
+        except Exception as e:
+            self.logger.error(f"[STICKER] Pack creation error for process {process_id}: {e}")
+            raise
+
+    async def _create_sticker_pack_async(self, pack_name: str, pack_url_name: str, sticker_type: str, media_items: List[MediaItem], process_id: str, auto_skip_icon: bool = True):
+        """EXACT STICKER CREATION LOGIC FROM PYTHON VERSION"""
+        try:
+            # Import active_processes from shared state
+            from shared_state import active_processes, process_lock, add_process, update_process
+            self.logger.info(f"[STICKER] Successfully imported active_processes, current processes: {list(active_processes.keys())}")
+
+            self.logger.info(f"[STICKER] Starting pack creation: {pack_name}")
+            self.logger.info(f"[STICKER] Process ID: {process_id}")
+            self.logger.info(f"[STICKER] Available processes: {list(active_processes.keys())}")
+
+            # Step 1: Create new sticker pack
+            command = "/newvideo" if sticker_type == "video" else "/newpack"
+            self.logger.info(f"[STICKER] Sending command: {command}")
+            
+            response = await self.conversation_manager.send_and_wait(
+                command, BotResponseType.NEW_PACK_CREATED, timeout=30.0
+            )
+
+            self.logger.info(f"[STICKER] Pack creation confirmed: {response.message[:100]}...")
+
+            # Step 2: Send pack name
+            self.logger.info(f"[STICKER] Sending pack name: {pack_name}")
+            response = await self.conversation_manager.send_and_wait(
+                pack_name, BotResponseType.PACK_NAME_ACCEPTED, timeout=30.0
+            )
+
+            self.logger.info(f"[STICKER] Pack name accepted: {response.message[:100]}...")
+
+            # Step 3: Upload stickers
+            for i, media_item in enumerate(media_items):
+                filename = os.path.basename(media_item.file_path)
+                self.logger.info(f"[STICKER] Processing sticker {i+1}/{len(media_items)}: {filename}")
+                
+                # Update process status
+                with process_lock:
+                    if process_id in active_processes:
+                        active_processes[process_id]['current_file'] = filename
+                        active_processes[process_id]['current_stage'] = f'Uploading sticker {i+1}/{len(media_items)}...'
+                        active_processes[process_id]['progress'] = (i / len(media_items)) * 100
+
+                try:
+                    # Upload file
+                    self.logger.info(f"[STICKER] Uploading file: {filename}")
+                    response = await self.conversation_manager.send_file_and_wait(
+                        media_item.file_path, BotResponseType.FILE_UPLOADED, timeout=60.0
+                    )
+
+                    self.logger.info(f"[STICKER] File uploaded: {response.message[:100]}...")
+
+                    # Send emoji
+                    self.logger.info(f"[STICKER] Sending emoji: {media_item.emoji}")
+                    response = await self.conversation_manager.send_and_wait(
+                        media_item.emoji, BotResponseType.EMOJI_ACCEPTED, timeout=30.0
+                    )
+
+                    self.logger.info(f"[STICKER] Emoji accepted: {response.message[:100]}...")
+
+                    # Update progress
+                    with process_lock:
+                        if process_id in active_processes:
+                            active_processes[process_id]['completed_files'] = i + 1
+                            active_processes[process_id]['progress'] = ((i + 1) / len(media_items)) * 100
+                            active_processes[process_id]['current_stage'] = f'Completed {filename}'
+
+                except Exception as e:
+                    self.logger.error(f"[STICKER] Error processing {filename}: {e}")
+                    # Continue with next file instead of failing completely
+                    continue
+
+            # Step 4: Publish pack
+            self.logger.info(f"[STICKER] Publishing pack...")
+            response = await self.conversation_manager.send_and_wait(
+                "/publish", BotResponseType.PACK_PUBLISHED, timeout=30.0
+            )
+
+            self.logger.info(f"[STICKER] Pack published: {response.message[:100]}...")
+
+            # Update final status
+            with process_lock:
+                if process_id in active_processes:
+                    active_processes[process_id]['status'] = 'completed'
+                    active_processes[process_id]['current_stage'] = 'Sticker pack created successfully'
+                    active_processes[process_id]['progress'] = 100
+
+            return {"success": True, "message": "Sticker pack created successfully"}
+
+        except Exception as e:
+            self.logger.error(f"[STICKER] Pack creation error: {e}")
+            raise
+
     def is_connected(self):
-        """Check if Telegram connection is available"""
+        """Check if Telegram connection is available with session reuse"""
         try:
             self.logger.info("[STICKER] Checking connection status...")
             
@@ -513,6 +784,34 @@ class StickerBotCore:
                 return False
                 
             self.logger.info(f"[STICKER] Handler found: {handler}")
+            
+            # Check if handler has a valid session
+            if handler.is_session_valid():
+                self.logger.info("[STICKER] Valid session found through handler")
+                # Update our references to the handler's client
+                self.client = handler._client
+                self.session_file = handler._client.session.filename if hasattr(handler._client, 'session') else None
+                
+                # Set up bot interaction if not already done
+                if not self.conversation_manager:
+                    try:
+                        async def setup_bot_interaction():
+                            self.bot_peer = await self.client.get_entity('@stickers')
+                            self.conversation_manager = SimpleConversationManager(
+                                self.client, 
+                                self.bot_peer, 
+                                self.logger
+                            )
+                            await self.conversation_manager.start_listening()
+                            return True
+                        
+                        handler.run_async(setup_bot_interaction())
+                        self.logger.info("[STICKER] Bot interaction set up with existing session")
+                    except Exception as e:
+                        self.logger.error(f"[STICKER] Error setting up bot interaction: {e}")
+                        return False
+                
+                return True
             
             if not handler._client:
                 self.logger.info("[STICKER] Connection status: FALSE (no client in handler)")
@@ -591,6 +890,33 @@ class StickerBotCore:
                     "needs_password": False,
                     "phone_number": safe_phone_number
                 }
+            
+            # Check if we already have a valid session
+            if handler.is_session_valid():
+                logging.info("[DEBUG] Valid session already exists, reusing...")
+                # Set up our references to the existing session
+                self.client = handler._client
+                self.session_file = handler._client.session.filename if hasattr(handler._client, 'session') else None
+                
+                # Set up bot interaction if not already done
+                if not self.conversation_manager:
+                    try:
+                        async def setup_bot_interaction():
+                            self.bot_peer = await self.client.get_entity('@stickers')
+                            self.conversation_manager = SimpleConversationManager(
+                                self.client, 
+                                self.bot_peer, 
+                                self.logger
+                            )
+                            await self.conversation_manager.start_listening()
+                            return True
+                        
+                        handler.run_async(setup_bot_interaction())
+                        logging.info("[DEBUG] Bot interaction set up with existing session")
+                    except Exception as e:
+                        logging.error(f"[DEBUG] Error setting up bot interaction with existing session: {e}")
+                
+                return {"success": True, "message": "Using existing valid session"}
             
             # Delegate to handler for consistent event loop usage
             result = handler.connect_telegram(safe_api_id, safe_api_hash, safe_phone_number)
@@ -746,13 +1072,14 @@ class StickerBotCore:
                 "needs_password": False
             }
 
-    def create_sticker_pack(self, pack_name: str, sticker_type: str, media_files: List[Dict], process_id: str):
+    def create_sticker_pack(self, pack_name: str, pack_url_name: str, sticker_type: str, media_files: List[Dict], process_id: str, auto_skip_icon: bool = True):
         """REAL sticker pack creation with EXACT advanced logic from Python version"""
         try:
             self.logger.info(f"[STICKER] Starting create_sticker_pack with process_id: {process_id}")
             self.logger.info(f"[STICKER] Pack name: {pack_name}")
             self.logger.info(f"[STICKER] Sticker type: {sticker_type}")
             self.logger.info(f"[STICKER] Media files count: {len(media_files)}")
+            self.logger.info(f"[STICKER] Auto-skip icon: {auto_skip_icon}")
             
             # Check current connection status
             self.logger.info(f"[STICKER] Current conversation_manager: {self.conversation_manager}")
@@ -811,6 +1138,17 @@ class StickerBotCore:
             
             if not self.conversation_manager:
                 raise RuntimeError("Not connected to Telegram")
+            
+            # Verify conversation manager is properly set up
+            if not self.conversation_manager.listening:
+                self.logger.warning("[STICKER] Conversation manager not listening, attempting to restart...")
+                try:
+                    # Use run_telegram_coroutine to handle the async call
+                    run_telegram_coroutine(self.conversation_manager.start_listening())
+                    self.logger.info("[STICKER] Conversation manager restarted successfully")
+                except Exception as e:
+                    self.logger.error(f"[STICKER] Failed to restart conversation manager: {e}")
+                    raise RuntimeError("Failed to start conversation manager")
 
             # Convert to MediaItem objects
             media_items = []
@@ -826,7 +1164,7 @@ class StickerBotCore:
 
             # Run creation using the existing run_telegram_coroutine function
             result = run_telegram_coroutine(
-                self._create_sticker_pack_async(pack_name, sticker_type, media_items, process_id)
+                self._create_sticker_pack_async(pack_name, pack_url_name, sticker_type, media_items, process_id, auto_skip_icon)
             )
 
             self.logger.info(f"[STICKER] Pack creation completed for process {process_id}")
@@ -836,7 +1174,7 @@ class StickerBotCore:
             self.logger.error(f"[STICKER] Pack creation error for process {process_id}: {e}")
             raise
 
-    async def _create_sticker_pack_async(self, pack_name: str, sticker_type: str, media_items: List[MediaItem], process_id: str):
+    async def _create_sticker_pack_async(self, pack_name: str, pack_url_name: str, sticker_type: str, media_items: List[MediaItem], process_id: str, auto_skip_icon: bool = True):
         """EXACT STICKER CREATION LOGIC FROM PYTHON VERSION"""
         try:
             # Import active_processes from shared state
@@ -866,7 +1204,55 @@ class StickerBotCore:
 
             self.logger.info(f"[STICKER] Pack name accepted: {response.message[:100]}...")
 
-            # Step 3: Process each media item
+            # Step 3: Send URL name (if requested)
+            if "please provide a short name" in response.message.lower() or "short name" in response.message.lower():
+                self.logger.info(f"[STICKER] URL name requested, sending: {pack_url_name}")
+                
+                # Try URL name up to 3 times
+                url_name_attempts = 0
+                max_attempts = 3
+                
+                while url_name_attempts < max_attempts:
+                    url_name_attempts += 1
+                    self.logger.info(f"[STICKER] URL name attempt {url_name_attempts}/{max_attempts}")
+                    
+                    # Update process status
+                    if process_id in active_processes:
+                        active_processes[process_id]["current_stage"] = f"Trying URL name (attempt {url_name_attempts}/{max_attempts})"
+                        active_processes[process_id]["url_name_attempts"] = url_name_attempts
+                    
+                    response = await self.conversation_manager.send_and_wait(
+                        pack_url_name, BotResponseType.URL_NAME_ACCEPTED, timeout=30.0
+                    )
+                    
+                    # Check if URL name was accepted
+                    if response.response_type == BotResponseType.URL_NAME_ACCEPTED:
+                        self.logger.info(f"[STICKER] URL name accepted: {pack_url_name}")
+                        break
+                    elif response.response_type == BotResponseType.URL_NAME_TAKEN:
+                        self.logger.warning(f"[STICKER] URL name taken: {pack_url_name}")
+                        if url_name_attempts >= max_attempts:
+                            # Max attempts reached, mark as failed
+                            if process_id in active_processes:
+                                active_processes[process_id]["status"] = "failed"
+                                active_processes[process_id]["current_stage"] = "URL name failed after 3 attempts. Please complete manually."
+                                active_processes[process_id]["error"] = "URL name was taken after 3 attempts. Please complete the process manually."
+                            return {"success": False, "error": "URL name was taken after 3 attempts. Please complete the process manually."}
+                        else:
+                            # Generate a new URL name with timestamp
+                            import time
+                            pack_url_name = f"{pack_url_name}_{int(time.time())}"
+                            self.logger.info(f"[STICKER] Trying new URL name: {pack_url_name}")
+                    else:
+                        self.logger.error(f"[STICKER] Unexpected response for URL name: {response.message}")
+                        if url_name_attempts >= max_attempts:
+                            if process_id in active_processes:
+                                active_processes[process_id]["status"] = "failed"
+                                active_processes[process_id]["current_stage"] = "URL name failed after 3 attempts. Please complete manually."
+                                active_processes[process_id]["error"] = "URL name failed after 3 attempts. Please complete the process manually."
+                            return {"success": False, "error": "URL name failed after 3 attempts. Please complete the process manually."}
+
+            # Step 4: Process each media item
             for i, media_item in enumerate(media_items):
                 filename = os.path.basename(media_item.file_path)
                 self.logger.info(f"[STICKER] Processing item {i+1}/{len(media_items)}: {filename}")
@@ -931,13 +1317,84 @@ class StickerBotCore:
                 active_processes[process_id]["current_stage"] = "Publishing pack..."
 
             response = await self.conversation_manager.send_and_wait(
-                "/publish", BotResponseType.PACK_PUBLISHED, timeout=30.0
+                "/publish", BotResponseType.ICON_REQUEST, timeout=30.0
             )
 
-            self.logger.info(f"[STICKER] Pack published successfully: {response.message[:100]}...")
-            self.logger.info("[STICKER] PACK CREATION COMPLETED SUCCESSFULLY!")
+            self.logger.info(f"[STICKER] Received icon request: {response.message[:100]}...")
+            
+            # Step 5: Handle icon selection
+            if process_id in active_processes:
+                active_processes[process_id]["current_stage"] = "Waiting for icon selection..."
+                active_processes[process_id]["waiting_for_user"] = True
+                active_processes[process_id]["icon_request_message"] = response.message
 
-            return {"success": True, "message": "Sticker pack created successfully"}
+            # Check if auto-skip is enabled
+            if auto_skip_icon:
+                self.logger.info("[STICKER] Auto-skip enabled, automatically skipping icon selection...")
+                
+                # Send skip command automatically
+                response = await self.conversation_manager.send_and_wait(
+                    "/skip", BotResponseType.ICON_ACCEPTED, timeout=30.0
+                )
+                
+                self.logger.info(f"[STICKER] Icon step skipped: {response.message[:100]}...")
+                
+                # Update process status
+                if process_id in active_processes:
+                    active_processes[process_id]["current_stage"] = "Icon step completed (auto-skipped)"
+                    active_processes[process_id]["waiting_for_user"] = False
+                    active_processes[process_id]["progress"] = 100
+                    active_processes[process_id]["status"] = "completed"
+                    
+                    # Extract the shareable link from the response
+                    if "https://t.me/addstickers/" in response.message:
+                        import re
+                        link_match = re.search(r'https://t\.me/addstickers/[a-zA-Z0-9_]+', response.message)
+                        if link_match:
+                            shareable_link = link_match.group(0)
+                            active_processes[process_id]["shareable_link"] = shareable_link
+                            self.logger.info(f"[STICKER] Shareable link extracted: {shareable_link}")
+                
+                self.logger.info("[STICKER] PACK CREATION COMPLETED SUCCESSFULLY!")
+                return {"success": True, "message": "Sticker pack created successfully"}
+            else:
+                # Auto-skip is disabled, wait for user decision
+                self.logger.info("[STICKER] Auto-skip disabled, waiting for user decision on icon selection...")
+                
+                # Wait for either skip command or icon file
+                try:
+                    # Wait for the next response (either /skip or icon file)
+                    response = await self.conversation_manager.wait_for_response(
+                        BotResponseType.ICON_ACCEPTED, timeout=300.0  # 5 minutes timeout for user action
+                    )
+                    
+                    self.logger.info(f"[STICKER] Icon step completed: {response.message[:100]}...")
+                    
+                    if process_id in active_processes:
+                        active_processes[process_id]["waiting_for_user"] = False
+                        active_processes[process_id]["current_stage"] = "Sticker pack created successfully"
+                        active_processes[process_id]["progress"] = 100
+                        active_processes[process_id]["status"] = "completed"
+                        
+                        # Extract the shareable link from the response
+                        if "https://t.me/addstickers/" in response.message:
+                            import re
+                            link_match = re.search(r'https://t\.me/addstickers/[a-zA-Z0-9_]+', response.message)
+                            if link_match:
+                                shareable_link = link_match.group(0)
+                                active_processes[process_id]["shareable_link"] = shareable_link
+                                self.logger.info(f"[STICKER] Shareable link extracted: {shareable_link}")
+                    
+                    self.logger.info("[STICKER] PACK CREATION COMPLETED SUCCESSFULLY!")
+                    return {"success": True, "message": "Sticker pack created successfully"}
+                    
+                except TimeoutError:
+                    self.logger.error("[STICKER] Timeout waiting for icon selection")
+                    if process_id in active_processes:
+                        active_processes[process_id]["waiting_for_user"] = False
+                        active_processes[process_id]["status"] = "error"
+                        active_processes[process_id]["current_stage"] = "Timeout waiting for icon selection"
+                    raise RuntimeError("Timeout waiting for icon selection")
 
         except Exception as e:
             self.logger.error(f"[STICKER] Pack creation error: {e}")
@@ -977,15 +1434,13 @@ def run_telegram_coroutine(coro):
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
         
-        # Use locks to prevent concurrent access
-        with telegram_global_lock, database_global_lock:
-            # Check if the loop is already running (nested call)
-            if loop.is_running():
-                future = asyncio.run_coroutine_threadsafe(coro, loop)
-                return future.result(timeout=30)
-            else:
-                # Run the coroutine in the event loop
-                return loop.run_until_complete(coro)
+        # Check if the loop is already running (nested call)
+        if loop.is_running():
+            future = asyncio.run_coroutine_threadsafe(coro, loop)
+            return future.result(timeout=30)
+        else:
+            # Run the coroutine in the event loop
+            return loop.run_until_complete(coro)
     
     except Exception as e:
         # Handle specific database lock errors
@@ -1135,8 +1590,13 @@ def sticker_pack_worker():
                     sticker_bot = StickerBotCore()
                     logging.info(f"[WORKER] sticker_bot initialized in worker thread")
                 
+                # Get auto-skip setting from process data
+                pack_url_name = active_processes.get(process_id, {}).get('pack_url_name', '')
+                auto_skip_icon = active_processes.get(process_id, {}).get('auto_skip_icon', True)
+                logging.info(f"[WORKER] Auto-skip icon setting: {auto_skip_icon}")
+                
                 # Perform sticker pack creation
-                result = sticker_bot.create_sticker_pack(pack_name, sticker_type, media_files, process_id)
+                result = sticker_bot.create_sticker_pack(pack_name, pack_url_name, sticker_type, media_files, process_id, auto_skip_icon)
                 
                 # Update process with result
                 with process_lock:
@@ -1384,9 +1844,11 @@ def register_sticker_routes(app):
         try:
             data = request.get_json()
             pack_name = data.get('pack_name', '') if data else ''
+            pack_url_name = data.get('pack_url_name', '') if data else ''
             sticker_type = data.get('sticker_type', 'video') if data else 'video'
             media_files = data.get('media_files', []) if data else []
             process_id = data.get('process_id', f'sticker_{int(time.time())}') if data else f'sticker_{int(time.time())}'
+            auto_skip_icon = data.get('auto_skip_icon', True) if data else True  # Default to True
 
             # Import active_processes from shared state
             from shared_state import active_processes, process_lock, add_process, get_next_process_id
@@ -1409,6 +1871,14 @@ def register_sticker_routes(app):
             if not pack_name:
                 return jsonify({"success": False, "error": "Pack name is required"}), 400
 
+            if not pack_url_name:
+                return jsonify({"success": False, "error": "URL name is required"}), 400
+
+            # Validate URL name
+            url_validation = validate_url_name(pack_url_name)
+            if not url_validation['valid']:
+                return jsonify({"success": False, "error": url_validation['error']}), 400
+
             if not media_files:
                 return jsonify({"success": False, "error": "No media files provided"}), 400
 
@@ -1425,8 +1895,14 @@ def register_sticker_routes(app):
                 "start_time": time.time(),
                 "type": "sticker_pack",
                 "pack_name": pack_name,
-                "sticker_type": sticker_type
+                "pack_url_name": pack_url_name,
+                "sticker_type": sticker_type,
+                "auto_skip_icon": auto_skip_icon,
+                "url_name_attempts": 0
             }
+            
+            print(f"🔧 [STICKER_API] Auto-skip icon setting: {auto_skip_icon}")
+            print(f"🔧 [STICKER_API] Process data: {process_data}")
             
             print(f"🔧 [DEBUG] Creating process {process_id} in active_processes")
             print(f"🔧 [DEBUG] Before creation - active_processes keys: {list(active_processes.keys())}")
@@ -1511,6 +1987,113 @@ def register_sticker_routes(app):
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500
 
+    @app.route('/api/sticker/skip-icon', methods=['POST', 'OPTIONS'], strict_slashes=False)
+    def skip_icon():
+        """
+        API endpoint to skip icon selection
+        Sends /skip command to Telegram bot
+        """
+        if request.method == 'OPTIONS':
+            return '', 200
+            
+        try:
+            data = request.get_json()
+            process_id = data.get('process_id', '') if data else ''
+            
+            if not process_id:
+                return jsonify({"success": False, "error": "Process ID is required"}), 400
+            
+            # Import active_processes from shared state
+            from shared_state import active_processes, process_lock
+            
+            with process_lock:
+                if process_id not in active_processes:
+                    return jsonify({"success": False, "error": "Process not found"}), 404
+                
+                if not active_processes[process_id].get('waiting_for_user', False):
+                    return jsonify({"success": False, "error": "Process is not waiting for user input"}), 400
+                
+                # Update process status
+                active_processes[process_id]['current_stage'] = 'Sending skip command...'
+            
+            # Send skip command using the conversation manager
+            async def send_skip_command():
+                try:
+                    response = await sticker_bot.conversation_manager.send_and_wait(
+                        "/skip", BotResponseType.ICON_ACCEPTED, timeout=30.0
+                    )
+                    
+                    # Update process status after successful skip
+                    with process_lock:
+                        if process_id in active_processes:
+                            active_processes[process_id]['waiting_for_user'] = False
+                            active_processes[process_id]['current_stage'] = 'Icon step completed, continuing...'
+                            active_processes[process_id]['progress'] = 90  # Almost done
+                    
+                    return {"success": True, "message": "Skip command sent successfully"}
+                except Exception as e:
+                    return {"success": False, "error": str(e)}
+            
+            # Run the async function
+            result = run_telegram_coroutine(send_skip_command())
+            return jsonify(result)
+            
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route('/api/sticker/upload-icon', methods=['POST', 'OPTIONS'], strict_slashes=False)
+    def upload_icon():
+        """
+        API endpoint to upload icon file
+        Sends icon file to Telegram bot
+        """
+        if request.method == 'OPTIONS':
+            return '', 200
+            
+        try:
+            data = request.get_json()
+            process_id = data.get('process_id', '') if data else ''
+            icon_file_path = data.get('icon_file_path', '') if data else ''
+            
+            if not process_id:
+                return jsonify({"success": False, "error": "Process ID is required"}), 400
+            
+            if not icon_file_path:
+                return jsonify({"success": False, "error": "Icon file path is required"}), 400
+            
+            if not os.path.exists(icon_file_path):
+                return jsonify({"success": False, "error": "Icon file not found"}), 400
+            
+            # Import active_processes from shared state
+            from shared_state import active_processes, process_lock
+            
+            with process_lock:
+                if process_id not in active_processes:
+                    return jsonify({"success": False, "error": "Process not found"}), 404
+                
+                if not active_processes[process_id].get('waiting_for_user', False):
+                    return jsonify({"success": False, "error": "Process is not waiting for user input"}), 400
+                
+                # Update process status
+                active_processes[process_id]['current_stage'] = 'Uploading icon file...'
+            
+            # Send icon file using the conversation manager
+            async def send_icon_file():
+                try:
+                    response = await sticker_bot.conversation_manager.send_file_and_wait(
+                        icon_file_path, BotResponseType.ICON_ACCEPTED, timeout=60.0
+                    )
+                    return {"success": True, "message": "Icon file uploaded successfully"}
+                except Exception as e:
+                    return {"success": False, "error": str(e)}
+            
+            # Run the async function
+            result = run_telegram_coroutine(send_icon_file())
+            return jsonify(result)
+            
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
 # Enhanced logging configuration
 import sys
 
@@ -1541,7 +2124,7 @@ file_handler.setLevel(logging.DEBUG)
 
 # Create console handler
 console_handler = logging.StreamHandler(sys.stdout)
-console_handler.setLevel(logging.DEBUG)
+console_handler.setLevel(logging.INFO)  # Only show INFO and above in console, DEBUG goes to file only
 
 # Create formatter
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
