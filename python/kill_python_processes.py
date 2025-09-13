@@ -18,6 +18,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Console encoding-safe icons (avoid UnicodeEncodeError on Windows cp1252)
+def _supports_unicode():
+    enc = getattr(sys.stdout, 'encoding', None) or ''
+    return 'UTF-8' in enc.upper()
+
+_UNICODE_OK = _supports_unicode()
+ICON_SNAKE = '🐍' if _UNICODE_OK else '[PY]'
+ICON_SCAN = '🔍' if _UNICODE_OK else '[SCAN]'
+ICON_RESULTS = '📊' if _UNICODE_OK else '[RESULTS]'
+ICON_OK = '✅' if _UNICODE_OK else '[OK]'
+ICON_INFO = 'ℹ️' if _UNICODE_OK else '[INFO]'
+ICON_ERR = '❌' if _UNICODE_OK else '[ERROR]'
+
 def kill_python_processes(target_our_app_only=True):
     """
     Kill Python processes - either all or only our app's processes
@@ -138,7 +151,7 @@ def kill_all_python_processes():
 
 def main():
     """Main function for command line usage"""
-    print("🐍 Python Process Killer")
+    print(f"{ICON_SNAKE} Python Process Killer")
     print("=" * 40)
     
     # Show current process info
@@ -157,10 +170,10 @@ def main():
         print("\nOperation cancelled.")
         return
     
-    print("\n🔍 Scanning for Python processes...")
+    print(f"\n{ICON_SCAN} Scanning for Python processes...")
     results = kill_python_processes()
     
-    print("\n📊 Results:")
+    print(f"\n{ICON_RESULTS} Results:")
     print(f"Success: {results['success']}")
     print(f"Processes killed: {results['killed_count']}")
     
@@ -170,11 +183,11 @@ def main():
             print(f"  - {error}")
     
     if results['success'] and results['killed_count'] > 0:
-        print("\n✅ All Python processes have been terminated!")
+        print(f"\n{ICON_OK} All Python processes have been terminated!")
     elif results['killed_count'] == 0:
-        print("\nℹ️  No Python processes were found to kill.")
+        print(f"\n{ICON_INFO} No Python processes were found to kill.")
     else:
-        print("\n❌ Some errors occurred during the kill operation.")
+        print(f"\n{ICON_ERR} Some errors occurred during the kill operation.")
 
 if __name__ == "__main__":
     main()
