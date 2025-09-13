@@ -467,6 +467,7 @@ app.on("window-all-closed", () => {
         try { await axios.post(`${BACKEND_URL}/api/sticker/reset-connection`).catch(() => {}); } catch {}
         try { await axios.post(`${BACKEND_URL}/api/stop-process`, { process_id: 'ALL' }).catch(() => {}); } catch {}
         try { await axios.post(`${BACKEND_URL}/api/clear-session`).catch(() => {}); } catch {}
+        try { await axios.post(`${BACKEND_URL}/api/kill-our-processes`).catch(() => {}); } catch {}
     })().finally(() => cleanupPythonProcess());
     if (process.platform !== "darwin") {
         app.quit();
