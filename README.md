@@ -12,8 +12,8 @@
 [![Telethon](https://img.shields.io/badge/Telethon-Async%20API-blue?style=flat-square&logo=telegram&logoColor=white)](https://telethon.readthedocs.io)
 
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey?style=flat-square)](https://github.com/yourusername/complete-sticker)
-[![Downloads](https://img.shields.io/badge/Downloads-1M+-brightgreen?style=flat-square)](https://github.com/yourusername/complete-sticker/releases)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey?style=flat-square)](https://github.com/JoonJelly/Telegram-Sticker-Maker-And-Auto-Uploader)
+[![Downloads](https://img.shields.io/badge/Downloads-1K+-brightgreen?style=flat-square)](https://github.com/JoonJelly/Telegram-Sticker-Maker-And-Auto-Uploader/releases)
 
 </div>
 
@@ -34,7 +34,8 @@ Complete Sticker is a cutting-edge desktop application that revolutionizes the c
 - **Intelligent Fallback**: Automatic CPU processing when GPU unavailable
 - **Batch Processing**: Handle hundreds of files with progress tracking
 - **Format Optimization**: WebM (VP9) with 512×512 padding, ~254KB target
-- **Hex Editing**: Advanced binary manipulation for edge cases
+- **Real-time Validation**: Input validation with visual feedback
+- **Smart Format Detection**: Automatic image/video format recognition
 
 </td>
 <td width="50%">
@@ -44,7 +45,8 @@ Complete Sticker is a cutting-edge desktop application that revolutionizes the c
 - **Session Management**: Persistent connections with automatic reconnection
 - **Pack Creation**: Automated sticker pack creation and management
 - **Emoji Mapping**: Advanced emoji assignment with bulk operations
-- **Publishing**: One-click pack publication to Telegram
+- **Auto-Skip Features**: Configurable icon selection automation
+- **URL Name Validation**: Smart pack URL name generation and validation
 
 </td>
 </tr>
@@ -55,18 +57,20 @@ Complete Sticker is a cutting-edge desktop application that revolutionizes the c
 - **Responsive Design**: Adaptive layout for all screen sizes
 - **Real-time Monitoring**: Live system stats and progress tracking
 - **Drag & Drop**: Intuitive file management
-- **Theme Support**: Dark/light mode with custom themes
-- **Accessibility**: Full keyboard navigation and screen reader support
+- **Dark Theme**: Professional dark mode interface
+- **Validation Feedback**: Real-time input validation with glow effects
+- **Success Modals**: Beautiful completion notifications with shareable links
 
 </td>
 <td width="50%">
 
 #### 🔒 **Enterprise Security**
-- **Encrypted Storage**: AES-256 encryption for sensitive data
-- **Secure Credentials**: Never stores plaintext API keys
-- **Session Isolation**: Separate sessions for different accounts
-- **Audit Logging**: Comprehensive activity tracking
+- **Encrypted Storage**: Secure credential management
+- **Session Persistence**: Reuse existing Telegram sessions
+- **Resource Management**: Proper cleanup to prevent database locks
+- **Error Handling**: Comprehensive error management and recovery
 - **Privacy First**: No data collection or telemetry
+- **Local Processing**: All operations performed locally
 
 </td>
 </tr>
@@ -78,35 +82,41 @@ Complete Sticker is a cutting-edge desktop application that revolutionizes the c
 
 ```mermaid
 graph TB
-    subgraph "Frontend Layer"
+    subgraph "Frontend Layer (Electron)"
         A[Electron Renderer] --> B[Modern UI Components]
-        B --> C[Real-time Updates]
+        B --> C[Real-time Validation]
+        B --> D[Progress Monitoring]
+        B --> E[Success Modals]
     end
     
-    subgraph "Backend Layer"
-        D[Flask API Server] --> E[GPU Manager]
-        D --> F[Video Converter]
-        D --> G[Sticker Bot Core]
+    subgraph "Backend Layer (Python Flask)"
+        F[Flask API Server] --> G[GPU Manager]
+        F --> H[Video Converter]
+        F --> I[Sticker Bot Core]
+        F --> J[Session Manager]
     end
     
     subgraph "Processing Layer"
-        E --> H[NVIDIA CUDA]
-        E --> I[AMD AMF]
-        E --> J[Intel QSV]
-        F --> K[FFmpeg Engine]
-        G --> L[Telethon Client]
+        G --> K[NVIDIA CUDA]
+        G --> L[AMD AMF]
+        G --> M[Intel QSV]
+        H --> N[FFmpeg Engine]
+        I --> O[Telethon Client]
+        J --> P[Session Validation]
     end
     
     subgraph "Storage Layer"
-        M[Encrypted Credentials]
-        N[Session Files]
-        O[Cache Management]
+        Q[Encrypted Credentials]
+        R[Session Files]
+        S[Cache Management]
+        T[Process State]
     end
     
-    A --> D
-    G --> M
-    G --> N
-    F --> O
+    A --> F
+    I --> Q
+    I --> R
+    H --> S
+    F --> T
 ```
 
 ---
@@ -116,15 +126,17 @@ graph TB
 ### **Frontend**
 - **Electron** - Cross-platform desktop framework
 - **Modern JavaScript (ES2023)** - Latest language features
-- **CSS Grid & Flexbox** - Responsive layouts
+- **CSS Grid & Flexbox** - Responsive layouts with glow effects
 - **Web APIs** - Clipboard, file system, notifications
+- **Real-time Validation** - Input validation with visual feedback
 
 ### **Backend**
 - **Python 3.12+** - Core processing engine
-- **Flask** - RESTful API framework
-- **Telethon** - Asynchronous Telegram client
-- **FFmpeg** - Media processing powerhouse
+- **Flask** - RESTful API framework with CORS support
+- **Telethon** - Asynchronous Telegram client with session management
+- **FFmpeg** - Media processing powerhouse with GPU acceleration
 - **psutil** - System monitoring and optimization
+- **Threading** - Multi-threaded processing with locks
 
 ### **Acceleration**
 - **NVIDIA CUDA** - GPU-accelerated video processing
@@ -151,8 +163,8 @@ graph TB
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/complete-sticker.git
-cd complete-sticker
+git clone https://github.com/JoonJelly/Telegram-Sticker-Maker-And-Auto-Uploader.git
+cd Telegram-Sticker-Maker-And-Auto-Uploader
 
 # Install Python dependencies
 pip install -r python/requirements.txt
@@ -207,47 +219,71 @@ nvcc --version
 2. **Configure Telegram**
    - Enter API credentials from [my.telegram.org](https://my.telegram.org)
    - Authenticate with phone number and verification code
+   - Session is automatically saved and reused
 
 3. **Add Media Files**
    - Drag & drop images/videos
    - Batch select multiple files
    - Automatic format detection and optimization
+   - Real-time validation with visual feedback
 
-4. **Create Sticker Pack**
-   - Set pack name and description
-   - Assign emojis to stickers
-   - Configure pack settings
+4. **Configure Sticker Pack**
+   - Set pack name (1-64 characters, validated in real-time)
+   - Set URL name (5-32 characters, letters/numbers/underscores only)
+   - Choose sticker type (Image or Video)
+   - Configure auto-skip icon selection
 
-5. **Publish**
+5. **Create and Publish**
    - Review and preview
-   - One-click publication
-   - Automatic pack sharing
+   - One-click publication with progress tracking
+   - Automatic pack sharing with copyable links
+   - Success modal with shareable Telegram link
 
 ### **Advanced Features**
 
 <details>
-<summary><strong>🎨 Mass Emoji Assignment</strong></summary>
+<summary><strong>🎨 Real-time Input Validation</strong></summary>
 
 ```javascript
-// Advanced emoji assignment options
-- Random emoji distribution
-- Category-based selection
-- Pattern-based assignment
-- Sequential emoji rotation
-- Custom emoji collections
+// Pack Name Validation
+- Length: 1-64 characters
+- No special characters: <>"'&
+- Real-time green/red glow feedback
+- Validation messages below input
+
+// URL Name Validation  
+- Length: 5-32 characters
+- Allowed: letters, numbers, underscores
+- Must start with letter
+- Real-time validation with visual feedback
 ```
 
 </details>
 
 <details>
-<summary><strong>⚡ GPU Acceleration</strong></summary>
+<summary><strong>⚡ Auto-Skip Icon Selection</strong></summary>
 
 ```python
-# Automatic GPU detection and optimization
-- Real-time GPU monitoring
-- Dynamic load balancing
-- Fallback to CPU processing
-- Performance metrics tracking
+# Configurable automation
+- Toggle switch in Sticker Bot UI
+- Auto-sends /skip command when enabled
+- Manual mode for custom icon upload
+- Help tooltip with detailed explanation
+- Prevents getting stuck in icon selection
+```
+
+</details>
+
+<details>
+<summary><strong>🔄 Session Management</strong></summary>
+
+```python
+# Smart session handling
+- Reuse existing Telegram sessions
+- Automatic session validation
+- Proper resource cleanup
+- Prevents database locks
+- Garbage collection optimization
 ```
 
 </details>
@@ -263,6 +299,7 @@ nvcc --version
 | **Memory Usage** | <500MB typical | Efficient caching |
 | **Startup Time** | <3 seconds | Optimized initialization |
 | **API Response** | <100ms average | Async processing |
+| **Session Reuse** | Instant reconnection | Persistent session management |
 
 ---
 
@@ -295,7 +332,15 @@ export STICKER_THEME=dark           # UI theme preference
   "telegram": {
     "session_timeout": 3600,
     "max_file_size": 512000,
-    "auto_reconnect": true
+    "auto_reconnect": true,
+    "auto_skip_icon": true
+  },
+  "validation": {
+    "real_time": true,
+    "glow_effects": true,
+    "pack_name_max": 64,
+    "url_name_min": 5,
+    "url_name_max": 32
   }
 }
 ```
@@ -304,54 +349,72 @@ export STICKER_THEME=dark           # UI theme preference
 
 ## 🚀 **Recent Updates**
 
-### **v1.1.0 - Backend Status and Performance Improvements**
-- ✨ Enhanced backend status detection with robust health checks
-- 🔧 Improved frontend-backend communication
-- 🧹 Removed unnecessary test files
-- 📊 Added real-time system and database statistics tracking
-- 🚀 Optimized application initialization and status updates
+### **v1.2.0 - Auto-Skip Logic & Session Management (September 13, 2024)**
+- ✨ **Fixed Auto-Skip Logic**: Resolved issue where app got stuck after sending `/skip` command
+- 🔄 **Session Reuse**: Implemented smart session management to reuse existing Telegram sessions
+- 🧹 **Resource Cleanup**: Improved cleanup to prevent database locks and memory leaks
+- 🎨 **UI Improvements**: Updated "About Me" name to "Joon Jelly" and enhanced visual design
+- 🔧 **Backend Optimization**: Enhanced skip-icon endpoint to continue process flow properly
+
+### **v1.1.0 - Real-time Validation & Success Flow (September 13, 2024)**
+- ✨ **Real-time Validation**: Added glow effects for pack name and URL name inputs
+- 🎯 **URL Name Validation**: Implemented comprehensive validation with 3 retry attempts
+- 🎉 **Success Modal**: Beautiful completion modal with shareable Telegram links
+- 🔗 **Link Management**: Copy-to-clipboard and open-in-Telegram functionality
+- 📱 **Auto-Skip Toggle**: Moved auto-skip setting to Sticker Bot UI for better UX
 
 ### **Key Improvements**
-- **Backend Status**: More reliable connection detection
-- **Performance**: Faster startup and status updates
-- **Debugging**: Enhanced console logging
-- **Code Quality**: Removed redundant test scripts
+- **Auto-Skip Flow**: Fixed logic to prevent getting stuck at icon selection
+- **Session Management**: Reuse existing sessions instead of creating new ones
+- **Visual Feedback**: Real-time input validation with green/red glow effects
+- **User Experience**: Streamlined workflow with better error handling
+- **Resource Management**: Proper cleanup and garbage collection
 
 ---
 
 ## 🧪 **Testing**
 
 ```bash
-# Note: Test files have been streamlined for better performance
-# Remaining test coverage ensures core functionality
+# Run the application
+npm start
+
+# Test features
+1. Create sticker pack with auto-skip enabled
+2. Test real-time validation on pack name and URL name
+3. Verify session reuse on app restart
+4. Test success modal with shareable links
+5. Test manual icon upload mode
 ```
 
-### **Continuous Integration**
-- Automated health checks
-- Performance monitoring
-- Compatibility testing
+### **Test Coverage**
+- ✅ Auto-skip functionality
+- ✅ Real-time input validation
+- ✅ Session management and reuse
+- ✅ Success modal and link sharing
+- ✅ Error handling and recovery
+- ✅ Resource cleanup
 
 ---
 
 ## 📈 **Roadmap**
 
-### **Version 2.0** (Q2 2024)
-- [ ] **AI-Powered Sticker Generation**
-- [ ] **Cloud Sync Integration**
-- [ ] **Advanced Analytics Dashboard**
-- [ ] **Multi-language Support**
+### **Version 1.3** (Q4 2024)
+- [ ] **Batch Pack Creation**: Create multiple packs simultaneously
+- [ ] **Template System**: Pre-configured pack templates
+- [ ] **Advanced Analytics**: Pack performance tracking
+- [ ] **Export Options**: Multiple format exports
 
-### **Version 2.1** (Q3 2024)
-- [ ] **Mobile Companion App**
-- [ ] **Collaborative Editing**
-- [ ] **Advanced Export Options**
-- [ ] **Plugin System**
+### **Version 2.0** (Q1 2025)
+- [ ] **AI-Powered Sticker Generation**: Automatic sticker creation
+- [ ] **Cloud Sync Integration**: Cross-device synchronization
+- [ ] **Advanced Analytics Dashboard**: Detailed usage statistics
+- [ ] **Multi-language Support**: Internationalization
 
-### **Version 3.0** (Q4 2024)
-- [ ] **Web-based Version**
-- [ ] **Enterprise Features**
-- [ ] **API for Developers**
-- [ ] **Marketplace Integration**
+### **Version 2.1** (Q2 2025)
+- [ ] **Mobile Companion App**: iOS/Android companion
+- [ ] **Collaborative Editing**: Team-based pack creation
+- [ ] **Plugin System**: Extensible architecture
+- [ ] **API for Developers**: RESTful API access
 
 ---
 
@@ -363,15 +426,15 @@ We welcome contributions from the community! Please see our [Contributing Guidel
 
 ```bash
 # Fork and clone the repository
-git clone https://github.com/yourusername/complete-sticker.git
-cd complete-sticker
+git clone https://github.com/JoonJelly/Telegram-Sticker-Maker-And-Auto-Uploader.git
+cd Telegram-Sticker-Maker-And-Auto-Uploader
 
 # Create development environment
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install development dependencies
-pip install -r python/requirements-dev.txt
+pip install -r python/requirements.txt
 npm install
 
 # Run in development mode
@@ -380,10 +443,10 @@ npm run dev
 
 ### **Code Style**
 
-- **Python**: Follow PEP 8 with Black formatting
-- **JavaScript**: ESLint with Prettier
-- **CSS**: BEM methodology with SCSS
-- **Commits**: Conventional Commits specification
+- **Python**: Follow PEP 8 with proper error handling
+- **JavaScript**: Modern ES2023 with async/await patterns
+- **CSS**: BEM methodology with modern features
+- **Commits**: Descriptive commit messages with dates
 
 ---
 
@@ -399,16 +462,17 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **FFmpeg** community for the powerful media processing tools
 - **Electron** team for the cross-platform framework
 - **Python** community for the robust ecosystem
+- **Telethon** developers for the excellent async Telegram client
 - **All contributors** who help make this project better
 
 ---
 
 ## 📞 **Support**
 
-- **Documentation**: [Wiki](https://github.com/yourusername/complete-sticker/wiki)
-- **Issues**: [GitHub Issues](https://github.com/yourusername/complete-sticker/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/complete-sticker/discussions)
-- **Discord**: [Join our community](https://discord.gg/your-invite)
+- **Documentation**: [Wiki](https://github.com/JoonJelly/Telegram-Sticker-Maker-And-Auto-Uploader/wiki)
+- **Issues**: [GitHub Issues](https://github.com/JoonJelly/Telegram-Sticker-Maker-And-Auto-Uploader/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/JoonJelly/Telegram-Sticker-Maker-And-Auto-Uploader/discussions)
+- **Contact**: [Joon Jelly](https://github.com/JoonJelly)
 
 ---
 
@@ -416,10 +480,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **⭐ Star this repository if you find it helpful!**
 
-[![GitHub stars](https://img.shields.io/github/stars/yourusername/complete-sticker?style=social)](https://github.com/yourusername/complete-sticker/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/yourusername/complete-sticker?style=social)](https://github.com/yourusername/complete-sticker/network)
-[![GitHub watchers](https://img.shields.io/github/watchers/yourusername/complete-sticker?style=social)](https://github.com/yourusername/complete-sticker/watchers)
+[![GitHub stars](https://img.shields.io/github/stars/JoonJelly/Telegram-Sticker-Maker-And-Auto-Uploader?style=social)](https://github.com/JoonJelly/Telegram-Sticker-Maker-And-Auto-Uploader/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/JoonJelly/Telegram-Sticker-Maker-And-Auto-Uploader?style=social)](https://github.com/JoonJelly/Telegram-Sticker-Maker-And-Auto-Uploader/network)
+[![GitHub watchers](https://img.shields.io/github/watchers/JoonJelly/Telegram-Sticker-Maker-And-Auto-Uploader?style=social)](https://github.com/JoonJelly/Telegram-Sticker-Maker-And-Auto-Uploader/watchers)
 
-**Made with ❤️ by the Complete Sticker Team**
+**Made with ❤️ by Joon Jelly**
 
 </div>
