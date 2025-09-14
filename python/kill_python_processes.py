@@ -68,7 +68,6 @@ def kill_python_processes(target_our_app_only=True):
                                 'sticker_bot.py', 
                                 'telegram_connection_handler.py',
                                 'video_converter.py',
-                                'gpu_manager.py',
                                 'Complete Sticker'  # Our app directory
                             ]
                             
