@@ -90,16 +90,12 @@ graph TB
     end
     
     subgraph "Backend Layer (Python Flask)"
-        F[Flask API Server] --> G[GPU Manager]
-        F --> H[Video Converter]
+        F[Flask API Server] --> H[Video Converter]
         F --> I[Sticker Bot Core]
         F --> J[Session Manager]
     end
     
     subgraph "Processing Layer"
-        G --> K[NVIDIA CUDA]
-        G --> L[AMD AMF]
-        G --> M[Intel QSV]
         H --> N[FFmpeg Engine]
         I --> O[Telethon Client]
         J --> P[Session Validation]
@@ -319,11 +315,6 @@ export STICKER_THEME=dark           # UI theme preference
 
 ```json
 {
-  "gpu": {
-    "enabled": true,
-    "preferred": "cuda",
-    "fallback": "cpu"
-  },
   "conversion": {
     "quality": "high",
     "batch_size": 10,
