@@ -39,7 +39,6 @@ class TelegramUtilities {
     this.setupEventListeners();
     this.setupTabSwitching();
     this.loadSettings();
-    await this.detectAccelerationMode();
     this.startSystemStatsMonitoring();
     await this.initializeTelegramConnection();
     
@@ -52,91 +51,6 @@ class TelegramUtilities {
       this.updateSystemInfo();
       this.updateDatabaseStats();
     };
-    // Wire GPU utility buttons
-    const checkBtn = document.getElementById('check-gpu');
-    if (checkBtn) {
-      checkBtn.addEventListener('click', async () => {
-        checkBtn.disabled = true;
-        checkBtn.innerHTML = '<i class="fas fa-sync fa-spin"></i> Checking...';
-        try {
-          await this.detectAccelerationMode();
-          const resp = await this.apiRequest('GET', '/api/gpu-detect');
-          
-          // Show detailed GPU information
-          if (resp && resp.success) {
-            let message = '';
-            
-            // Show detected GPUs
-            if (resp.gpus && resp.gpus.length > 0) {
-              const gpu = resp.gpus[0];
-              message += `<strong>GPU Detected:</strong> ${gpu.name}<br>`;
-              message += `<strong>Type:</strong> ${gpu.type.toUpperCase()}<br>`;
-              message += `<strong>Memory:</strong> ${gpu.memory_mb ? (gpu.memory_mb / 1024).toFixed(1) + ' GB' : 'Unknown'}<br>`;
-              
-              if (gpu.cuda_version) {
-                message += `<strong>CUDA:</strong> ${gpu.cuda_version}<br>`;
-              }
-              
-              // Show acceleration status
-              const modeBadge = document.getElementById("mode-badge");
-              if (modeBadge) {
-                const currentMode = modeBadge.textContent;
-                message += `<br><strong>Current Mode:</strong> ${currentMode}`;
-              }
-            } else {
-              message = '<strong>No GPU detected</strong><br>Running in CPU mode';
-            }
-            
-            // Show CUDA status for NVIDIA
-            if (resp.cuda_info) {
-              if (!resp.cuda_info.nvcc_available && resp.gpus && resp.gpus[0]?.type === 'nvidia') {
-                message += '<br><br><em>CUDA toolkit not installed - GPU acceleration limited</em>';
-              }
-            }
-            
-            // Display results in a nice format
-            this.showDetailedMessage('GPU Detection Results', message);
-            
-            // Update install button visibility
-            const installBtn = document.getElementById('install-gpu-support');
-            if (installBtn) {
-              const best = resp?.gpus && resp.gpus[0];
-              const needs = resp?.needs_cuda_install && best?.type === 'nvidia';
-              installBtn.style.display = needs ? 'inline-flex' : 'none';
-            }
-          } else {
-            this.showToast('error', 'GPU Check', 'Failed to detect GPU');
-          }
-        } catch (e) {
-          this.showToast('error', 'GPU Check', 'Failed to detect GPU: ' + e.message);
-        } finally {
-          checkBtn.disabled = false;
-          checkBtn.innerHTML = '<i class="fas fa-sync"></i> Check GPU';
-        }
-      });
-    }
-
-    const installBtn = document.getElementById('install-gpu-support');
-    if (installBtn) {
-      installBtn.addEventListener('click', async () => {
-        installBtn.disabled = true;
-        installBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Installing...';
-        try {
-          const res = await this.apiRequest('POST', '/api/install-cuda');
-          if (res.success) {
-            this.showToast('success', 'CUDA Install', 'Installer launched. Restart app after installation.', 8000);
-          } else {
-            const url = 'https://developer.nvidia.com/cuda-downloads';
-            this.showToast('error', 'CUDA Install', (res.error || 'Failed to start installer') + ` <a href="${url}" target="_blank">Download manually</a>`, 12000);
-          }
-        } catch (e) {
-          this.showToast('error', 'CUDA Install', 'Failed to start installer');
-        } finally {
-          installBtn.disabled = false;
-          installBtn.innerHTML = '<i class="fas fa-download"></i> Install GPU Support';
-        }
-      });
-    }
     
     // Optional backend tests only in debug mode
     if (RENDERER_DEBUG) {
@@ -177,237 +91,9 @@ class TelegramUtilities {
     }, 5000);
   }
   
-  async detectAccelerationMode() {
-    try {
-      const modeBadge = document.getElementById("mode-badge");
-      const modeDetails = document.getElementById("mode-details");
-      
-      // Show detecting status
-      if (modeBadge) {
-        modeBadge.textContent = "Detecting...";
-        modeBadge.className = "mode-badge detecting";
-      }
-      
-      // Detect available GPUs
-      const response = await this.apiRequest("GET", "/api/gpu-detect");
-      
-      // Handle different response scenarios
-      if (!response.success) {
-        if (RENDERER_DEBUG) console.warn("GPU detection failed, falling back to CPU mode:", response.error);
-        
-        // Set CPU fallback mode
-        if (modeBadge) {
-          modeBadge.textContent = "CPU";
-          modeBadge.className = "mode-badge cpu mode-badge-tooltip";
-          modeBadge.innerHTML = `
-            CPU
-            <span class="tooltip-content">CPU Processing Mode</span>
-          `;
-        }
-        
-        if (modeDetails) {
-          modeDetails.innerHTML = `
-            <div class="acceleration-details">
-              <div class="detail-icon cpu-icon"></div>
-              <div class="detail-text">CPU Processing</div>
-            </div>
-          `;
-        }
-        
-        // Store CPU mode
-        this.accelerationMode = "cpu";
-        this.selectedGPU = null;
-        this.cudaAvailable = false;
-        
-        return false;
-      }
-      
-      // Successful GPU detection
-      if (response.gpus && response.gpus.length > 0) {
-        const bestGPU = response.gpus[0];
-        
-        // Update mode badge
-        if (modeBadge) {
-          const cudaAvailable = response.cuda_info && response.cuda_info.available;
-          const cudaToolkitInstalled = response.cuda_toolkit_installed;
-          
-          modeBadge.textContent = cudaAvailable ? "CUDA" : "GPU";
-          modeBadge.className = `mode-badge gpu mode-badge-tooltip ${!cudaToolkitInstalled ? 'warning' : ''}`;
-          modeBadge.innerHTML = `
-            ${cudaAvailable ? 'CUDA' : 'GPU'}
-            <span class="tooltip-content">
-              ${bestGPU.name}
-              ${!cudaToolkitInstalled ? '<br><strong>Toolkit Not Fully Installed</strong>' : ''}
-            </span>
-          `;
-        }
-        
-        // Update mode details
-        if (modeDetails) {
-          let detailsHtml = `
-            <div class="acceleration-details">
-              <div class="detail-icon gpu-icon"></div>
-              <div class="detail-text">${bestGPU.name}</div>
-            </div>
-          `;
-          
-          // Add CUDA toolkit warning if not fully installed
-          if (!response.cuda_toolkit_installed) {
-            detailsHtml += `
-              <div class="cuda-warning">
-                <strong>Note:</strong> CUDA toolkit not fully installed
-                <button id="install-cuda-btn" class="btn btn-warning">Install CUDA</button>
-              </div>
-            `;
-          }
-          
-          modeDetails.innerHTML = detailsHtml;
-          
-          // Add event listener for CUDA installation
-          const installCudaBtn = document.getElementById('install-cuda-btn');
-          if (installCudaBtn) {
-            installCudaBtn.addEventListener('click', () => this.installCUDA());
-          }
-        }
-        
-        // Store GPU mode
-        this.accelerationMode = response.cuda_info && response.cuda_info.available ? "cuda" : "gpu";
-        this.selectedGPU = bestGPU;
-        this.cudaAvailable = response.cuda_info && response.cuda_info.available;
-        
-        return true;
-      }
-      
-      // No GPUs detected - CPU fallback
-      if (RENDERER_DEBUG) console.info("No GPUs detected, using CPU fallback mode");
-      
-      if (modeBadge) {
-        modeBadge.textContent = "CPU";
-        modeBadge.className = "mode-badge cpu mode-badge-tooltip";
-        modeBadge.innerHTML = `
-          CPU
-          <span class="tooltip-content">CPU Processing Mode</span>
-        `;
-      }
-      
-      if (modeDetails) {
-        modeDetails.innerHTML = `
-          <div class="acceleration-details">
-            <div class="detail-icon cpu-icon"></div>
-            <div class="detail-text">CPU Processing</div>
-          </div>
-        `;
-      }
-      
-      // Store CPU mode
-      this.accelerationMode = "cpu";
-      this.selectedGPU = null;
-      this.cudaAvailable = false;
-      
-      return false;
-    } catch (error) {
-      if (RENDERER_DEBUG) console.error("GPU detection error, falling back to CPU mode:", error);
-      
-      const modeBadge = document.getElementById("mode-badge");
-      const modeDetails = document.getElementById("mode-details");
-      
-      // Set CPU fallback mode on error
-      if (modeBadge) {
-        modeBadge.textContent = "CPU";
-        modeBadge.className = "mode-badge cpu mode-badge-tooltip";
-        modeBadge.innerHTML = `
-          CPU
-          <span class="tooltip-content">CPU Processing Mode</span>
-        `;
-      }
-      
-      if (modeDetails) {
-        modeDetails.innerHTML = `
-          <div class="acceleration-details">
-            <div class="detail-icon cpu-icon"></div>
-            <div class="detail-text">CPU Processing</div>
-          </div>
-        `;
-      }
-      
-      // Store CPU mode
-      this.accelerationMode = "cpu";
-      this.selectedGPU = null;
-      this.cudaAvailable = false;
-      
-      return false;
-    }
-  }
-  
-  async showCudaInstallPrompt(gpu) {
-    // Get CUDA installation info
-    const installInfo = await this.apiRequest("GET", "/api/cuda-install-info");
-    if (!installInfo.success) return;
-    
-    const info = installInfo.install_info;
-    
-    // Create a notification or modal
-    const message = `
-      <div style="text-align: left;">
-        <h3>🚀 CUDA Not Detected</h3>
-        <p>Your system has an NVIDIA GPU (${gpu.name}) but CUDA is not installed.</p>
-        <p>Installing CUDA will enable <strong>5-10x faster</strong> video processing!</p>
-        <br>
-        <p><strong>To install CUDA:</strong></p>
-        <p style="font-family: monospace; background: #1a1a1a; padding: 8px; border-radius: 4px;">
-          ${info.command || 'Visit: ' + info.url}
-        </p>
-        <br>
-        <p style="font-size: 0.9em; color: #888;">
-          ${info.description}
-        </p>
-      </div>
-    `;
-    
-    // Toast with action buttons
-    this.showToast("info", "CUDA Installation Recommended", message +
-      '<div style="margin-top:8px;display:flex;gap:8px;">\
-        <button id="install-cuda-btn" class="btn btn-sm btn-success">Install CUDA</button>\
-        <button id="dismiss-cuda-btn" class="btn btn-sm">Not now</button>\
-      </div>', 20000);
-    
-    // Also add a permanent indicator in the UI
-    const gpuInfo = document.getElementById("gpu-info");
-    if (gpuInfo) {
-      gpuInfo.innerHTML = `
-        <a href="${info.url}" target="_blank" style="color: #ffa500; text-decoration: none;">
-          ⚠️ Install CUDA for 5-10x faster processing →
-        </a>
-      `;
-      gpuInfo.style.display = "block";
-    }
 
-    // Wire up action buttons
-    setTimeout(() => {
-      const installBtn = document.getElementById('install-cuda-btn');
-      const dismissBtn = document.getElementById('dismiss-cuda-btn');
-      if (installBtn) {
-        installBtn.onclick = async () => {
-          try {
-            const res = await this.apiRequest('POST', '/api/install-cuda');
-            if (res.success) {
-              this.showToast('success', 'CUDA Install', 'Installer launched. Follow prompts, then restart the app.', 8000);
-            } else {
-              const hint = res.hint ? `<br><small>${res.hint}</small>` : '';
-              this.showToast('error', 'CUDA Install', (res.error || 'Failed to launch installer') + hint, 10000);
-            }
-          } catch (e) {
-            this.showToast('error', 'CUDA Install', 'Failed to start installer. Open the link and install manually.', 8000);
-          }
-        };
-      }
-      if (dismissBtn) {
-        dismissBtn.onclick = () => {
-          // Do nothing; user opted out
-        };
-      }
-    }, 0);
-  }
+  
+
 
   async updateSystemStats() {
     try {
@@ -450,172 +136,6 @@ class TelegramUtilities {
             ramUsage.style.color = '#44ff44';
           }
         }
-        
-        // Check if we're in CPU mode or GPU mode
-        const gpuStatsRow = document.getElementById("gpu-stats-row");
-        const gpuLabel = document.getElementById("gpu-label");
-        const vramLabel = document.getElementById("vram-label");
-        const gpuName = document.getElementById("gpu-name");
-        const gpuMemory = document.getElementById("gpu-memory");
-        const gpuDetails = document.getElementById("gpu-details");
-        
-        // Update GPU/CPU stats based on acceleration mode
-        if (this.accelerationMode === "cpu") {
-          // Show CPU stats in the GPU row when in CPU mode
-          if (gpuStatsRow) gpuStatsRow.style.display = "flex";
-          
-          // Update labels for CPU mode
-          if (gpuLabel) gpuLabel.textContent = "Cores:";
-          if (vramLabel) vramLabel.textContent = "Threads:";
-          
-          // Show CPU core information
-          if (gpuName && stats.cpu) {
-            gpuName.textContent = `${stats.cpu.count || 0} cores`;
-            gpuName.style.color = '#44aaff';
-          }
-          
-          if (gpuMemory && stats.cpu) {
-            gpuMemory.textContent = `${stats.cpu.threads || 0} threads`;
-            gpuMemory.style.color = '#44aaff';
-          }
-          
-          // Show CPU frequency and details
-          if (gpuDetails && stats.cpu) {
-            const parts = [];
-            
-            // Add CPU frequency
-            if (stats.cpu.frequency > 0) {
-              const freqGHz = (stats.cpu.frequency / 1000).toFixed(2);
-              parts.push(`${freqGHz} GHz`);
-            }
-            
-            // Add CPU usage with color
-            const percent = stats.cpu.percent;
-            let usageStr = `${percent.toFixed(1)}% Usage`;
-            if (percent > 80) {
-              usageStr = `<span style="color: #ff4444">${usageStr}</span>`;
-            } else if (percent > 50) {
-              usageStr = `<span style="color: #ffaa00">${usageStr}</span>`;
-            } else {
-              usageStr = `<span style="color: #44ff44">${usageStr}</span>`;
-            }
-            parts.push(usageStr);
-            
-            // Add CPU mode indicator
-            parts.push('<span style="color: #2196F3">CPU Processing</span>');
-            
-            gpuDetails.innerHTML = parts.join(' | ');
-          }
-          
-        } else if (stats.gpus && stats.gpus.length > 0) {
-          // GPU mode - show GPU stats
-          const gpu = stats.gpus[0]; // Use first GPU for display
-          
-          if (gpuStatsRow) gpuStatsRow.style.display = "flex";
-          
-          // Reset labels for GPU mode
-          if (gpuLabel) gpuLabel.textContent = "GPU:";
-          if (vramLabel) vramLabel.textContent = "VRAM:";
-          
-          if (gpuName) {
-            // Show GPU utilization as primary metric
-            if (gpu.utilization !== undefined) {
-              gpuName.textContent = `${gpu.utilization.toFixed(0)}%`;
-              
-              // Color code GPU usage
-              if (gpu.utilization > 80) {
-                gpuName.style.color = '#ff4444';
-              } else if (gpu.utilization > 50) {
-                gpuName.style.color = '#ffaa00';
-              } else {
-                gpuName.style.color = '#44ff44';
-              }
-            } else {
-              gpuName.textContent = "0%";
-              gpuName.style.color = '#44ff44';
-            }
-          }
-          
-          if (gpuMemory && gpu.memory_total > 0) {
-            const usedGB = (gpu.memory_used / 1024).toFixed(1);
-            const totalGB = (gpu.memory_total / 1024).toFixed(1);
-            const memPercent = (gpu.memory_used / gpu.memory_total * 100);
-            gpuMemory.textContent = `${usedGB}GB / ${totalGB}GB`;
-            
-            // Color code VRAM usage
-            if (memPercent > 90) {
-              gpuMemory.style.color = '#ff4444';
-            } else if (memPercent > 70) {
-              gpuMemory.style.color = '#ffaa00';
-            } else {
-              gpuMemory.style.color = '#44ff44';
-            }
-          }
-          
-          if (gpuDetails) {
-            const parts = [];
-            
-            // Add temperature with color coding
-            if (gpu.temperature > 0) {
-              const temp = gpu.temperature;
-              let tempStr = `${temp}°C`;
-              if (temp > 80) {
-                tempStr = `<span style="color: #ff4444">${tempStr}</span>`;
-              } else if (temp > 70) {
-                tempStr = `<span style="color: #ffaa00">${tempStr}</span>`;
-              } else {
-                tempStr = `<span style="color: #44ff44">${tempStr}</span>`;
-              }
-              parts.push(tempStr);
-            }
-            
-            // Add power draw if available
-            if (gpu.power_draw > 0) {
-              parts.push(`${gpu.power_draw.toFixed(0)}W`);
-            }
-            
-            // Add clocks if available
-            if (gpu.core_clock > 0) {
-              parts.push(`${gpu.core_clock}MHz`);
-            }
-            
-            gpuDetails.innerHTML = parts.join(' | ');
-          }
-        } else {
-          // No GPU detected - show CPU stats instead
-          if (gpuStatsRow) gpuStatsRow.style.display = "flex";
-          
-          // Update labels for CPU mode
-          if (gpuLabel) gpuLabel.textContent = "Cores:";
-          if (vramLabel) vramLabel.textContent = "Threads:";
-          
-          // Show CPU core information
-          if (gpuName && stats.cpu) {
-            gpuName.textContent = `${stats.cpu.count || 0} cores`;
-            gpuName.style.color = '#44aaff';
-          }
-          
-          if (gpuMemory && stats.cpu) {
-            gpuMemory.textContent = `${stats.cpu.threads || 0} threads`;
-            gpuMemory.style.color = '#44aaff';
-          }
-          
-          // Show CPU details
-          if (gpuDetails && stats.cpu) {
-            const parts = [];
-            
-            // Add CPU frequency
-            if (stats.cpu.frequency > 0) {
-              const freqGHz = (stats.cpu.frequency / 1000).toFixed(2);
-              parts.push(`${freqGHz} GHz`);
-            }
-            
-            // Add CPU mode indicator
-            parts.push('<span style="color: #2196F3">CPU Processing Mode</span>');
-            
-            gpuDetails.innerHTML = parts.join(' | ');
-          }
-        }
       }
     } catch (error) {
       // Failed to fetch system stats
@@ -623,9 +143,9 @@ class TelegramUtilities {
   }
 
 
-  getSelectedGpuModeForBackend() {
-    // Always return auto mode - let backend decide
-    return "auto";
+  // CPU-only processing mode
+  getCPUMode() {
+    return "cpu";
   }
 
   debugWarn(...args) {
@@ -1994,8 +1514,8 @@ class TelegramUtilities {
           </div>
         </div>
         <div class="file-actions">
-          <button class="btn btn-sm btn-secondary" onclick="app.showFileInfo(${index})" title="File Info">
-            <i class="fas fa-info"></i>
+          <button class="btn btn-sm btn-info" onclick="app.showFileInfo(${index})" title="File Info">
+            <i class="fas fa-info-circle"></i>
           </button>
           <button class="btn btn-sm btn-danger" onclick="app.removeVideoFile(${index})" 
                   ${file.status === "converting" ? "disabled" : ""} title="Remove File">
@@ -2047,21 +1567,120 @@ class TelegramUtilities {
     return iconMap[status] || "fas fa-video";
   }
 
-  showFileInfo(index) {
+  getStatusColor(status) {
+    const colorMap = {
+      pending: "#fbbf24",
+      starting: "#3b82f6",
+      analyzing: "#8b5cf6",
+      preparing: "#f59e0b",
+      converting: "#3b82f6",
+      checking: "#06b6d4",
+      completed: "#10b981",
+      error: "#ef4444",
+      ready: "#6b7280"
+    };
+    return colorMap[status] || "#ccc";
+  }
+
+  async showFileInfo(index) {
     const file = this.videoFiles[index];
     if (!file) return;
     
+    // Get detailed file metadata from backend
+    let fileInfo = {
+      name: file.name,
+      size: 'Unknown',
+      duration: 'Unknown',
+      format: 'Unknown',
+      dimensions: 'Unknown'
+    };
+    
+    try {
+      const result = await this.apiRequest('POST', '/api/get-file-info', { 
+        path: file.path 
+      });
+      
+      if (result && result.success && result.data) {
+        fileInfo = {
+          name: result.data.name || file.name,
+          size: result.data.size_formatted || 'Unknown',
+          duration: result.data.duration_formatted || 'Unknown',
+          format: result.data.format ? result.data.format.toUpperCase() : 'Unknown',
+          dimensions: result.data.dimensions || 'Unknown',
+          codec: result.data.codec || null,
+          fps: result.data.fps || null
+        };
+      }
+    } catch (error) {
+      if (RENDERER_DEBUG) console.error('Failed to get file info:', error);
+    }
+    
+    // Format additional info
+    let additionalInfo = '';
+    if (fileInfo.codec) {
+      additionalInfo += `<strong style="color: #667eea;">Codec:</strong> <span style="color: #ccc;">${fileInfo.codec}</span><br>`;
+    }
+    if (fileInfo.fps && fileInfo.fps > 0) {
+      additionalInfo += `<strong style="color: #667eea;">Frame Rate:</strong> <span style="color: #ccc;">${fileInfo.fps.toFixed(1)} fps</span><br>`;
+    }
+    
     const info = `
-      <strong>File:</strong> ${file.name}<br>
-      <strong>Path:</strong> ${file.path}<br>
-      <strong>Status:</strong> ${file.status}<br>
-      <strong>Progress:</strong> ${file.progress}%<br>
-      <strong>Stage:</strong> ${file.stage}<br>
-      ${file.size ? `<strong>Size:</strong> ${file.size}<br>` : ""}
-      ${file.duration ? `<strong>Duration:</strong> ${file.duration}<br>` : ""}
+      <div style="font-size: 0.9rem; line-height: 1.8; max-width: 400px;">
+        <div style="margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.1);">
+          <strong style="color: #667eea; font-size: 1rem;">📹 Video File Information</strong>
+        </div>
+        
+        <div style="margin-bottom: 0.5rem;">
+          <strong style="color: #667eea;">📄 Name:</strong> 
+          <span style="color: #ccc; word-break: break-word;">${fileInfo.name}</span>
+        </div>
+        
+        <div style="margin-bottom: 0.5rem;">
+          <strong style="color: #667eea;">📏 Size:</strong> 
+          <span style="color: #ccc;">${fileInfo.size}</span>
+        </div>
+        
+        <div style="margin-bottom: 0.5rem;">
+          <strong style="color: #667eea;">⏱️ Duration:</strong> 
+          <span style="color: #ccc;">${fileInfo.duration}</span>
+        </div>
+        
+        <div style="margin-bottom: 0.5rem;">
+          <strong style="color: #667eea;">📐 Dimensions:</strong> 
+          <span style="color: #ccc;">${fileInfo.dimensions}</span>
+        </div>
+        
+        <div style="margin-bottom: 0.5rem;">
+          <strong style="color: #667eea;">🎬 Format:</strong> 
+          <span style="color: #ccc;">${fileInfo.format}</span>
+        </div>
+        
+        ${additionalInfo}
+        
+        <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.1);">
+          <div style="margin-bottom: 0.5rem;">
+            <strong style="color: #667eea;">🔄 Status:</strong> 
+            <span style="color: ${this.getStatusColor(file.status)};">${file.status || 'Ready'}</span>
+          </div>
+          
+          <div style="margin-bottom: 0.5rem;">
+            <strong style="color: #667eea;">📊 Progress:</strong> 
+            <span style="color: #ccc;">${file.progress || 0}%</span>
+          </div>
+          
+          ${file.stage ? `<div style="margin-bottom: 0.5rem;">
+            <strong style="color: #667eea;">⚙️ Stage:</strong> 
+            <span style="color: #ccc;">${file.stage}</span>
+          </div>` : ''}
+        </div>
+        
+        <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.1);">
+          <small style="color: #888;">File ${index + 1} of ${this.videoFiles.length} • Video Conversion</small>
+        </div>
+      </div>
     `;
     
-    this.showInfoModal("File Information", info);
+    this.showDetailedMessage("Video File Details", info);
   }
 
   async removeVideoFile(index) {
@@ -2235,7 +1854,7 @@ class TelegramUtilities {
         files: filesToConvert,
         output_dir: this.currentVideoOutput,
         settings: {
-          gpu_mode: "auto", // Always use automatic GPU detection
+          cpu_mode: "cpu", // Always use CPU-only processing
           quality: Number(localStorage.getItem("quality_setting") || 75)
         }
       };
@@ -3950,11 +3569,15 @@ class TelegramUtilities {
     const file = this.mediaFiles[index];
     if (!file) return;
     
-    // Get file metadata
-    let fileSize = 'Unknown';
-    let dimensions = 'Unknown';
-    let duration = 'N/A';
-    let dateModified = 'Unknown';
+    // Get detailed file metadata from backend
+    let fileInfo = {
+      name: file.name,
+      size: 'Unknown',
+      duration: 'N/A',
+      format: 'Unknown',
+      dimensions: 'Unknown',
+      dateModified: 'Unknown'
+    };
     
     try {
       const result = await this.apiRequest('POST', '/api/get-file-info', { 
@@ -3962,63 +3585,98 @@ class TelegramUtilities {
       });
       
       if (result && result.success && result.data) {
-        fileSize = this.formatFileSize(result.data.size || 0);
-        if (result.data.width && result.data.height) {
-          dimensions = `${result.data.width} × ${result.data.height}`;
-        }
-        if (result.data.duration) {
-          duration = this.formatDuration(result.data.duration);
-        }
-        if (result.data.modified) {
-          dateModified = new Date(result.data.modified).toLocaleDateString();
-        }
+        fileInfo = {
+          name: result.data.name || file.name,
+          size: result.data.size_formatted || 'Unknown',
+          duration: result.data.duration_formatted || 'N/A',
+          format: result.data.format ? result.data.format.toUpperCase() : 'Unknown',
+          dimensions: result.data.dimensions || 'Unknown',
+          dateModified: result.data.modified ? new Date(result.data.modified * 1000).toLocaleDateString() : 'Unknown',
+          type: result.data.type || 'unknown',
+          codec: result.data.codec || null,
+          fps: result.data.fps || null
+        };
       }
     } catch (error) {
       if (RENDERER_DEBUG) console.error('Failed to get file info:', error);
     }
     
+    // Format additional technical info
+    let technicalInfo = '';
+    if (fileInfo.codec) {
+      technicalInfo += `<div style="margin-bottom: 0.5rem;">
+        <strong style="color: #667eea;">🎬 Codec:</strong> 
+        <span style="color: #ccc;">${fileInfo.codec}</span>
+      </div>`;
+    }
+    if (fileInfo.fps && fileInfo.fps > 0) {
+      technicalInfo += `<div style="margin-bottom: 0.5rem;">
+        <strong style="color: #667eea;">⚡ Frame Rate:</strong> 
+        <span style="color: #ccc;">${fileInfo.fps.toFixed(1)} fps</span>
+      </div>`;
+    }
+    
+    // Get file type icon
+    const typeIcon = fileInfo.type === 'video' ? '🎥' : fileInfo.type === 'image' ? '🖼️' : '📄';
+    const typeLabel = fileInfo.type === 'video' ? 'Video' : fileInfo.type === 'image' ? 'Image' : 'File';
+    
     const info = `
-      <div style="font-size: 0.9rem; line-height: 1.8;">
-        <div style="margin-bottom: 0.5rem;">
-          <strong style="color: #667eea;">File Name:</strong> 
-          <span style="color: #ccc;">${file.name}</span>
+      <div style="font-size: 0.9rem; line-height: 1.8; max-width: 400px;">
+        <div style="margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.1);">
+          <strong style="color: #667eea; font-size: 1rem;">${typeIcon} ${typeLabel} File Information</strong>
         </div>
+        
         <div style="margin-bottom: 0.5rem;">
-          <strong style="color: #667eea;">Type:</strong> 
-          <span style="color: #ccc;">${file.type.toUpperCase()}</span>
+          <strong style="color: #667eea;">📄 Name:</strong> 
+          <span style="color: #ccc; word-break: break-word;">${fileInfo.name}</span>
         </div>
+        
         <div style="margin-bottom: 0.5rem;">
-          <strong style="color: #667eea;">Size:</strong> 
-          <span style="color: #ccc;">${fileSize}</span>
+          <strong style="color: #667eea;">📏 Size:</strong> 
+          <span style="color: #ccc;">${fileInfo.size}</span>
         </div>
+        
         <div style="margin-bottom: 0.5rem;">
-          <strong style="color: #667eea;">Dimensions:</strong> 
-          <span style="color: #ccc;">${dimensions}</span>
+          <strong style="color: #667eea;">📐 Dimensions:</strong> 
+          <span style="color: #ccc;">${fileInfo.dimensions}</span>
         </div>
-        ${file.type === 'video' ? `
-        <div style="margin-bottom: 0.5rem;">
-          <strong style="color: #667eea;">Duration:</strong> 
-          <span style="color: #ccc;">${duration}</span>
+        
+        ${file.type === 'video' ? `<div style="margin-bottom: 0.5rem;">
+          <strong style="color: #667eea;">⏱️ Duration:</strong> 
+          <span style="color: #ccc;">${fileInfo.duration}</span>
         </div>` : ''}
+        
         <div style="margin-bottom: 0.5rem;">
-          <strong style="color: #667eea;">Date Modified:</strong> 
-          <span style="color: #ccc;">${dateModified}</span>
+          <strong style="color: #667eea;">🎬 Format:</strong> 
+          <span style="color: #ccc;">${fileInfo.format}</span>
         </div>
+        
         <div style="margin-bottom: 0.5rem;">
-          <strong style="color: #667eea;">Emoji:</strong> 
-          <span style="font-size: 1.5rem;">${file.emoji}</span>
+          <strong style="color: #667eea;">📅 Modified:</strong> 
+          <span style="color: #ccc;">${fileInfo.dateModified}</span>
         </div>
-        <div style="margin-bottom: 0.5rem;">
-          <strong style="color: #667eea;">Status:</strong> 
-          <span style="color: ${file.status === 'completed' ? '#4ade80' : '#ccc'};">${file.status || "Ready"}</span>
-        </div>
+        
+        ${technicalInfo}
+        
         <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.1);">
-          <small style="color: #888;">File ${index + 1} of ${this.mediaFiles.length}</small>
+          <div style="margin-bottom: 0.5rem;">
+            <strong style="color: #667eea;">🎉 Emoji:</strong> 
+            <span style="font-size: 1.5rem;">${file.emoji || '😀'}</span>
+          </div>
+          
+          <div style="margin-bottom: 0.5rem;">
+            <strong style="color: #667eea;">🔄 Status:</strong> 
+            <span style="color: ${this.getStatusColor(file.status)};">${file.status || 'Ready'}</span>
+          </div>
+        </div>
+        
+        <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.1);">
+          <small style="color: #888;">File ${index + 1} of ${this.mediaFiles.length} • Sticker Pack</small>
         </div>
       </div>
     `;
     
-    this.showInfoModal("Media File Metadata", info);
+    this.showDetailedMessage("Media File Details", info);
   }
   
   formatFileSize(bytes) {
@@ -4957,9 +4615,9 @@ class TelegramUtilities {
     `;
     
     // Add animations if not already present
-    if (!document.getElementById('gpu-modal-animations')) {
+    if (!document.getElementById('modal-animations')) {
       const style = document.createElement('style');
-      style.id = 'gpu-modal-animations';
+      style.id = 'modal-animations';
       style.textContent = `
         @keyframes fadeIn {
           from { opacity: 0; }
