@@ -3305,6 +3305,16 @@ html {
   box-shadow: 0 6px 20px rgba(244, 67, 54, 0.4);
 }
 
+.btn-info {
+  background: linear-gradient(135deg, #17a2b8, #138496);
+  color: white;
+  box-shadow: 0 2px 8px rgba(23, 162, 184, 0.3);
+}
+
+.btn-info:hover {
+  box-shadow: 0 6px 20px rgba(23, 162, 184, 0.4);
+}
+
 /* Button Sizes */
 .btn-sm {
   padding: 0.5rem 1rem;
