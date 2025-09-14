@@ -5,7 +5,6 @@ import time
 import gc
 import psutil
 from pathlib import Path
-from gpu_manager import GPUManager, GPUType, GPUInfo
 
 class VideoConverterCore:
     def __init__(self):
@@ -33,31 +32,10 @@ class VideoConverterCore:
         self.VPX_CPU_USED = 5  # slightly faster preset
         self.MAX_ATTEMPTS = 99999  # Essentially infinite attempts - user will improve core logic
         
-        # Initialize GPU Manager
-        self.gpu_manager = GPUManager()
-        self.selected_gpu = None
-        self.gpu_mode = "auto"  # auto, cpu, nvidia, amd, intel
-        
-        # Load GPU configuration from preflight check
-        self.gpu_config = self._load_gpu_config()
-        
         # Memory management
         self.memory_cleanup_interval = 5  # Cleanup every 5 conversions
         self.conversions_since_cleanup = 0
-    
-    def _load_gpu_config(self):
-        """Load GPU configuration from preflight check"""
-        try:
-            import json
-            config_path = os.path.join(os.path.dirname(__file__), "gpu_config.json")
-            if os.path.exists(config_path):
-                with open(config_path, 'r') as f:
-                    config = json.load(f)
-                    self.logger.info(f"[GPU] Loaded configuration: {config.get('optimal', {}).get('mode', 'unknown')}")
-                    return config
-        except Exception as e:
-            self.logger.warning(f"[GPU] Could not load config: {e}")
-        return {}
+
 
     def update_process_status(self, process_id, update_data):
         """Helper to update process status in backend"""
@@ -155,33 +133,7 @@ class VideoConverterCore:
             self.logger.error(f"Error getting file size for {filename}: {e}")
             return 0
 
-    def detect_gpu(self):
-        """Automatic GPU detection - selects best GPU, falls back to CPU"""
-        try:
-            # Get available GPUs
-            gpus = self.gpu_manager.gpus
-            
-            if not gpus:
-                self.logger.info("[GPU] No GPU detected, using CPU")
-                self.selected_gpu = None
-                return 'cpu'
-            
-            # Select the best available GPU automatically
-            self.selected_gpu = self.gpu_manager.get_best_gpu()
-            
-            if self.selected_gpu:
-                self.logger.info(f"[GPU] Auto-selected: {self.selected_gpu.name} ({self.selected_gpu.type.value})")
-                self.logger.info(f"[GPU] Memory: {self.selected_gpu.memory_used}MB/{self.selected_gpu.memory_total}MB")
-                return self.selected_gpu.type.value
-            else:
-                self.logger.info("[GPU] No suitable GPU found, falling back to CPU")
-                self.selected_gpu = None
-                return 'cpu'
-                
-        except Exception as e:
-            self.logger.error(f"[GPU] Detection error: {e}, falling back to CPU")
-            self.selected_gpu = None
-            return 'cpu'
+
     
     def cleanup_memory(self):
         """Cleanup memory to prevent leaks"""
@@ -205,18 +157,11 @@ class VideoConverterCore:
             # Log memory status
             memory = psutil.virtual_memory()
             self.logger.info(f"[MEMORY] System RAM: {memory.used // (1024*1024)}MB/{memory.total // (1024*1024)}MB ({memory.percent}%)")
-            
-            if self.selected_gpu:
-                gpu_mem_used, gpu_mem_total, gpu_mem_percent = self.gpu_manager.get_gpu_memory_usage(self.selected_gpu.index)
-                self.logger.info(f"[MEMORY] GPU: {gpu_mem_used}MB/{gpu_mem_total}MB ({gpu_mem_percent:.1f}%)")
                 
         except Exception as e:
             self.logger.error(f"[CLEANUP] Memory cleanup error: {e}")
 
-    def convert_video(self, input_file, output_file, gpu_mode='auto', process_id=None, file_index=None):
-        import time
-        import os
-        import logging
+    def convert_video(self, input_file, output_file, process_id=None, file_index=None):
         
         # Configure detailed logging
         log_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'conversion.log')
@@ -237,8 +182,8 @@ class VideoConverterCore:
             force=True  # Force reconfiguration of root logger
         )
         
-        # Create a file handler to ensure file is created
-        file_handler = logging.FileHandler(log_file, mode='a')
+        # Create a file handler to ensure file is created with UTF-8 encoding
+        file_handler = logging.FileHandler(log_file, mode='a', encoding='utf-8')
         file_handler.setLevel(logging.DEBUG)
         formatter = logging.Formatter('%(asctime)s - %(levelname)s: %(message)s')
         file_handler.setFormatter(formatter)
@@ -252,9 +197,9 @@ class VideoConverterCore:
         conversion_logger.handlers.clear()
         conversion_logger.addHandler(file_handler)
         
-        # Ensure the log file is writable
+        # Ensure the log file is writable with UTF-8 encoding
         try:
-            with open(log_file, 'a') as f:
+            with open(log_file, 'a', encoding='utf-8') as f:
                 f.write(f"\n{'='*50}\n[LOGGING INITIALIZED] {time.ctime()}\n{'='*50}\n")
         except Exception as e:
             print(f"Error creating log file: {e}")
@@ -279,22 +224,16 @@ class VideoConverterCore:
             conversion_logger.info(f"- Resolution: {width}x{height}")
             conversion_logger.info(f"- Initial File Size: {initial_file_size:.2f} KB")
             
-            # Always use automatic GPU detection
-            gpu_type = self.detect_gpu()
-            
-            # Get system stats before conversion
-            system_stats = self.gpu_manager.get_current_stats()
+            # CPU-only mode - no GPU detection or monitoring
+            conversion_logger.info(f"[CPU] Using CPU-only processing mode")
             
             # Update file status to "analyzing"
             if process_id and file_index is not None:
-                gpu_info = f"GPU: {self.selected_gpu.name}" if self.selected_gpu else "CPU Mode"
                 self.update_file_status(process_id, file_index, {
                     'status': 'analyzing',
                     'progress': 5,
-                    'stage': f'Analyzing video... ({gpu_info})',
-                    'filename': filename,
-                    'gpu_info': gpu_info,
-                    'system_stats': system_stats
+                    'stage': f'Analyzing video... (CPU Mode)',
+                    'filename': filename
                 })
 
             # Get video metadata
@@ -366,22 +305,19 @@ class VideoConverterCore:
                         'filename': filename
                     })
 
-                # For now, force CPU mode to ensure stability
-                # We'll re-enable GPU after fixing the CUDA issues
-                use_cuda_preproc = False
-                
-                # CPU path - always use this for now
-                ffmpeg_pre_args = []
+                # CPU-only mode - use standard scaling filter
                 scale_filter = (
                     f"scale={self.SCALE_WIDTH}:{self.SCALE_HEIGHT}:force_original_aspect_ratio=decrease,"
                     f"pad={self.SCALE_WIDTH}:{self.SCALE_HEIGHT}:(ow-iw)/2:(oh-ih)/2"
                 )
-                self.logger.info(f"[FFMPEG] Using CPU processing for {filename} (GPU temporarily disabled for stability)")
+                
+                conversion_logger.info(f"[CPU] Using CPU processing for {filename}")
 
                 # Pass log base for two-pass; suppress console noise
                 pass_log_base = os.path.join(self.TEMP_DIR, f"ffmpeg_pass_{os.getpid()}_{int(time.time())}_{attempt}")
                 null_device = "NUL" if os.name == 'nt' else "/dev/null"
 
+                # CPU-only VP9 encoding with two-pass
                 # FFmpeg command configuration - YOUR EXACT COMMAND
                 convert_cmd = [
                     "ffmpeg",
@@ -389,7 +325,6 @@ class VideoConverterCore:
                     "-loglevel", "error",
                     "-y",  # Overwrite output file
                     "-threads", str(max(1, (os.cpu_count() or 4))),
-                ] + ffmpeg_pre_args + [
                     "-i", input_file,
                     "-vf", scale_filter,  # Scaling with padding
                     "-c:v", "libvpx-vp9",
@@ -407,6 +342,11 @@ class VideoConverterCore:
                 ]
 
                 conversion_logger.info(f"[PASS1] {filename}: Starting FFmpeg Pass 1...")
+                
+                # DEBUG: Log the exact FFmpeg command for verification
+                conversion_logger.info(f"[CPU_DEBUG] FFmpeg Pass 1 Command:")
+                cmd_str = ' '.join(f'"{{arg}}"' if ' ' in arg else arg for arg in convert_cmd)
+                conversion_logger.info(f"[CPU_DEBUG] {cmd_str}")
 
                 # Update progress for pass 1
                 if process_id and file_index is not None:
@@ -418,6 +358,7 @@ class VideoConverterCore:
                     })
 
                 # First Pass
+                conversion_logger.info(f"[CPU_DEBUG] Executing FFmpeg Pass 1...")
                 result = subprocess.run(convert_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
                 # Second Pass Command - rebuild it properly
@@ -427,7 +368,6 @@ class VideoConverterCore:
                     "-loglevel", "error",
                     "-y",  # Overwrite output file
                     "-threads", str(max(1, (os.cpu_count() or 4))),
-                ] + ffmpeg_pre_args + [
                     "-i", input_file,
                     "-vf", scale_filter,  # Scaling with padding
                     "-c:v", "libvpx-vp9",
@@ -446,6 +386,11 @@ class VideoConverterCore:
                 ]
 
                 conversion_logger.info(f"[PASS2] {filename}: Starting FFmpeg Pass 2...")
+                
+                # DEBUG: Log Pass 2 command as well
+                conversion_logger.info(f"[CPU_DEBUG] FFmpeg Pass 2 Command:")
+                cmd_str = ' '.join(f'"{{arg}}"' if ' ' in arg else arg for arg in convert_cmd)
+                conversion_logger.info(f"[CPU_DEBUG] {cmd_str}")
 
                 # Update progress for pass 2
                 if process_id and file_index is not None:
@@ -593,6 +538,7 @@ class VideoConverterCore:
             conversion_logger.error(f"\n{'='*50}")
             conversion_logger.error(f"[VIDEO] CONVERSION ERROR: {e}")
             conversion_logger.error(f"{'='*50}\n")
+            
             return False
 
     def hex_edit_file(self, input_file, output_file, process_id=None, file_index=None):
@@ -659,12 +605,12 @@ class VideoConverterCore:
                 })
             return False
 
-    def batch_convert(self, input_files, output_dir, gpu_mode, process_id):
+    def batch_convert(self, input_files, output_dir, process_id):
         """Process files ONE BY ONE sequentially with proper progress tracking and memory management"""
         self.logger.info(f"[BATCH] Starting conversion of {len(input_files)} files")
         self.logger.info(f"[BATCH] Process ID: {process_id}")
         self.logger.info(f"[BATCH] Output dir: {output_dir}")
-        self.logger.info(f"[BATCH] GPU Mode: {gpu_mode}")
+        self.logger.info(f"[BATCH] Processing Mode: CPU-only")
         
         # Validate inputs
         if not input_files:
@@ -690,9 +636,6 @@ class VideoConverterCore:
         except ImportError as e:
             self.logger.error(f"[BATCH] Failed to import StatisticsTracker: {e}")
             stats_tracker = None
-        
-        # Start resource monitoring
-        self.gpu_manager.start_monitoring(interval=2.0)
         
         try:
             results = []
@@ -750,8 +693,8 @@ class VideoConverterCore:
                 except Exception:
                     pass
 
-                # Convert the file
-                success = self.convert_video(input_file, output_file, gpu_mode, process_id, i)
+                # Convert the file - CPU mode only
+                success = self.convert_video(input_file, output_file, process_id, i)
 
                 if success:
                     completed_files += 1
@@ -813,9 +756,6 @@ class VideoConverterCore:
             # Final memory cleanup
             self.cleanup_memory()
             
-            # Stop monitoring
-            self.gpu_manager.stop_monitoring()
-            
             # Update statistics using centralized StatisticsTracker
             self.logger.info(f"[BATCH] Updating stats for {len(results)} results")
             for i, result in enumerate(results):
@@ -836,8 +776,6 @@ class VideoConverterCore:
             
         except Exception as e:
             self.logger.error(f"[BATCH] Critical error: {str(e)}", exc_info=True)
-            # Ensure monitoring stops on error
-            self.gpu_manager.stop_monitoring()
             raise
 
     def batch_hex_edit(self, input_files, output_dir, process_id):
