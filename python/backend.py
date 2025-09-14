@@ -61,14 +61,6 @@ logger = logging.getLogger(__name__)
 
 # Statistics tracker is imported from separate module
 
-# Run GPU preflight check first
-try:
-    import gpu_preflight
-    logger.info("[GPU] Running GPU preflight check...")
-    gpu_preflight.main()
-except Exception as e:
-    logger.warning(f"[GPU] Preflight check failed: {e}")
-
 # Import video converter (after logging configured)
 try:
     print(f"[IMPORT] Attempting to import video_converter from {current_dir}")
@@ -78,38 +70,16 @@ try:
     print(f"[IMPORT] VideoConverterCore instantiated successfully")
     VIDEO_CONVERTER_AVAILABLE = True
     logger.info("[OK] Video converter imported successfully")
-    
-    # Import GPU manager for stats
-    from gpu_manager import GPUManager
-    gpu_manager = GPUManager()
-    GPU_MANAGER_AVAILABLE = True
-    logger.info("[OK] GPU manager imported successfully")
-    
 
-    
-    # Log detected GPUs
-    if gpu_manager.gpus:
-        logger.info(f"[GPU] Detected {len(gpu_manager.gpus)} GPU(s):")
-        for gpu in gpu_manager.gpus:
-            logger.info(f"  - {gpu.name} ({gpu.type.value}) - {gpu.memory_total}MB VRAM")
-            if gpu.cuda_version:
-                logger.info(f"    CUDA {gpu.cuda_version} available")
-    else:
-        logger.info("[GPU] No GPUs detected - using CPU mode")
-        
 except ImportError as e:
     logger.warning(f"[ERROR] Video converter import failed: {e}. CWD={os.getcwd()} PYTHONPATH={sys.path}")
     VIDEO_CONVERTER_AVAILABLE = False
     video_converter = None
-    GPU_MANAGER_AVAILABLE = False
-    gpu_manager = None
 
 except Exception as e:
     logger.error(f"[ERROR] Video converter initialization failed: {e} ({type(e).__name__})")
     VIDEO_CONVERTER_AVAILABLE = False
     video_converter = None
-    GPU_MANAGER_AVAILABLE = False
-    gpu_manager = None
 
 
 # Flask app
@@ -412,173 +382,6 @@ def system_info():
         logger.error(f"Error getting system info: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
-# GPU detection route
-@app.route('/api/gpu-detect', methods=['GET'])
-def detect_gpus():
-    try:
-        if not GPU_MANAGER_AVAILABLE:
-            return jsonify({
-                "success": False, 
-                "error": "GPU manager not available", 
-                "details": "Failed to initialize GPU detection capabilities",
-                "diagnostics": {
-                    "system": platform.system(),
-                    "python_version": platform.python_version(),
-                    "required_commands": {
-                        "nvidia-smi": shutil.which("nvidia-smi") is not None,
-                        "rocm-smi": shutil.which("rocm-smi") is not None,
-                        "nvcc": shutil.which("nvcc") is not None
-                    }
-                }
-            }), 500
-    
-        # Check if GPU manager is healthy
-        if not gpu_manager.is_healthy():
-            return jsonify({
-                "success": False,
-                "error": "GPU manager initialization failed",
-                "details": gpu_manager.initialization_error or "Unknown initialization error",
-                "diagnostics": {
-                    "system": platform.system(),
-                    "python_version": platform.python_version(),
-                    "gpu_manager_healthy": False,
-                    "initialization_error": gpu_manager.initialization_error
-                }
-            }), 500
-    
-        # Get detected GPUs
-        gpus = gpu_manager.gpus
-        
-        # Prepare detailed GPU information
-        gpu_info = []
-        for gpu in gpus:
-            gpu_details = {
-                "index": gpu.index,
-                "name": gpu.name,
-                "type": gpu.type.value,
-                "memory_total": gpu.memory_total,
-                "memory_used": gpu.memory_used,
-                "memory_free": gpu.memory_free,
-                "cuda_version": gpu.cuda_version
-            }
-            gpu_info.append(gpu_details)
-        
-        # Check CUDA availability and toolkit installation
-        cuda_info = {
-            "available": gpu_manager.cuda_available,
-            "version": gpu_manager.cuda_version
-        }
-        
-        # Determine if CUDA toolkit is fully installed
-        cuda_toolkit_installed = False
-        try:
-            # Check for CUDA toolkit binaries and libraries
-            cuda_paths = [
-                os.environ.get("CUDA_PATH"),
-                "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v*",
-                "C:\\CUDA\\bin"
-            ]
-            
-            cuda_toolkit_installed = any(
-                os.path.exists(path.replace('*', gpu_manager.cuda_version)) 
-                for path in cuda_paths if path
-            )
-        except Exception as e:
-            logger.warning(f"CUDA toolkit installation check failed: {e}")
-        
-        # Success response
-        response_data = {
-            "success": True,
-            "gpus": gpu_info,
-            "cuda_info": cuda_info,
-            "needs_cuda_install": len(gpus) > 0 and any(gpu.type.value == 'nvidia' for gpu in gpus) and not cuda_toolkit_installed,
-            "cuda_toolkit_installed": cuda_toolkit_installed,
-            "diagnostics": {
-                "gpu_count": len(gpus),
-                "gpu_manager_healthy": gpu_manager.is_healthy(),
-                "cuda_available": gpu_manager.cuda_available
-            }
-        }
-        
-        logger.info(f"GPU detection successful: {len(gpus)} GPU(s) detected, CUDA: {gpu_manager.cuda_available}, Toolkit Installed: {cuda_toolkit_installed}")
-        return jsonify(response_data)
-    
-    except Exception as e:
-        logger.error(f"GPU detection failed: {e}", exc_info=True)
-        return jsonify({
-            "success": False, 
-            "error": "Failed to detect GPUs", 
-            "details": str(e),
-            "diagnostics": {
-                "system": platform.system(),
-                "python_version": platform.python_version(),
-                "exception_type": type(e).__name__,
-                "gpu_manager_available": GPU_MANAGER_AVAILABLE
-            }
-        }), 500
-
-# CUDA installation info route
-@app.route('/api/cuda-install-info', methods=['GET', 'OPTIONS'], strict_slashes=False)
-def cuda_install_info():
-    if request.method == 'OPTIONS':
-        return '', 200
-    try:
-        if not GPU_MANAGER_AVAILABLE:
-            return jsonify({"success": False, "error": "GPU manager not available"}), 500
-        
-        install_info = gpu_manager.get_cuda_install_command()
-        
-        return jsonify({
-            "success": True,
-            "install_info": install_info,
-            "platform": platform.system()
-        })
-    except Exception as e:
-        logger.error(f"Error getting CUDA install info: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
-
-# CUDA installer (Windows-first minimal implementation)
-@app.route('/api/install-cuda', methods=['POST', 'OPTIONS'], strict_slashes=False)
-def install_cuda():
-    if request.method == 'OPTIONS':
-        return '', 200
-    try:
-        import platform
-        system = platform.system()
-        if system != 'Windows':
-            return jsonify({
-                "success": False,
-                "error": "Automated CUDA install is only supported on Windows for now.",
-                "hint": "Visit https://developer.nvidia.com/cuda-downloads to install manually"
-            }), 400
-
-        # Use winget to install CUDA Toolkit silently
-        cmd = [
-            'winget', 'install', 'Nvidia.CUDA', '-e', '--silent',
-            '--accept-package-agreements', '--accept-source-agreements'
-        ]
-
-        try:
-            subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except FileNotFoundError:
-            return jsonify({
-                "success": False,
-                "error": "winget not found. Install winget or use manual download.",
-                "command": 'winget install Nvidia.CUDA -e --silent --accept-package-agreements --accept-source-agreements',
-                "url": "https://developer.nvidia.com/cuda-downloads"
-            }), 400
-
-        return jsonify({
-            "success": True,
-            "started": True,
-            "message": "CUDA installation started via winget. You may be prompted for permission.",
-            "command": 'winget install Nvidia.CUDA -e --silent --accept-package-agreements --accept-source-agreements'
-        })
-    except Exception as e:
-        logger.error(f"Error starting CUDA install: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
 
 # System stats route
 @app.route('/api/get-file-info', methods=['POST', 'OPTIONS'], strict_slashes=False)
@@ -597,22 +400,28 @@ def get_file_info():
         # Get basic file stats
         stats = os.stat(file_path)
         file_info = {
+            "name": os.path.basename(file_path),
             "size": stats.st_size,
+            "size_formatted": format_file_size(stats.st_size),
             "modified": stats.st_mtime,
-            "created": stats.st_ctime
+            "created": stats.st_ctime,
+            "format": get_file_format(file_path)
         }
         
         # For images, get dimensions
-        if file_path.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
+        if file_path.lower().endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp')):
             try:
                 from PIL import Image
                 with Image.open(file_path) as img:
                     file_info["width"], file_info["height"] = img.size
-            except:
-                pass
+                    file_info["dimensions"] = f"{img.size[0]} × {img.size[1]}"
+                    file_info["type"] = "image"
+            except Exception as e:
+                logger.warning(f"Could not get image info for {file_path}: {e}")
+                file_info["type"] = "image"
         
         # For videos, get duration and dimensions
-        elif file_path.lower().endswith(('.mp4', '.webm', '.mov', '.avi')):
+        elif file_path.lower().endswith(('.mp4', '.webm', '.mov', '.avi', '.mkv', '.flv')):
             try:
                 import subprocess
                 import json
@@ -627,22 +436,38 @@ def get_file_info():
                     file_path
                 ]
                 
-                result = subprocess.run(cmd, capture_output=True, text=True)
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
                 if result.returncode == 0:
                     metadata = json.loads(result.stdout)
                     
                     # Get duration
                     if 'format' in metadata and 'duration' in metadata['format']:
-                        file_info["duration"] = float(metadata['format']['duration'])
+                        duration = float(metadata['format']['duration'])
+                        file_info["duration"] = duration
+                        file_info["duration_formatted"] = format_duration(duration)
                     
-                    # Get dimensions from video stream
+                    # Get dimensions and codec info from video stream
                     for stream in metadata.get('streams', []):
                         if stream.get('codec_type') == 'video':
                             file_info["width"] = stream.get('width')
                             file_info["height"] = stream.get('height')
+                            if file_info["width"] and file_info["height"]:
+                                file_info["dimensions"] = f"{file_info['width']} × {file_info['height']}"
+                            file_info["codec"] = stream.get('codec_name', 'Unknown')
+                            file_info["fps"] = eval(stream.get('r_frame_rate', '0/1')) if '/' in str(stream.get('r_frame_rate', '')) else 0
                             break
-            except:
-                pass
+                    
+                    file_info["type"] = "video"
+                else:
+                    logger.warning(f"ffprobe failed for {file_path}: {result.stderr}")
+                    file_info["type"] = "video"
+                    
+            except Exception as e:
+                logger.warning(f"Could not get video info for {file_path}: {e}")
+                file_info["type"] = "video"
+        else:
+            # Other file types
+            file_info["type"] = "other"
         
         return jsonify({"success": True, "data": file_info})
         
@@ -650,37 +475,64 @@ def get_file_info():
         logger.error(f"Error getting file info: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
+def format_file_size(size_bytes):
+    """Format file size in human readable format"""
+    if size_bytes == 0:
+        return "0 B"
+    
+    size_names = ["B", "KB", "MB", "GB", "TB"]
+    import math
+    i = int(math.floor(math.log(size_bytes, 1024)))
+    p = math.pow(1024, i)
+    s = round(size_bytes / p, 2)
+    return f"{s} {size_names[i]}"
+
+def format_duration(seconds):
+    """Format duration in human readable format"""
+    if seconds < 60:
+        return f"{int(seconds)}s"
+    elif seconds < 3600:
+        minutes = int(seconds // 60)
+        secs = int(seconds % 60)
+        return f"{minutes}m {secs}s"
+    else:
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        secs = int(seconds % 60)
+        return f"{hours}h {minutes}m {secs}s"
+
+def get_file_format(file_path):
+    """Get file format/extension"""
+    ext = os.path.splitext(file_path)[1].lower()
+    return ext[1:] if ext else "unknown"
+
 @app.route('/api/system-stats', methods=['GET', 'OPTIONS'], strict_slashes=False)
 def system_stats():
     if request.method == 'OPTIONS':
         return '', 200
     try:
-        if not GPU_MANAGER_AVAILABLE:
-            # Basic stats without GPU
-            import psutil
-            memory = psutil.virtual_memory()
-            cpu = psutil.cpu_percent(interval=0.1)
-            
-            return jsonify({
-                "success": True,
-                "stats": {
-                    'cpu': {
-                        'count': psutil.cpu_count(logical=False),
-                        'threads': psutil.cpu_count(logical=True),
-                        'percent': cpu
-                    },
-                    'memory': {
-                        'total': memory.total // (1024 * 1024),
-                        'used': memory.used // (1024 * 1024),
-                        'free': memory.available // (1024 * 1024),
-                        'percent': memory.percent
-                    },
-                    'gpus': []
-                }
-            })
+        # CPU-only system stats
+        import psutil
+        memory = psutil.virtual_memory()
+        cpu_freq = psutil.cpu_freq()
         
-        stats = gpu_manager.get_current_stats()
-        return jsonify({"success": True, "stats": stats})
+        return jsonify({
+            "success": True,
+            "stats": {
+                'cpu': {
+                    'count': psutil.cpu_count(logical=False),
+                    'threads': psutil.cpu_count(logical=True),
+                    'percent': psutil.cpu_percent(interval=0.1),
+                    'frequency': cpu_freq.current if cpu_freq else 0
+                },
+                'memory': {
+                    'total': memory.total // (1024 * 1024),
+                    'used': memory.used // (1024 * 1024),
+                    'free': memory.available // (1024 * 1024),
+                    'percent': memory.percent
+                }
+            }
+        })
         
     except Exception as e:
         logger.error(f"Error getting system stats: {e}")
@@ -953,7 +805,6 @@ def start_video_conversion():
                     results = video_converter.batch_convert(
                         input_files=input_files,
                         output_dir=output_dir,
-                        gpu_mode=settings.get('gpu_mode', 'auto'),
                         process_id=process_id
                     )
                 except Exception as convert_error:
