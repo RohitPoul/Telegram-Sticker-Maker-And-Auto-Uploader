@@ -1,6 +1,6 @@
 {
   "name": "telegram-utilities",
-  "version": "1.0.0", 
+  "version": "1.0.0",
   "description": "Advanced Telegram Utilities - Video Converter & Sticker Bot",
   "main": "electron/main.js",
   "scripts": {
@@ -33,7 +33,7 @@
       "icon": "electron/assets/icon.ico"
     },
     "mac": {
-      "target": "dmg", 
+      "target": "dmg",
       "icon": "electron/assets/icon.icns"
     },
     "linux": {
@@ -46,7 +46,9 @@
     "electron-builder": "^24.6.4"
   },
   "dependencies": {
-    "axios": "^1.5.0",
-    "electron-store": "^8.1.0"
+    "axios": "^1.12.2",
+    "debug": "^4.4.3",
+    "electron-store": "^8.1.0",
+    "follow-redirects": "^1.15.11"
   }
 }
