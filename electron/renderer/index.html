@@ -941,6 +941,48 @@
           </div>
         </div>
 
+        <!-- URL Name Taken Modal -->
+        <div class="modal" id="url-name-modal" style="display: none">
+          <div class="modal-header">
+            <h3><i class="fas fa-exclamation-triangle" style="color: var(--warning-color);"></i> URL Name Already Taken</h3>
+            <button class="modal-close" onclick="window.app?.hideUrlNameModal()">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="url-name-content">
+              <div class="url-name-info">
+                <p>The URL name "<span id="taken-url-name" style="font-weight: bold; color: var(--error-color);">unknown</span>" is already taken by another sticker pack.</p>
+                <p>Please choose a different URL name for your sticker pack:</p>
+              </div>
+              
+              <div class="form-group">
+                <label>New URL Name</label>
+                <div class="input-group">
+                  <span class="input-prefix">t.me/addstickers/</span>
+                  <input
+                    type="text"
+                    id="new-url-name"
+                    class="form-control"
+                    placeholder="my_awesome_pack_2025"
+                    maxlength="32"
+                    pattern="[a-zA-Z][a-zA-Z0-9_]*"
+                  />
+                </div>
+                <small class="help-text">5-32 characters, start with letter, use letters/numbers/underscores only</small>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="window.app?.hideUrlNameModal()">
+              <i class="fas fa-times"></i> Cancel
+            </button>
+            <button class="btn btn-success" id="submit-new-url-name" onclick="window.app?.submitNewUrlName()">
+              <i class="fas fa-check"></i> Submit New Name
+            </button>
+          </div>
+        </div>
+
         <!-- Success Modal -->
         <div class="modal" id="success-modal" style="display: none">
           <div class="modal-header">
