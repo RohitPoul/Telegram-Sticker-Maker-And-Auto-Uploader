@@ -3945,11 +3945,121 @@ html {
 /* Icon Selection Modal Styles */
 .icon-selection-content {
   text-align: center;
+  padding: 1rem 0;
 }
 
 .icon-info {
-  margin-bottom: 2rem;
-  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius);
+  border: 1px solid var(--border-color);
+}
+
+.icon-info p {
+  margin: 0.5rem 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.icon-info ul {
+  margin: 0.75rem 0;
+  padding-left: 1.5rem;
+  text-align: left;
+}
+
+.icon-info ul li {
+  margin: 0.4rem 0;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.icon-options {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin: 1.5rem 0;
+  flex-direction: column;
+  align-items: center;
+}
+
+.icon-option {
+  text-align: center;
+  flex: 1;
+}
+
+.icon-option .btn-large {
+  padding: 0.8rem 1.5rem;
+  font-size: 0.9rem;
+  min-width: 200px;
+  margin-bottom: 0.5rem;
+  display: block;
+}
+
+.icon-option .help-text {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.icon-file-info {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: var(--bg-tertiary);
+  border-radius: var(--border-radius);
+  border: 1px solid var(--border-color);
+}
+
+.file-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.file-preview i {
+  font-size: 1.5rem;
+  color: var(--accent-color);
+}
+
+.file-preview span {
+  font-family: 'Courier New', monospace;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+
+.file-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.file-actions .btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+}
+
+/* Make icon modal smaller and more compact */
+#icon-modal {
+  max-width: 450px;
+  width: 85%;
+}
+
+#icon-modal .modal-body {
+  padding: 1rem 1.5rem;
+}
+
+#icon-modal .modal-header h3 {
+  font-size: 1.1rem;
+}
+
+#icon-modal .modal-footer {
+  padding: 0.75rem 1.5rem;
+}
+
+.icon-info {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
   background: var(--bg-secondary);
   border-radius: var(--border-radius);
   border: 1px solid var(--border-color);
