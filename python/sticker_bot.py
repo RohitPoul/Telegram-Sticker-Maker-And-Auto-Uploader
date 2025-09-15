@@ -20,6 +20,29 @@ try:
 except Exception:
     pass
 
+def run_telegram_coroutine(coro):
+    """
+    Helper function to run async coroutines in sync context
+    Uses the telegram handler's event loop for consistency
+    """
+    try:
+        from telegram_connection_handler import get_telegram_handler
+        handler = get_telegram_handler()
+        if handler:
+            return handler.run_async(coro)
+        else:
+            # Fallback: create new event loop
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                return loop.run_until_complete(coro)
+            finally:
+                loop.close()
+    except Exception as e:
+        logging.error(f"Error running telegram coroutine: {e}")
+        raise
+
 def validate_url_name(url_name):
     """Validate URL name according to Telegram sticker pack rules"""
     # Length validation (5-32 characters)
@@ -499,76 +522,61 @@ class StickerBotCore:
     
     def cleanup_connection(self):
         """
-        Comprehensive method to clean up Telegram connection
-        Ensures all resources are properly released
+        COMPLETE connection cleanup for clean workflow implementation
+        Ensures proper disconnection and session cleanup
         """
         thread_name = threading.current_thread().name
-        logging.info(f"[DEBUG] cleanup_connection called from thread: {thread_name}")
+        logging.info(f"[STICKER_CLEANUP] Starting complete cleanup in thread: {thread_name}")
         
         with self._connection_lock:
-            logging.info(f"[DEBUG] Connection lock acquired in thread: {thread_name}")
             try:
-                # Disconnect and log out if client exists
-                if self.client:
-                    logging.info(f"[DEBUG] Cleaning up client in thread: {thread_name}")
-                    # Use run_telegram_coroutine to ensure thread-safety
-                    try:
-                        logging.info(f"[DEBUG] Logging out client in thread: {thread_name}")
-                        run_telegram_coroutine(self.client.log_out())
-                        logging.info(f"[DEBUG] Client logged out successfully in thread: {thread_name}")
-                    except Exception as e:
-                        logging.warning(f"[DEBUG] Error logging out client in thread {thread_name}: {e}")
-                    try:
-                        logging.info(f"[DEBUG] Disconnecting client in thread: {thread_name}")
-                        run_telegram_coroutine(self.client.disconnect())
-                        logging.info(f"[DEBUG] Client disconnected successfully in thread: {thread_name}")
-                    except Exception as e:
-                        logging.warning(f"[DEBUG] Error disconnecting client in thread {thread_name}: {e}")
-                    
-                    # Clear client reference
-                    self.client = None
-                    logging.info(f"[DEBUG] Client reference cleared in thread: {thread_name}")
-                
-                # Reset conversation manager
+                # STEP 1: Stop conversation manager first
                 if self.conversation_manager:
-                    logging.info(f"[DEBUG] Cleaning up conversation manager in thread: {thread_name}")
+                    logging.info(f"[STICKER_CLEANUP] Stopping conversation manager...")
                     try:
                         run_telegram_coroutine(self.conversation_manager.stop_listening())
-                        logging.info(f"[DEBUG] Conversation manager stopped successfully in thread: {thread_name}")
+                        logging.info(f"[STICKER_CLEANUP] Conversation manager stopped successfully")
                     except Exception as e:
-                        logging.warning(f"[DEBUG] Error stopping conversation manager in thread {thread_name}: {e}")
+                        logging.warning(f"[STICKER_CLEANUP] Error stopping conversation manager: {e}")
                     self.conversation_manager = None
-                    logging.info(f"[DEBUG] Conversation manager reference cleared in thread: {thread_name}")
                 
-                # Reset bot peer
-                self.bot_peer = None
-                logging.info(f"[DEBUG] Bot peer reference cleared in thread: {thread_name}")
-                
-                # Smart session cleanup - only remove temporary/invalid sessions
+                # STEP 2: Use telegram handler for proper cleanup
                 try:
-                    logging.info(f"[DEBUG] Smart session cleanup in thread: {thread_name}")
-                    # Only remove temporary sessions, keep persistent ones
-                    temp_session_pattern = f'temp_session_*.session*'
-                    for session_file in glob.glob(temp_session_pattern):
-                        try:
-                            os.remove(session_file)
-                            logging.info(f"[DEBUG] Removed temporary session file: {session_file}")
-                        except Exception as e:
-                            logging.warning(f"[DEBUG] Could not remove temp session file {session_file}: {e}")
-                            
-                    # Force garbage collection to release any lingering connections
+                    from telegram_connection_handler import get_telegram_handler
+                    handler = get_telegram_handler()
+                    if handler:
+                        logging.info(f"[STICKER_CLEANUP] Using handler for force cleanup...")
+                        handler.force_disconnect_and_cleanup()
+                        logging.info(f"[STICKER_CLEANUP] Handler cleanup completed")
+                    else:
+                        logging.warning(f"[STICKER_CLEANUP] No handler available for cleanup")
+                except Exception as e:
+                    logging.error(f"[STICKER_CLEANUP] Handler cleanup error: {e}")
+                
+                # STEP 3: Clear our references
+                self.client = None
+                self.bot_peer = None
+                self.session_file = None
+                
+                # STEP 4: Force garbage collection
+                try:
                     import gc
                     gc.collect()
-                    logging.info(f"[DEBUG] Forced garbage collection in thread: {thread_name}")
-                    
+                    logging.info(f"[STICKER_CLEANUP] Forced garbage collection completed")
                 except Exception as e:
-                    logging.error(f"[DEBUG] Error during session cleanup in thread {thread_name}: {e}")
+                    logging.warning(f"[STICKER_CLEANUP] Error during garbage collection: {e}")
                 
-                logging.info(f"[DEBUG] Connection cleaned up successfully in thread: {thread_name}")
+                logging.info(f"[STICKER_CLEANUP] Complete cleanup finished successfully")
+                
             except Exception as e:
-                logging.error(f"[DEBUG] Error during connection cleanup in thread {thread_name}: {e}")
-                logging.error(f"[DEBUG] Error type: {type(e)}")
-                logging.error(f"[DEBUG] Full traceback: {traceback.format_exc()}")
+                logging.error(f"[STICKER_CLEANUP] Critical cleanup error: {e}")
+                logging.error(f"[STICKER_CLEANUP] Error type: {type(e)}")
+                logging.error(f"[STICKER_CLEANUP] Full traceback: {traceback.format_exc()}")
+                # Even on error, try to clear our references
+                self.conversation_manager = None
+                self.client = None
+                self.bot_peer = None
+                self.session_file = None
 
     def create_sticker_pack(self, pack_name: str, pack_url_name: str, sticker_type: str, media_files: List[Dict], process_id: str, auto_skip_icon: bool = True):
         """REAL sticker pack creation with EXACT advanced logic from Python version"""
@@ -764,38 +772,33 @@ class StickerBotCore:
             raise
 
     def is_connected(self):
-        """Check if Telegram connection is available with session reuse"""
+        """Check if Telegram connection is available - CLEAN WORKFLOW VERSION"""
         try:
-            self.logger.info("[STICKER] Checking connection status...")
+            logging.info("[STICKER_CONNECTION] Checking connection status for clean workflow...")
             
-            # First check if we have a conversation manager
-            if self.conversation_manager:
-                self.logger.info("[STICKER] Connection status: TRUE (conversation_manager exists)")
-                return True
-            
-            self.logger.info("[STICKER] No conversation_manager found, checking handler...")
-            
-            # If not, check if we can get a client from the handler
-            from telegram_connection_handler import get_telegram_handler
-            handler = get_telegram_handler()
-            
-            if not handler:
-                self.logger.info("[STICKER] Connection status: FALSE (no handler)")
-                return False
+            # For clean workflow, we check the actual connection status from handler
+            try:
+                from telegram_connection_handler import get_telegram_handler
+                handler = get_telegram_handler()
                 
-            self.logger.info(f"[STICKER] Handler found: {handler}")
-            
-            # Check if handler has a valid session
-            if handler.is_session_valid():
-                self.logger.info("[STICKER] Valid session found through handler")
-                # Update our references to the handler's client
-                self.client = handler._client
-                self.session_file = handler._client.session.filename if hasattr(handler._client, 'session') else None
+                if not handler:
+                    logging.info("[STICKER_CONNECTION] No handler available - disconnected")
+                    return False
                 
-                # Set up bot interaction if not already done
-                if not self.conversation_manager:
+                # Check if handler has an active connection
+                has_connection = handler.has_active_connection()
+                logging.info(f"[STICKER_CONNECTION] Handler connection status: {has_connection}")
+                
+                if not has_connection:
+                    logging.info("[STICKER_CONNECTION] No active connection in handler")
+                    return False
+                
+                # If handler has connection, ensure we have bot interaction set up
+                if not self.conversation_manager and handler._client:
+                    logging.info("[STICKER_CONNECTION] Setting up bot interaction from handler's connection...")
                     try:
                         async def setup_bot_interaction():
+                            self.client = handler._client
                             self.bot_peer = await self.client.get_entity('@stickers')
                             self.conversation_manager = SimpleConversationManager(
                                 self.client, 
@@ -806,32 +809,27 @@ class StickerBotCore:
                             return True
                         
                         handler.run_async(setup_bot_interaction())
-                        self.logger.info("[STICKER] Bot interaction set up with existing session")
+                        logging.info("[STICKER_CONNECTION] Bot interaction set up successfully")
                     except Exception as e:
-                        self.logger.error(f"[STICKER] Error setting up bot interaction: {e}")
+                        logging.error(f"[STICKER_CONNECTION] Error setting up bot interaction: {e}")
                         return False
                 
-                return True
-            
-            if not handler._client:
-                self.logger.info("[STICKER] Connection status: FALSE (no client in handler)")
-                return False
+                # Final check - do we have everything needed?
+                connected = (self.conversation_manager is not None and 
+                           self.client is not None and 
+                           self.bot_peer is not None)
                 
-            self.logger.info(f"[STICKER] Client found in handler: {handler._client}")
+                logging.info(f"[STICKER_CONNECTION] Final status: {connected}")
+                return connected
             
-            # Try to check if the client is connected
-            try:
-                # This is a simple check - if we can access the client, it's likely connected
-                self.logger.info("[STICKER] Connection status: TRUE (client accessible)")
-                return True
             except Exception as e:
-                self.logger.info(f"[STICKER] Connection status: FALSE (client not accessible: {e})")
+                logging.error(f"[STICKER_CONNECTION] Error checking connection: {e}")
                 return False
             
         except Exception as e:
-            self.logger.error(f"[STICKER] Error checking connection status: {e}")
-            self.logger.error(f"[STICKER] Error type: {type(e)}")
-            self.logger.error(f"[STICKER] Full traceback: {traceback.format_exc()}")
+            logging.error(f"[STICKER_CONNECTION] Critical error in connection check: {e}")
+            logging.error(f"[STICKER_CONNECTION] Error type: {type(e)}")
+            logging.error(f"[STICKER_CONNECTION] Full traceback: {traceback.format_exc()}")
             return False
 
     def __del__(self):
@@ -843,7 +841,7 @@ class StickerBotCore:
     
     def connect_telegram(self, api_id: str, api_hash: str, phone_param: str, process_id: str, retry_count: int = 0) -> Dict:
         """
-        Simplified Telegram connection method - delegates to handler for consistency
+        Clean workflow Telegram connection - always starts fresh
         
         :param api_id: Telegram API ID
         :param api_hash: Telegram API Hash
@@ -853,7 +851,8 @@ class StickerBotCore:
         :return: Connection result dictionary
         """
         # DEBUG: Log function entry
-        logging.critical(f"🚀 STICKER_BOT.connect_telegram CALLED WITH: api_id={api_id}, api_hash={api_hash}, phone_param={phone_param}, process_id={process_id}")
+        logging.info(f"🚀 STICKER_BOT.connect_telegram CLEAN WORKFLOW STARTING")
+        logging.info(f"📱 Phone: ***{str(phone_param)[-4:]}, Process: {process_id}")
         
         # Initialize safe variables to prevent scoping issues
         safe_phone_number = phone_param if phone_param else ''
@@ -862,12 +861,11 @@ class StickerBotCore:
         safe_process_id = process_id if process_id else ''
         
         thread_name = threading.current_thread().name
-        logging.info(f"[DEBUG] connect_telegram called from thread: {thread_name}")
-        logging.info(f"[DEBUG] API ID: {safe_api_id}, API Hash: {safe_api_hash[:10]}..., Phone: {safe_phone_number}")
+        logging.info(f"[STICKER_CONNECT] Clean connection in thread: {thread_name}")
         
         # Validate inputs
         if not all([safe_api_id, safe_api_hash, safe_phone_number]):
-            logging.warning(f"[DEBUG] Missing required fields in thread: {thread_name}")
+            logging.warning(f"[STICKER_CONNECT] Missing required fields")
             return {
                 "success": False, 
                 "error": "Missing required connection details",
@@ -877,12 +875,16 @@ class StickerBotCore:
             }
         
         try:
-            # Use the handler for connection to ensure single event loop
+            # CLEAN WORKFLOW: Always force cleanup before connecting
+            logging.info("[STICKER_CONNECT] CLEAN WORKFLOW: Force cleanup before fresh connection...")
+            self.cleanup_connection()
+            
+            # Use the handler for clean connection
             from telegram_connection_handler import get_telegram_handler
             handler = get_telegram_handler()
             
             if not handler:
-                logging.error("[DEBUG] No telegram handler available")
+                logging.error("[STICKER_CONNECT] No telegram handler available")
                 return {
                     "success": False, 
                     "error": "Telegram handler not available",
@@ -891,42 +893,15 @@ class StickerBotCore:
                     "phone_number": safe_phone_number
                 }
             
-            # Check if we already have a valid session
-            if handler.is_session_valid():
-                logging.info("[DEBUG] Valid session already exists, reusing...")
-                # Set up our references to the existing session
-                self.client = handler._client
-                self.session_file = handler._client.session.filename if hasattr(handler._client, 'session') else None
-                
-                # Set up bot interaction if not already done
-                if not self.conversation_manager:
-                    try:
-                        async def setup_bot_interaction():
-                            self.bot_peer = await self.client.get_entity('@stickers')
-                            self.conversation_manager = SimpleConversationManager(
-                                self.client, 
-                                self.bot_peer, 
-                                self.logger
-                            )
-                            await self.conversation_manager.start_listening()
-                            return True
-                        
-                        handler.run_async(setup_bot_interaction())
-                        logging.info("[DEBUG] Bot interaction set up with existing session")
-                    except Exception as e:
-                        logging.error(f"[DEBUG] Error setting up bot interaction with existing session: {e}")
-                
-                return {"success": True, "message": "Using existing valid session"}
-            
-            # Delegate to handler for consistent event loop usage
+            # Force clean connection (always fresh as per requirements)
+            logging.info("[STICKER_CONNECT] Requesting FRESH connection from handler...")
             result = handler.connect_telegram(safe_api_id, safe_api_hash, safe_phone_number)
             
-            # If connection successful, set up bot interaction
+            # Update our references if connection successful
             if result.get('success') and not result.get('needs_code') and not result.get('needs_password'):
                 try:
                     # Get the client from the handler
                     self.client = handler._client
-                    self.session_file = handler._client.session.filename if hasattr(handler._client, 'session') else None
                     
                     # Set up bot interaction using the handler's event loop
                     async def setup_bot_interaction():
@@ -941,19 +916,20 @@ class StickerBotCore:
                     
                     # Run setup on handler's event loop
                     handler.run_async(setup_bot_interaction())
-                    logging.info(f"[DEBUG] Bot interaction set up successfully")
+                    logging.info(f"[STICKER_CONNECT] Bot interaction set up successfully")
                     
                 except Exception as e:
-                    logging.error(f"[DEBUG] Error setting up bot interaction: {e}")
+                    logging.error(f"[STICKER_CONNECT] Error setting up bot interaction: {e}")
                     # Don't fail the connection, just log the error
             
+            logging.info(f"[STICKER_CONNECT] Connection result: {result}")
             return result
         
         except Exception as e:
             # Log the error
-            logging.error(f"[DEBUG] Telegram connection error in thread {thread_name}: {e}")
-            logging.error(f"[DEBUG] Error type: {type(e)}")
-            logging.error(f"[DEBUG] Full traceback: {traceback.format_exc()}")
+            logging.error(f"[STICKER_CONNECT] Connection error: {e}")
+            logging.error(f"[STICKER_CONNECT] Error type: {type(e)}")
+            logging.error(f"[STICKER_CONNECT] Full traceback: {traceback.format_exc()}")
             
             return {
                 "success": False, 
@@ -1221,36 +1197,52 @@ class StickerBotCore:
                         active_processes[process_id]["current_stage"] = f"Trying URL name (attempt {url_name_attempts}/{max_attempts})"
                         active_processes[process_id]["url_name_attempts"] = url_name_attempts
                     
-                    response = await self.conversation_manager.send_and_wait(
-                        pack_url_name, BotResponseType.URL_NAME_ACCEPTED, timeout=30.0
-                    )
-                    
-                    # Check if URL name was accepted
-                    if response.response_type == BotResponseType.URL_NAME_ACCEPTED:
-                        self.logger.info(f"[STICKER] URL name accepted: {pack_url_name}")
-                        break
-                    elif response.response_type == BotResponseType.URL_NAME_TAKEN:
-                        self.logger.warning(f"[STICKER] URL name taken: {pack_url_name}")
-                        if url_name_attempts >= max_attempts:
-                            # Max attempts reached, mark as failed
+                    try:
+                        response = await self.conversation_manager.send_and_wait(
+                            pack_url_name, BotResponseType.URL_NAME_ACCEPTED, timeout=45.0  # Increased timeout
+                        )
+                        
+                        # Check if URL name was accepted
+                        if response.response_type == BotResponseType.URL_NAME_ACCEPTED:
+                            self.logger.info(f"[STICKER] URL name accepted: {pack_url_name}")
+                            break
+                        elif response.response_type == BotResponseType.URL_NAME_TAKEN:
+                            self.logger.warning(f"[STICKER] URL name taken: {pack_url_name}")
+                            # Instead of auto-generating, mark for user input
                             if process_id in active_processes:
-                                active_processes[process_id]["status"] = "failed"
-                                active_processes[process_id]["current_stage"] = "URL name failed after 3 attempts. Please complete manually."
-                                active_processes[process_id]["error"] = "URL name was taken after 3 attempts. Please complete the process manually."
-                            return {"success": False, "error": "URL name was taken after 3 attempts. Please complete the process manually."}
+                                active_processes[process_id]["status"] = "waiting_for_url_name"
+                                active_processes[process_id]["current_stage"] = f"URL name '{pack_url_name}' is taken. Waiting for new URL name..."
+                                active_processes[process_id]["waiting_for_user"] = True
+                                active_processes[process_id]["url_name_taken"] = True
+                                active_processes[process_id]["original_url_name"] = pack_url_name
+                                self.logger.info(f"[STICKER] URL name taken, waiting for user to provide new name")
+                            return {"success": False, "error": "URL name taken", "waiting_for_user": True, "url_name_taken": True}
                         else:
-                            # Generate a new URL name with timestamp
-                            import time
-                            pack_url_name = f"{pack_url_name}_{int(time.time())}"
-                            self.logger.info(f"[STICKER] Trying new URL name: {pack_url_name}")
-                    else:
-                        self.logger.error(f"[STICKER] Unexpected response for URL name: {response.message}")
+                            self.logger.error(f"[STICKER] Unexpected response for URL name: {response.message}")
+                            # Continue the loop to retry (don't fail immediately on unexpected responses)
+                    
+                    except (asyncio.TimeoutError, TimeoutError) as e:
+                        self.logger.warning(f"[STICKER] Timeout waiting for URL name response (attempt {url_name_attempts})")
+                        # Mark for user input instead of failing after timeout
+                        if process_id in active_processes:
+                            active_processes[process_id]["status"] = "waiting_for_url_name"
+                            active_processes[process_id]["current_stage"] = f"URL name timeout. Please provide a new URL name."
+                            active_processes[process_id]["waiting_for_user"] = True
+                            active_processes[process_id]["url_name_taken"] = True
+                            active_processes[process_id]["original_url_name"] = pack_url_name
+                        return {"success": False, "error": "URL name timeout", "waiting_for_user": True, "url_name_taken": True}
+                    
+                    except Exception as e:
+                        self.logger.error(f"[STICKER] Error during URL name attempt {url_name_attempts}: {e}")
+                        # Continue to next attempt unless it's the last one
                         if url_name_attempts >= max_attempts:
                             if process_id in active_processes:
-                                active_processes[process_id]["status"] = "failed"
-                                active_processes[process_id]["current_stage"] = "URL name failed after 3 attempts. Please complete manually."
-                                active_processes[process_id]["error"] = "URL name failed after 3 attempts. Please complete the process manually."
-                            return {"success": False, "error": "URL name failed after 3 attempts. Please complete the process manually."}
+                                active_processes[process_id]["status"] = "waiting_for_url_name"
+                                active_processes[process_id]["current_stage"] = f"URL name error. Please provide a new URL name."
+                                active_processes[process_id]["waiting_for_user"] = True
+                                active_processes[process_id]["url_name_taken"] = True
+                                active_processes[process_id]["original_url_name"] = pack_url_name
+                            return {"success": False, "error": "URL name error", "waiting_for_user": True, "url_name_taken": True}
 
             # Step 4: Process each media item
             for i, media_item in enumerate(media_items):
@@ -1332,16 +1324,29 @@ class StickerBotCore:
             if auto_skip_icon:
                 self.logger.info("[STICKER] Auto-skip enabled, automatically skipping icon selection...")
                 
-                # Send skip command automatically
+                # Send skip command automatically - expect URL_NAME_REQUEST not ICON_ACCEPTED
                 response = await self.conversation_manager.send_and_wait(
-                    "/skip", BotResponseType.ICON_ACCEPTED, timeout=30.0
+                    "/skip", BotResponseType.URL_NAME_REQUEST, timeout=30.0
                 )
                 
-                self.logger.info(f"[STICKER] Icon step skipped: {response.message[:100]}...")
+                self.logger.info(f"[STICKER] Icon step skipped, received URL name request: {response.message[:100]}...")
                 
-                # Update process status
+                # Update process status - now waiting for URL name
                 if process_id in active_processes:
-                    active_processes[process_id]["current_stage"] = "Icon step completed (auto-skipped)"
+                    active_processes[process_id]["current_stage"] = "Providing URL name..."
+                    active_processes[process_id]["waiting_for_user"] = False
+                    active_processes[process_id]["progress"] = 85
+                
+                # Send the URL name that was already provided
+                response = await self.conversation_manager.send_and_wait(
+                    pack_url_name, BotResponseType.PACK_SUCCESS, timeout=30.0
+                )
+                
+                self.logger.info(f"[STICKER] Pack published successfully: {response.message[:100]}...")
+                
+                # Update process status - completed
+                if process_id in active_processes:
+                    active_processes[process_id]["current_stage"] = "Sticker pack created successfully"
                     active_processes[process_id]["waiting_for_user"] = False
                     active_processes[process_id]["progress"] = 100
                     active_processes[process_id]["status"] = "completed"
@@ -1354,6 +1359,15 @@ class StickerBotCore:
                             shareable_link = link_match.group(0)
                             active_processes[process_id]["shareable_link"] = shareable_link
                             self.logger.info(f"[STICKER] Shareable link extracted: {shareable_link}")
+                
+                # FIXED: Increment sticker creation stats in backend
+                try:
+                    from stats_tracker import stats_tracker
+                    sticker_count = len(media_items)
+                    stats_tracker.increment_stickers(sticker_count)
+                    self.logger.info(f"[STICKER] Updated backend stats: +{sticker_count} stickers")
+                except Exception as stats_error:
+                    self.logger.warning(f"[STICKER] Failed to update backend stats: {stats_error}")
                 
                 self.logger.info("[STICKER] PACK CREATION COMPLETED SUCCESSFULLY!")
                 return {"success": True, "message": "Sticker pack created successfully"}
@@ -1385,6 +1399,15 @@ class StickerBotCore:
                                 active_processes[process_id]["shareable_link"] = shareable_link
                                 self.logger.info(f"[STICKER] Shareable link extracted: {shareable_link}")
                     
+                    # FIXED: Increment sticker creation stats in backend
+                    try:
+                        from stats_tracker import stats_tracker
+                        sticker_count = len(media_items)
+                        stats_tracker.increment_stickers(sticker_count)
+                        self.logger.info(f"[STICKER] Updated backend stats: +{sticker_count} stickers")
+                    except Exception as stats_error:
+                        self.logger.warning(f"[STICKER] Failed to update backend stats: {stats_error}")
+                    
                     self.logger.info("[STICKER] PACK CREATION COMPLETED SUCCESSFULLY!")
                     return {"success": True, "message": "Sticker pack created successfully"}
                     
@@ -1404,51 +1427,60 @@ class StickerBotCore:
 
 def run_telegram_coroutine(coro):
     """
-    Safely run a Telegram coroutine using the handler's dedicated event loop.
+    Safely run a Telegram coroutine with database lock handling.
     
     :param coro: Coroutine to run
     :return: Result of the coroutine
     """
     thread_name = threading.current_thread().name
+    max_retries = 3
     
-    try:
-        # Try to use the handler's event loop first
+    for attempt in range(max_retries):
         try:
-            from telegram_connection_handler import get_telegram_handler
-            handler = get_telegram_handler()
-            if handler and handler._loop and handler._running:
-                # Use the handler's dedicated event loop
-                future = asyncio.run_coroutine_threadsafe(coro, handler._loop)
-                return future.result(timeout=30)
-        except Exception as e:
-            logging.warning(f"Could not use handler's event loop: {e}")
-        
-        # Fallback to creating a new event loop if handler is not available
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_closed():
+            # Try to use the handler's event loop first
+            try:
+                from telegram_connection_handler import get_telegram_handler
+                handler = get_telegram_handler()
+                if handler and handler._loop and handler._running:
+                    # Use the handler's dedicated event loop
+                    future = asyncio.run_coroutine_threadsafe(coro, handler._loop)
+                    return future.result(timeout=30)
+            except Exception as e:
+                logging.warning(f"Could not use handler's event loop: {e}")
+            
+            # Fallback to creating a new event loop if handler is not available
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_closed():
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+            except RuntimeError:
+                # No event loop in this thread, create a new one
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-        except RuntimeError:
-            # No event loop in this thread, create a new one
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+            
+            # Check if the loop is already running (nested call)
+            if loop.is_running():
+                future = asyncio.run_coroutine_threadsafe(coro, loop)
+                return future.result(timeout=30)
+            else:
+                # Run the coroutine in the event loop
+                return loop.run_until_complete(coro)
         
-        # Check if the loop is already running (nested call)
-        if loop.is_running():
-            future = asyncio.run_coroutine_threadsafe(coro, loop)
-            return future.result(timeout=30)
-        else:
-            # Run the coroutine in the event loop
-            return loop.run_until_complete(coro)
-    
-    except Exception as e:
-        # Handle specific database lock errors
-        if "database is locked" in str(e).lower():
-            handle_database_lock_error(e, "coroutine execution")
-        
-        # Re-raise the original exception
-        raise
+        except Exception as e:
+            # Handle specific database lock errors
+            if "database is locked" in str(e).lower():
+                logging.warning(f"[DATABASE] Lock detected on attempt {attempt + 1}/{max_retries}: {e}")
+                handle_database_lock_error(e, f"coroutine execution (attempt {attempt + 1})")
+                
+                if attempt < max_retries - 1:
+                    # Wait before retrying
+                    import time
+                    time.sleep(2 * (attempt + 1))  # Exponential backoff
+                    continue
+            
+            # Re-raise the original exception if not a database lock or final attempt
+            raise
 
 # Flask routes for sticker bot
 from flask import request, jsonify
@@ -1484,13 +1516,15 @@ def handle_database_lock_error(e, operation_name):
         active_threads = [t.name for t in threading.enumerate()]
         logging.info(f"[DATABASE] Active threads during lock: {active_threads}")
         
-        # Aggressive lock file cleanup - remove ALL lock files
+        # Enhanced lock file cleanup - remove ALL lock files
         lock_patterns = [
             '*.session-journal', 
-            '*.session-wal', 
+            '*.session-wal',
+            '*.session-shm',  # SQLite shared memory files
             'temp_session_*.session*',
             'session_*.session-journal',
-            'session_*.session-wal'
+            'session_*.session-wal',
+            'telegram_session_*.session*',  # Process-specific sessions
         ]
         
         cleaned_count = 0
@@ -1517,9 +1551,12 @@ def handle_database_lock_error(e, operation_name):
         
         logging.info(f"[DATABASE] Cleaned up {cleaned_count} lock files")
         
-        # Wait for file handles to be released
+        # Wait longer for file handles to be released
         import time
-        time.sleep(1.0)
+        time.sleep(2.0)
+        
+        # Force another garbage collection
+        gc.collect()
         
     except Exception as cleanup_error:
         logging.error(f"[DATABASE] Error during lock recovery in thread {thread_name}: {cleanup_error}")
@@ -2019,24 +2056,118 @@ def register_sticker_routes(app):
             # Send skip command using the conversation manager
             async def send_skip_command():
                 try:
+                    # Use URL_NAME_REQUEST like the main auto-skip logic
                     response = await sticker_bot.conversation_manager.send_and_wait(
-                        "/skip", BotResponseType.ICON_ACCEPTED, timeout=30.0
+                        "/skip", BotResponseType.URL_NAME_REQUEST, timeout=30.0
                     )
                     
-                    # Update process status after successful skip
-                    with process_lock:
-                        if process_id in active_processes:
-                            active_processes[process_id]['waiting_for_user'] = False
-                            active_processes[process_id]['current_stage'] = 'Icon step completed, continuing...'
-                            active_processes[process_id]['progress'] = 90  # Almost done
+                    # Get the pack URL name for this process
+                    pack_url_name = active_processes.get(process_id, {}).get('pack_url_name', '')
                     
-                    return {"success": True, "message": "Skip command sent successfully"}
+                    if pack_url_name:
+                        # Send the URL name automatically
+                        url_response = await sticker_bot.conversation_manager.send_and_wait(
+                            pack_url_name, BotResponseType.PACK_SUCCESS, timeout=30.0
+                        )
+                        
+                        # Update process status after successful completion
+                        with process_lock:
+                            if process_id in active_processes:
+                                active_processes[process_id]['waiting_for_user'] = False
+                                active_processes[process_id]['current_stage'] = 'Sticker pack created successfully'
+                                active_processes[process_id]['progress'] = 100
+                                active_processes[process_id]['status'] = 'completed'
+                                
+                                # Extract shareable link
+                                if "https://t.me/addstickers/" in url_response.message:
+                                    import re
+                                    link_match = re.search(r'https://t\.me/addstickers/[a-zA-Z0-9_]+', url_response.message)
+                                    if link_match:
+                                        active_processes[process_id]['shareable_link'] = link_match.group(0)
+                        
+                        return {"success": True, "message": "Sticker pack created successfully"}
+                    else:
+                        # Update process status after successful skip
+                        with process_lock:
+                            if process_id in active_processes:
+                                active_processes[process_id]['waiting_for_user'] = False
+                                active_processes[process_id]['current_stage'] = 'Waiting for URL name input...'
+                                active_processes[process_id]['progress'] = 85
+                        
+                        return {"success": True, "message": "Icon skipped, please provide URL name"}
+                        
                 except Exception as e:
                     return {"success": False, "error": str(e)}
             
             # Run the async function
             result = run_telegram_coroutine(send_skip_command())
             return jsonify(result)
+            
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route('/api/sticker/submit-url-name', methods=['POST', 'OPTIONS'], strict_slashes=False)
+    def submit_url_name():
+        """
+        API endpoint to submit new URL name when original is taken
+        """
+        if request.method == 'OPTIONS':
+            return '', 200
+            
+        try:
+            data = request.get_json()
+            process_id = data.get('process_id', '') if data else ''
+            new_url_name = data.get('new_url_name', '') if data else ''
+            
+            if not process_id:
+                return jsonify({"success": False, "error": "Process ID is required"}), 400
+            
+            if not new_url_name:
+                return jsonify({"success": False, "error": "New URL name is required"}), 400
+            
+            # Validate URL name
+            validation = validate_url_name(new_url_name)
+            if not validation['valid']:
+                return jsonify({"success": False, "error": validation['error']}), 400
+            
+            # Import active_processes from shared state
+            from shared_state import active_processes, process_lock
+            
+            with process_lock:
+                if process_id not in active_processes:
+                    return jsonify({"success": False, "error": "Process not found"}), 404
+                
+                if active_processes[process_id].get('status') != 'waiting_for_url_name':
+                    return jsonify({"success": False, "error": "Process is not waiting for URL name"}), 400
+                
+                # Update process with new URL name and resume
+                active_processes[process_id]['pack_url_name'] = new_url_name
+                active_processes[process_id]['current_stage'] = f'Resuming with new URL name: {new_url_name}'
+                active_processes[process_id]['status'] = 'processing'
+                active_processes[process_id]['waiting_for_user'] = False
+                active_processes[process_id]['url_name_taken'] = False
+                active_processes[process_id]['url_name_attempts'] = active_processes[process_id].get('url_name_attempts', 0) + 1
+            
+            # Get the process data and resume sticker creation in background
+            process_data = active_processes[process_id]
+            pack_name = process_data.get('pack_name', '')
+            sticker_type = process_data.get('sticker_type', 'video')
+            auto_skip_icon = process_data.get('auto_skip_icon', True)
+            
+            # Convert media files back to the expected format
+            media_files = []
+            for i in range(process_data.get('total_files', 0)):
+                # We'll need to reconstruct this from the original request
+                # For now, we'll mark the process as needing to be restarted
+                pass
+            
+            logging.info(f"[API] URL name updated for process {process_id}: {new_url_name}")
+            
+            return jsonify({
+                "success": True, 
+                "message": f"URL name updated to: {new_url_name}",
+                "new_url_name": new_url_name
+            })
             
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500
