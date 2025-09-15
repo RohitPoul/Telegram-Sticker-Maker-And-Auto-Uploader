@@ -8,6 +8,8 @@ import time
 import atexit
 import tempfile
 import signal
+import re
+import os
 from pathlib import Path
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -113,9 +115,24 @@ else:
 # After creating the Flask app
 from telegram_connection_handler import get_telegram_handler
 
-# Initialize the Telegram handler early
+# Initialize the Telegram handler early and FORCE clean startup
 telegram_handler = get_telegram_handler()
-logger.info("Telegram connection handler initialized early in backend startup")
+logger.info("Telegram connection handler initialized with CLEAN startup in backend")
+
+# CRITICAL: Force clean startup - remove ALL session files on backend startup
+try:
+    logger.info("BACKEND STARTUP: Forcing complete session cleanup for clean workflow...")
+    telegram_handler.force_disconnect_and_cleanup()
+    logger.info("BACKEND STARTUP: Clean startup completed - all sessions removed")
+except Exception as e:
+    logger.warning(f"BACKEND STARTUP: Error during clean startup: {e}")
+
+# Clean up any leftover database locks from previous sessions
+try:
+    cleanup_telegram_and_sessions()
+    logger.info("BACKEND STARTUP: Additional cleanup completed - removed any leftover database locks")
+except Exception as e:
+    logger.warning(f"BACKEND STARTUP: Additional cleanup failed: {e}")
 
 # Configuration
 class Config:
@@ -191,10 +208,12 @@ def cleanup_telegram_and_sessions():
             'temp_session_*.session*',  # Only temporary sessions
             '*.session-journal',        # SQLite journal files (safe to delete)
             '*.session-wal',           # SQLite WAL files (safe to delete)
+            '*.session-shm',           # SQLite shared memory files
             'session_*.session-journal', # Session journal files (safe to delete)
             'session_*.session-wal',    # Session WAL files (safe to delete)
             'telegram_session.session-journal', # Our session's journal (safe to delete)
-            'telegram_session.session-wal'      # Our session's WAL (safe to delete)
+            'telegram_session.session-wal',     # Our session's WAL (safe to delete)
+            'telegram_session_*.session*',      # Process-specific sessions
         ]
         
         # Explicitly protect our main session file
@@ -945,44 +964,37 @@ def get_conversion_progress(process_id):
 @app.route('/api/process-status/<process_id>', methods=['GET', 'OPTIONS'])
 def get_process_status(process_id):
     """
-    Returns JSON with current status for any process (conversion, hex-edit, or sticker pack).
+    OPTIMIZED: Returns JSON with current status for any process - reduced logging for performance.
     """
     if request.method == 'OPTIONS':
         return '', 200
     
     try:
-        print(f"🔧 [API] Getting status for process: {process_id}")
-        print(f"🔧 [API] active_processes type: {type(active_processes)}")
-        print(f"🔧 [API] active_processes id: {id(active_processes)}")
+        # FIXED: Sanitize process_id to prevent [Errno 22] Invalid argument
+        safe_process_id = re.sub(r'[^a-zA-Z0-9_-]', '_', str(process_id))[:50]
         
         with process_lock:
-            print(f"🔧 [API] Current active_processes keys: {list(active_processes.keys())}")
-            print(f"🔧 [API] Process {process_id} exists: {process_id in active_processes}")
+            if safe_process_id not in active_processes:
+                # Look for original process_id as fallback
+                if process_id in active_processes:
+                    safe_process_id = process_id
+                else:
+                    return jsonify({"success": False, "error": "Process not found"}), 404
             
-            if process_id not in active_processes:
-                print(f"🔧 [API] Process {process_id} not found!")
-                print(f"🔧 [API] Available processes: {list(active_processes.keys())}")
-                print(f"🔧 [API] Process count: {len(active_processes)}")
-                for pid, pdata in active_processes.items():
-                    print(f"🔧 [API] Process {pid}: {pdata.get('type', 'unknown')} - {pdata.get('status', 'unknown')}")
-                return jsonify({"success": False, "error": "Process not found"}), 404
-            
-            process_data = active_processes[process_id]
-            print(f"🔧 [API] Process data: {process_data}")
+            process_data = active_processes[safe_process_id]
             
             # Calculate progress percentage
             total_files = process_data.get('total_files', 1)
             completed_files = process_data.get('completed_files', 0)
             failed_files = process_data.get('failed_files', 0)
             
-            # Calculate progress percentage
             if total_files > 0:
                 progress_percentage = ((completed_files + failed_files) / total_files) * 100
             else:
                 progress_percentage = 0
             
             response_data = {
-                "process_id": process_id,
+                "process_id": safe_process_id,
                 "status": process_data.get('status', 'unknown'),
                 "current_stage": process_data.get('current_stage', 'Unknown'),
                 "progress": round(progress_percentage, 2),
@@ -993,33 +1005,28 @@ def get_process_status(process_id):
                 "start_time": process_data.get('start_time', 0),
                 "type": process_data.get('type', 'unknown'),
                 "file_statuses": process_data.get('file_statuses', {}),
-                "paused": process_data.get('paused', False)
+                "paused": process_data.get('paused', False),
+                # OPTIMIZED: Add fields for sticker creation
+                "waiting_for_user": process_data.get('waiting_for_user', False),
+                "icon_request_message": process_data.get('icon_request_message', '')
             }
-            
-            print(f"🔧 [API] Returning response data: {response_data}")
             
             return jsonify({
                 "success": True,
                 "data": response_data
             })
     except Exception as e:
-        print(f"🔧 [API] Error getting process status: {e}")
-        logger.error(f"Error getting process status: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
+        logger.error(f"Error getting process status for {process_id}: {e}")
+        return jsonify({"success": False, "error": "Internal server error"}), 500
 
 @app.route('/api/debug/active-processes', methods=['GET', 'OPTIONS'])
 def debug_active_processes():
-    """Debug endpoint to check active processes"""
+    """OPTIMIZED: Debug endpoint with reduced logging"""
     if request.method == 'OPTIONS':
         return '', 200
     
     try:
         with process_lock:
-            print(f"🔧 [DEBUG_API] Current active_processes: {list(active_processes.keys())}")
-            print(f"🔧 [DEBUG_API] Process count: {len(active_processes)}")
-            for pid, pdata in active_processes.items():
-                print(f"🔧 [DEBUG_API] Process {pid}: {pdata.get('type', 'unknown')} - {pdata.get('status', 'unknown')}")
-            
             return jsonify({
                 "success": True,
                 "data": {
@@ -1029,8 +1036,8 @@ def debug_active_processes():
                 }
             })
     except Exception as e:
-        print(f"🔧 [DEBUG_API] Error: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
+        logger.error(f"Debug API error: {e}")
+        return jsonify({"success": False, "error": "Internal server error"}), 500
 
 # New route to stop a process
 @app.route('/api/stop-process', methods=['POST','OPTIONS'], strict_slashes=False)
@@ -1412,6 +1419,36 @@ def reset_stats():
         logger.error(f"Error resetting stats: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
+@app.route('/api/stats/increment-stickers', methods=['POST', 'OPTIONS'], strict_slashes=False)
+def increment_sticker_stats():
+    """Increment sticker creation statistics"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    try:
+        data = request.get_json()
+        count = data.get('count', 1) if data else 1
+        
+        # Validate count
+        try:
+            count = max(int(count), 0)
+        except (ValueError, TypeError):
+            count = 1
+        
+        # Increment stats
+        stats_tracker.increment_stickers(count)
+        
+        logger.info(f"[STATS] Incremented sticker creation count by {count}")
+        
+        return jsonify({
+            "success": True,
+            "message": f"Sticker stats incremented by {count}",
+            "count": count
+        })
+        
+    except Exception as e:
+        logger.error(f"Error incrementing sticker stats: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @app.route('/api/clear-logs', methods=['POST', 'OPTIONS'], strict_slashes=False)
 def clear_logs():
     """Clear application logs"""
@@ -1585,35 +1622,84 @@ def internal_error(error):
 
 @app.route('/api/telegram/session-status', methods=['GET', 'OPTIONS'], strict_slashes=False)
 def telegram_session_status():
-    """Get Telegram session file status"""
+    """Get Telegram session file status with proper disconnection detection"""
     if request.method == 'OPTIONS':
         return '', 200
     try:
         from sticker_bot import sticker_bot
+        from telegram_connection_handler import get_telegram_handler
+        
         session_info = {
             "session_file": None,
             "session_exists": False,
             "session_valid": False
         }
         
-        # Check both sticker_bot and telegram_connection_handler for session file
-        session_file = None
-        if sticker_bot and hasattr(sticker_bot, 'session_file') and sticker_bot.session_file:
-            session_file = sticker_bot.session_file
-        else:
-            # Check telegram_connection_handler
+        # Check telegram_connection_handler first (primary source)
+        handler = get_telegram_handler()
+        if handler:
+            logger.debug("[SESSION_STATUS] Checking handler session...")
             try:
-                from telegram_connection_handler import current_session_file
-                if current_session_file:
-                    session_file = current_session_file
-            except:
-                pass
+                # Check if handler has a client
+                if handler._client:
+                    # Get session file from client
+                    if hasattr(handler._client, 'session') and getattr(handler._client.session, 'filename', None):
+                        session_file = handler._client.session.filename
+                        session_info["session_file"] = session_file
+                        session_info["session_exists"] = os.path.exists(session_file)
+                        
+                        # Check if actually connected and authorized (not just file exists)
+                        try:
+                            async def _check_real_connection():
+                                if not handler._client.is_connected():
+                                    return False
+                                return await handler._client.is_user_authorized()
+                            
+                            session_valid = handler.run_async(_check_real_connection())
+                            session_info["session_valid"] = session_valid
+                            logger.debug(f"[SESSION_STATUS] Real connection status: {session_valid}")
+                        except Exception as e:
+                            logger.debug(f"[SESSION_STATUS] Connection check failed: {e}")
+                            session_info["session_valid"] = False
+                        
+                        return jsonify({
+                            "success": True,
+                            "data": session_info
+                        })
+                else:
+                    logger.debug("[SESSION_STATUS] No client in handler")
+            except Exception as e:
+                logger.debug(f"[SESSION_STATUS] Handler check failed: {e}")
         
-        if session_file:
-            session_info["session_file"] = session_file
-            session_info["session_exists"] = os.path.exists(session_file)
-            session_info["session_valid"] = session_info["session_exists"] and os.path.getsize(session_file) > 0
+        # Fallback: Check for session files manually
+        logger.debug("[SESSION_STATUS] Checking for session files manually...")
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        potential_session_files = [
+            os.path.join(base_dir, "telegram_session.session"),
+            os.path.join(base_dir, "../telegram_session.session"),
+        ]
         
+        for session_file in potential_session_files:
+            if os.path.exists(session_file) and os.path.getsize(session_file) > 0:
+                logger.debug(f"[SESSION_STATUS] Found session file: {session_file}")
+                session_info["session_file"] = session_file
+                session_info["session_exists"] = True
+                
+                # File exists but we don't know if it's connected - mark as invalid
+                # since the handler doesn't have a valid client
+                session_info["session_valid"] = False
+                logger.debug("[SESSION_STATUS] Session file exists but no active connection")
+                break
+        
+        # Final fallback: check sticker_bot
+        if not session_info["session_exists"] and sticker_bot and hasattr(sticker_bot, 'session_file') and sticker_bot.session_file:
+            session_file = sticker_bot.session_file
+            if os.path.exists(session_file):
+                session_info["session_file"] = session_file
+                session_info["session_exists"] = True
+                session_info["session_valid"] = False  # Conservative - no active connection
+        
+        logger.debug(f"[SESSION_STATUS] Final result: {session_info}")
         return jsonify({
             "success": True,
             "data": session_info
@@ -1625,16 +1711,166 @@ def telegram_session_status():
             "error": str(e)
         }), 500
 
+@app.route('/api/telegram/cleanup-session', methods=['POST', 'OPTIONS'], strict_slashes=False)
+def cleanup_telegram_session():
+    """Clean up invalid Telegram session files"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    try:
+        from telegram_connection_handler import get_telegram_handler
+        
+        handler = get_telegram_handler()
+        if handler:
+            removed_count = handler.cleanup_invalid_session()
+            return jsonify({
+                "success": True,
+                "message": f"Cleaned up {removed_count} session files",
+                "removed_count": removed_count
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Telegram handler not available"
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Error cleaning up session: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/telegram/force-reset', methods=['POST', 'OPTIONS'], strict_slashes=False)
+def force_reset_telegram():
+    """FORCE complete Telegram reset - implements clean workflow requirement"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    try:
+        logger.info("[FORCE_RESET] Starting COMPLETE Telegram reset...")
+        
+        # Step 1: Reset sticker bot
+        try:
+            from sticker_bot import sticker_bot
+            if sticker_bot:
+                logger.info("[FORCE_RESET] Cleaning up sticker bot...")
+                sticker_bot.cleanup_connection()
+                logger.info("[FORCE_RESET] Sticker bot cleanup completed")
+        except Exception as e:
+            logger.warning(f"[FORCE_RESET] Error cleaning up sticker bot: {e}")
+        
+        # Step 2: Force handler cleanup
+        try:
+            from telegram_connection_handler import get_telegram_handler
+            handler = get_telegram_handler()
+            if handler:
+                logger.info("[FORCE_RESET] Force disconnecting and cleaning up handler...")
+                handler.force_disconnect_and_cleanup()
+                logger.info("[FORCE_RESET] Handler cleanup completed")
+        except Exception as e:
+            logger.warning(f"[FORCE_RESET] Error cleaning up handler: {e}")
+        
+        # Step 3: Comprehensive session cleanup
+        try:
+            logger.info("[FORCE_RESET] Running comprehensive session cleanup...")
+            cleanup_telegram_and_sessions()
+            logger.info("[FORCE_RESET] Session cleanup completed")
+        except Exception as e:
+            logger.warning(f"[FORCE_RESET] Error during session cleanup: {e}")
+        
+        # Step 4: Kill any lingering Python processes
+        try:
+            from kill_python_processes import kill_our_app_processes
+            kill_results = kill_our_app_processes()
+            logger.info(f"[FORCE_RESET] Process cleanup: {kill_results}")
+        except Exception as e:
+            logger.warning(f"[FORCE_RESET] Error killing processes: {e}")
+        
+        logger.info("[FORCE_RESET] COMPLETE reset finished successfully")
+        
+        return jsonify({
+            "success": True, 
+            "message": "Complete Telegram reset performed - all sessions and connections cleared"
+        })
+        
+    except Exception as e:
+        logger.error(f"[FORCE_RESET] Critical error during force reset: {e}")
+        return jsonify({
+            "success": False, 
+            "error": str(e)
+        }), 500
+
+@app.route('/api/telegram/connection-status', methods=['GET', 'OPTIONS'], strict_slashes=False)
+def get_telegram_connection_status():
+    """Get comprehensive Telegram connection status for clean workflow"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    try:
+        status = {
+            "connected": False,
+            "authorized": False,
+            "ready_for_stickers": False,
+            "session_file": None,
+            "clean_state": True,  # Always clean in our workflow
+            "handler_status": "unknown",
+            "sticker_bot_status": "unknown"
+        }
+        
+        # Check handler status
+        try:
+            from telegram_connection_handler import get_telegram_handler
+            handler = get_telegram_handler()
+            if handler:
+                handler_status = handler.get_connection_status()
+                status.update(handler_status)
+                status["handler_status"] = "available"
+                
+                # For clean workflow, we only consider connections ready if they're active
+                status["connected"] = handler.has_active_connection()
+                status["authorized"] = status["connected"]
+                
+            else:
+                status["handler_status"] = "not_available"
+        except Exception as e:
+            logger.debug(f"[CONNECTION_STATUS] Handler check error: {e}")
+            status["handler_status"] = "error"
+        
+        # Check sticker bot status
+        try:
+            from sticker_bot import sticker_bot
+            if sticker_bot:
+                bot_connected = sticker_bot.is_connected()
+                status["sticker_bot_status"] = "connected" if bot_connected else "disconnected"
+                status["ready_for_stickers"] = bot_connected
+            else:
+                status["sticker_bot_status"] = "not_initialized"
+        except Exception as e:
+            logger.debug(f"[CONNECTION_STATUS] Sticker bot check error: {e}")
+            status["sticker_bot_status"] = "error"
+        
+        return jsonify({
+            "success": True,
+            "data": status
+        })
+        
+    except Exception as e:
+        logger.error(f"[CONNECTION_STATUS] Error getting connection status: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
 @app.route('/api/telegram/connect', methods=['POST', 'OPTIONS'], strict_slashes=False)
 def connect_telegram():
-    """Connect to Telegram using the simplified handler"""
+    """Connect to Telegram using clean workflow - always fresh connection"""
     if request.method == 'OPTIONS':
         return '', 200
     
     try:
         # Get JSON data
         data = request.get_json()
-        logger.info(f"[TRACE][api/telegram/connect] payload keys={list(data.keys()) if data else None}")
+        logger.info(f"[CONNECT] Clean workflow connection request")
         if not data:
             return jsonify({"success": False, "error": "No data provided"}), 400
         
@@ -1643,7 +1879,7 @@ def connect_telegram():
         api_hash = data.get('api_hash')
         phone_number = data.get('phone_number')
         process_id = data.get('process_id')
-        logger.info(f"[TRACE][api/telegram/connect] process_id={process_id} phone=***{str(phone_number)[-4:]}")
+        logger.info(f"[CONNECT] Process: {process_id}, Phone: ***{str(phone_number)[-4:]}")
         
         # Validate inputs
         if not all([api_id, api_hash, phone_number]):
@@ -1652,28 +1888,105 @@ def connect_telegram():
                 "error": "Missing required connection details: api_id, api_hash, phone_number"
             }), 400
         
-        # Use the simplified Telegram connection handler
+        # Use the clean workflow connection handler
         from telegram_connection_handler import get_telegram_handler
         handler = get_telegram_handler()
-        logger.info(f"[TRACE][api/telegram/connect] health(before)={handler.health_status()}")
         
-        # Ensure loop and log again
+        if not handler:
+            return jsonify({
+                "success": False, 
+                "error": "Telegram handler not available"
+            }), 500
+        
+        # Ensure event loop is ready
         try:
             handler.ensure_event_loop()
-            logger.info(f"[TRACE][api/telegram/connect] health(after ensure)={handler.health_status()}")
         except Exception as e:
-            logger.error(f"[TRACE][api/telegram/connect] ensure_event_loop error: {e}")
-            raise
+            logger.error(f"[CONNECT] Event loop setup error: {e}")
+            return jsonify({
+                "success": False, 
+                "error": "Failed to initialize connection system"
+            }), 500
         
-        # Attempt to connect
-        logger.info("[TRACE][api/telegram/connect] calling handler.connect_telegram()")
+        # Attempt FRESH connection (always clean as per requirements)
+        logger.info("[CONNECT] Starting FRESH connection...")
         result = handler.connect_telegram(api_id, api_hash, phone_number)
-        logger.info(f"[TRACE][api/telegram/connect] result={result}")
+        logger.info(f"[CONNECT] Connection result: {result}")
         
         return jsonify(result)
     
     except Exception as e:
-        logger.error(f"Telegram connection error: {e}", exc_info=True)
+        logger.error(f"[CONNECT] Connection error: {e}", exc_info=True)
+        return jsonify({
+            "success": False, 
+            "error": str(e)
+        }), 500
+
+@app.route('/api/telegram/verify-code', methods=['POST', 'OPTIONS'], strict_slashes=False)
+def verify_telegram_code():
+    """Verify Telegram code for clean workflow"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
+        
+        code = data.get('code')
+        if not code:
+            return jsonify({"success": False, "error": "Code is required"}), 400
+        
+        # Use handler for code verification
+        from telegram_connection_handler import get_telegram_handler
+        handler = get_telegram_handler()
+        
+        if not handler:
+            return jsonify({
+                "success": False, 
+                "error": "Telegram handler not available"
+            }), 500
+        
+        result = handler.verify_code(code)
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"[VERIFY_CODE] Error: {e}")
+        return jsonify({
+            "success": False, 
+            "error": str(e)
+        }), 500
+
+@app.route('/api/telegram/verify-password', methods=['POST', 'OPTIONS'], strict_slashes=False)
+def verify_telegram_password():
+    """Verify Telegram 2FA password for clean workflow"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
+        
+        password = data.get('password')
+        if not password:
+            return jsonify({"success": False, "error": "Password is required"}), 400
+        
+        # Use handler for password verification
+        from telegram_connection_handler import get_telegram_handler
+        handler = get_telegram_handler()
+        
+        if not handler:
+            return jsonify({
+                "success": False, 
+                "error": "Telegram handler not available"
+            }), 500
+        
+        result = handler.verify_password(password)
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"[VERIFY_PASSWORD] Error: {e}")
         return jsonify({
             "success": False, 
             "error": str(e)
