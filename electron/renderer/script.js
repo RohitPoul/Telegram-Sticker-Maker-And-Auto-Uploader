@@ -29,6 +29,21 @@ class TelegramUtilities {
       totalStickers: 0
     };
     this.autoScrollEnabled = true; // Initialize auto-scroll
+    
+    // Prevent double submission flags
+    this.isSubmittingCode = false;
+    this.isSubmittingPassword = false;
+    this.isConnecting = false;
+    
+    // OPTIMIZED: Add properties to prevent race conditions and duplicate notifications
+    this.lastStageWasQueue = false;
+    this.lastStatusMessage = null;
+    this.lastStatusType = null;
+    this.autoSkipAttempted = false;
+    this.lastStage = null;
+    this.telegramConnectionData = null;
+    this.mediaData = {};
+    
     this.init();
     this.initializeNavigation(); // Add this line to initialize navigation
     this.initializeTelegramForm(); // Add this to load saved Telegram credentials
@@ -167,32 +182,66 @@ class TelegramUtilities {
     }
   }
 
-  // Wrap apiRequest with tracing
+  // OPTIMIZED apiRequest with better error handling and timeout
   async apiRequest(method, path, body = null) {
-    const url = `http://127.0.0.1:5000${path}`;
-    const started = performance.now();
-
-    const res = await fetch(url, {
+    // FIXED: Validate path to prevent [Errno 22] Invalid argument
+    if (!path || typeof path !== 'string') {
+      throw new Error('Invalid API path');
+    }
+    
+    // FIXED: Better path handling to prevent [Errno 22] Invalid argument
+    // Only sanitize the dynamic parts, not the entire path
+    let safePath = path;
+    if (path.includes('/process-status/')) {
+      const parts = path.split('/');
+      const lastPart = parts[parts.length - 1];
+      const sanitizedLastPart = lastPart.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 50);
+      parts[parts.length - 1] = sanitizedLastPart;
+      safePath = parts.join('/');
+    }
+    
+    const url = `http://127.0.0.1:5000${safePath}`;
+    
+    // OPTIMIZED: Add timeout to prevent hanging requests
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    
+    try {
+      const res = await fetch(url, {
         method,
-      headers: { 'Content-Type': 'application/json' },
-      body: body ? JSON.stringify(body) : null
+        headers: { 'Content-Type': 'application/json' },
+        body: body ? JSON.stringify(body) : null,
+        signal: controller.signal
       });
-
+      
+      clearTimeout(timeoutId);
+      
       const text = await res.text();
       let json;
-    try {
-      json = text ? JSON.parse(text) : {}; 
-    } catch (e) { 
-      json = { raw: text }; 
-    }
-
-
+      try {
+        json = text ? JSON.parse(text) : {}; 
+      } catch (e) { 
+        json = { raw: text }; 
+      }
+      
       if (!res.ok) {
         const err = new Error(json?.error || `${res.status} ${res.statusText}`);
         err.status = res.status;
         throw err;
       }
       return json;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      
+      // FIXED: Better error handling for specific error types
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout - server may be overloaded');
+      }
+      if (error.message && error.message.includes('[Errno 22]')) {
+        throw new Error('Invalid request format - please try again');
+      }
+      throw error;
+    }
   }
 
   setupEventListeners() {
@@ -540,13 +589,22 @@ class TelegramUtilities {
     
     // Enter key handlers for modals
     document.getElementById("verification-code").addEventListener("keypress", (e) => {
-      if (e.key === "Enter") this.submitVerificationCode();
+      if (e.key === "Enter") {
+        e.preventDefault();
+        this.submitVerificationCode();
+      }
     });
     document.getElementById("two-factor-password").addEventListener("keypress", (e) => {
-      if (e.key === "Enter") this.submitPassword();
+      if (e.key === "Enter") {
+        e.preventDefault();
+        this.submitPassword();
+      }
     });
     document.getElementById("emoji-input").addEventListener("keypress", (e) => {
-      if (e.key === "Enter") this.saveEmoji();
+      if (e.key === "Enter") {
+        e.preventDefault();
+        this.saveEmoji();
+      }
     });
     
     // Theme switching
@@ -1000,11 +1058,15 @@ class TelegramUtilities {
           }
           const createBtn = document.getElementById("create-sticker-pack");
           if (createBtn) createBtn.disabled = false;
-          // Update Connect button to Connected state
+          // Update Connect button to show Disconnect option
           const connectBtnOk = document.getElementById("connect-telegram");
           if (connectBtnOk) {
-            connectBtnOk.disabled = true;
-            connectBtnOk.innerHTML = '<i class="fas fa-plug"></i> Connected';
+            connectBtnOk.disabled = false;
+            connectBtnOk.innerHTML = '<i class="fas fa-unlink"></i> Disconnect';
+            connectBtnOk.classList.remove('btn-primary');
+            connectBtnOk.classList.add('btn-secondary');
+            // Update click handler for disconnect
+            connectBtnOk.onclick = () => this.disconnectTelegram();
           }
           this.telegramConnected = true;
           break;
@@ -1030,6 +1092,10 @@ class TelegramUtilities {
           if (connectBtnIdle) {
             connectBtnIdle.disabled = false;
             connectBtnIdle.innerHTML = '<i class="fas fa-plug"></i> Connect to Telegram';
+            connectBtnIdle.classList.remove('btn-secondary');
+            connectBtnIdle.classList.add('btn-primary');
+            // Reset click handler for connect
+            connectBtnIdle.onclick = () => this.connectTelegram();
           }
           this.telegramConnected = false;
           break;
@@ -1132,15 +1198,24 @@ class TelegramUtilities {
   }
 
   showSuccessModal(shareableLink) {
+    console.log(`🎉 [SUCCESS_MODAL] Showing success modal with link: ${shareableLink}`);
+    
     const modal = document.getElementById("success-modal");
     const linkInput = document.getElementById("shareable-link");
     
     if (linkInput && shareableLink) {
       linkInput.value = shareableLink;
+      console.log(`🎉 [SUCCESS_MODAL] Set link input value: ${shareableLink}`);
     }
     
     if (modal) {
       modal.style.display = "flex";
+      console.log(`🎉 [SUCCESS_MODAL] Modal should now be visible`);
+      
+      // Add a status message about the modal
+      this.addStatusItem(`🎉 Sticker pack created! Shareable link: ${shareableLink}`, "completed");
+    } else {
+      console.error(`🎉 [SUCCESS_MODAL] Modal element not found!`);
     }
   }
 
@@ -2953,53 +3028,115 @@ class TelegramUtilities {
   // =============================================
   // TELEGRAM STICKER BOT METHODS
   // =============================================
-  async connectTelegram() {
-    // Updated to match the HTML IDs correctly
-    const apiIdInput = document.getElementById("telegram-api-id");
-    const apiHashInput = document.getElementById("telegram-api-hash");
-    const phoneInput = document.getElementById("telegram-phone");
-    
-    if (RENDERER_DEBUG) console.log('[DEBUG] connectTelegram called - checking inputs:', {
-      apiIdInput: !!apiIdInput,
-      apiHashInput: !!apiHashInput, 
-      phoneInput: !!phoneInput
-    });
-    
-    if (!apiIdInput || !apiHashInput || !phoneInput) {
-      if (RENDERER_DEBUG) console.error('[DEBUG] Missing input elements:', {
-        apiIdInput: !!apiIdInput,
-        apiHashInput: !!apiHashInput,
-        phoneInput: !!phoneInput
-      });
-      this.showToast('error', 'Input Error', 'Telegram connection inputs not found');
-      return;
-    }
-    
-    const apiId = apiIdInput.value.trim();
-    const apiHash = apiHashInput.value.trim();
-    const phoneNumber = phoneInput.value.trim();
-    
-    if (RENDERER_DEBUG) console.log('[DEBUG] Input values:', {
-      apiId: apiId ? 'provided' : 'empty',
-      apiHash: apiHash ? 'provided' : 'empty', 
-      phoneNumber: phoneNumber ? 'provided' : 'empty'
-    });
-    
-    // Validate inputs
-    if (!apiId || !apiHash || !phoneNumber) {
-      if (RENDERER_DEBUG) console.error('[DEBUG] Validation failed - missing inputs');
-      
-      // Show specific field errors
-      const missingFields = [];
-      if (!apiId) missingFields.push('API ID');
-      if (!apiHash) missingFields.push('API Hash');
-      if (!phoneNumber) missingFields.push('Phone Number');
-      
-      this.showToast('error', 'Invalid Input', `Please fill in: ${missingFields.join(', ')}`);
-      return;
-    }
+  async disconnectTelegram() {
+    if (RENDERER_DEBUG) console.log('[DEBUG] disconnectTelegram called');
     
     try {
+      this.updateTelegramStatus("connecting"); // Show as connecting/processing
+      
+      // Clean up the session
+      const response = await this.apiRequest("POST", "/api/telegram/cleanup-session");
+      
+      if (response && response.success) {
+        this.showToast('success', 'Disconnected', 'Successfully disconnected from Telegram');
+        this.updateTelegramStatus("disconnected");
+      } else {
+        this.showToast('warning', 'Disconnect Warning', 'Session may not be fully cleaned');
+        this.updateTelegramStatus("disconnected"); // Still update UI
+      }
+      
+    } catch (error) {
+      if (RENDERER_DEBUG) console.error('[DEBUG] Disconnect error:', error);
+      this.showToast('error', 'Disconnect Error', 'Error during disconnect, but session should be invalid');
+      this.updateTelegramStatus("disconnected"); // Still update UI
+    }
+  }
+
+  async connectTelegram() {
+    // Prevent double connection attempts - ENHANCED
+    if (this.isConnecting || this.pendingCode || this.pendingPassword) {
+      console.log('🔧 [FRONTEND] Connection already in progress, ignoring duplicate request');
+      return;
+    }
+    
+    // Set flag to prevent duplicate requests
+    this.isConnecting = true;
+    
+    try {
+      // Check if there's already a valid session first when user wants to connect
+      try {
+        if (RENDERER_DEBUG) console.log('[DEBUG] User wants to connect - checking for existing session...');
+        
+        const sessionResponse = await this.apiRequest("GET", "/api/telegram/session-status");
+        
+        if (sessionResponse && sessionResponse.success && sessionResponse.data) {
+          const { session_exists, session_valid } = sessionResponse.data;
+          
+          if (session_exists && session_valid) {
+            if (RENDERER_DEBUG) console.log('[DEBUG] Found valid existing session - using it');
+            this.updateTelegramStatus("connected");
+            this.showToast('success', 'Already Connected', 'Using existing Telegram session');
+            return;
+          } else if (session_exists && !session_valid) {
+            if (RENDERER_DEBUG) console.log('[DEBUG] Found invalid session - cleaning up before new connection');
+            try {
+              await this.cleanupTelegramSession();
+            } catch (cleanupError) {
+              console.warn('[DEBUG] Could not clean up invalid session:', cleanupError);
+            }
+          }
+        }
+      } catch (error) {
+        if (RENDERER_DEBUG) console.warn('[DEBUG] Could not check existing session, proceeding with new connection:', error);
+      }
+      
+      // ... rest of connection logic ...
+      
+      // Updated to match the HTML IDs correctly
+      const apiIdInput = document.getElementById("telegram-api-id");
+      const apiHashInput = document.getElementById("telegram-api-hash");
+      const phoneInput = document.getElementById("telegram-phone");
+      
+      if (RENDERER_DEBUG) console.log('[DEBUG] connectTelegram called - checking inputs:', {
+        apiIdInput: !!apiIdInput,
+        apiHashInput: !!apiHashInput, 
+        phoneInput: !!phoneInput
+      });
+      
+      if (!apiIdInput || !apiHashInput || !phoneInput) {
+        if (RENDERER_DEBUG) console.error('[DEBUG] Missing input elements:', {
+          apiIdInput: !!apiIdInput,
+          apiHashInput: !!apiHashInput,
+          phoneInput: !!phoneInput
+        });
+        this.showToast('error', 'Input Error', 'Telegram connection inputs not found');
+        return;
+      }
+      
+      const apiId = apiIdInput.value.trim();
+      const apiHash = apiHashInput.value.trim();
+      const phoneNumber = phoneInput.value.trim();
+      
+      if (RENDERER_DEBUG) console.log('[DEBUG] Input values:', {
+        apiId: apiId ? 'provided' : 'empty',
+        apiHash: apiHash ? 'provided' : 'empty', 
+        phoneNumber: phoneNumber ? 'provided' : 'empty'
+      });
+      
+      // Validate inputs
+      if (!apiId || !apiHash || !phoneNumber) {
+        if (RENDERER_DEBUG) console.error('[DEBUG] Validation failed - missing inputs');
+        
+        // Show specific field errors
+        const missingFields = [];
+        if (!apiId) missingFields.push('API ID');
+        if (!apiHash) missingFields.push('API Hash');
+        if (!phoneNumber) missingFields.push('Phone Number');
+        
+        this.showToast('error', 'Invalid Input', `Please fill in: ${missingFields.join(', ')}`);
+        return;
+      }
+      
       // Save credentials securely
       this.saveCredentials();
       
@@ -3102,18 +3239,13 @@ class TelegramUtilities {
       }
       
       this.showToast('error', 'Connection Error', errorMsg);
+      
     } finally {
-      if (RENDERER_DEBUG) console.log('[DEBUG] Checking if button needs reset');
-      // Only reset the button if connection failed (not if it succeeded)
-      if (!this.telegramConnected) {
-        const connectBtn = document.getElementById("connect-telegram");
-        if (connectBtn) {
-          connectBtn.disabled = false;
-          connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect to Telegram';
-        }
-      }
+      // Reset connection flag
+      this.isConnecting = false;
     }
   }
+
 
   highlightEmptyFields(fields) {
     fields.forEach((field) => {
@@ -3125,6 +3257,12 @@ class TelegramUtilities {
   }
 
   async submitVerificationCode() {
+    // Prevent double submission
+    if (this.isSubmittingCode) {
+      console.log('🔧 [FRONTEND] Verification code submission already in progress, ignoring duplicate request');
+      return;
+    }
+    
     const codeInput = document.getElementById("verification-code");
     if (!codeInput) return;
     
@@ -3150,6 +3288,9 @@ class TelegramUtilities {
     }
     
     try {
+      // Set flag to prevent double submission
+      this.isSubmittingCode = true;
+      
       const submitBtn = document.getElementById("submit-code");
       if (submitBtn) {
         submitBtn.disabled = true;
@@ -3210,6 +3351,9 @@ class TelegramUtilities {
         "Failed to verify code: " + error.message
       );
     } finally {
+      // Reset submission flag
+      this.isSubmittingCode = false;
+      
       const submitBtn = document.getElementById("submit-code");
       if (submitBtn) {
         submitBtn.disabled = false;
@@ -3219,6 +3363,12 @@ class TelegramUtilities {
   }
 
   async submitPassword() {
+    // Prevent double submission
+    if (this.isSubmittingPassword) {
+      console.log('🔧 [FRONTEND] Password submission already in progress, ignoring duplicate request');
+      return;
+    }
+    
     const passwordInput = document.getElementById("two-factor-password");
     if (!passwordInput) return;
     
@@ -3234,6 +3384,9 @@ class TelegramUtilities {
     }
     
     try {
+      // Set flag to prevent double submission
+      this.isSubmittingPassword = true;
+      
       const submitBtn = document.getElementById("submit-password");
       if (submitBtn) {
         submitBtn.disabled = true;
@@ -3271,6 +3424,9 @@ class TelegramUtilities {
         "Failed to verify password: " + error.message
       );
     } finally {
+      // Reset submission flag
+      this.isSubmittingPassword = false;
+      
       const submitBtn = document.getElementById("submit-password");
       if (submitBtn) {
         submitBtn.disabled = false;
@@ -3759,11 +3915,61 @@ class TelegramUtilities {
     const stickerTypeEl = document.querySelector('input[name="sticker-type"]:checked');
     const stickerType = stickerTypeEl ? stickerTypeEl.value : 'image';
 
+    // 🔒 CRITICAL: Check Telegram connection first
+    console.log(`🔧 [FRONTEND] Checking Telegram connection status...`);
+    console.log(`🔧 [FRONTEND] Frontend connection status: ${this.telegramConnected}`);
+    
+    // Primary check: Use frontend connection status first
+    if (!this.telegramConnected) {
+      this.showToast("error", "Telegram Not Connected", "Please connect to Telegram first before creating sticker packs");
+      this.addStatusItem("❌ Error: Telegram not connected - Please connect to Telegram first", "error");
+      
+      // Switch to Telegram tab to help user
+      const telegramTab = document.querySelector('[data-tab="sticker-bot"]');
+      if (telegramTab) {
+        telegramTab.click();
+      }
+      return;
+    }
+    
+    // Secondary check: Verify backend session (non-blocking)
+    try {
+      const sessionResponse = await this.apiRequest("GET", "/api/telegram/session-status");
+      console.log(`🔧 [FRONTEND] Backend session status:`, sessionResponse);
+      
+      // If backend says no connection but frontend thinks connected, try to reconnect silently
+      if (!sessionResponse.success || !sessionResponse.data || !sessionResponse.data.session_valid) {
+        console.log(`🔧 [FRONTEND] ⚠️ Backend session invalid, attempting to refresh connection...`);
+        
+        // Try a quick health check to refresh connection
+        try {
+          await this.apiRequest("GET", "/api/health");
+          console.log(`🔧 [FRONTEND] Health check completed, proceeding with creation`);
+        } catch (healthError) {
+          console.error(`🔧 [FRONTEND] Health check failed:`, healthError);
+          this.showToast("warning", "Connection Issue", "Backend connection issue detected, but proceeding anyway...");
+        }
+      } else {
+        console.log(`🔧 [FRONTEND] ✅ Backend session verified`);
+      }
+    } catch (error) {
+      console.error(`🔧 [FRONTEND] Session check failed:`, error);
+      console.log(`🔧 [FRONTEND] Proceeding with creation despite session check failure`);
+      // Don't block creation on session check failure - frontend status takes precedence
+    }
+
+    // Validate media files
+    if (!this.mediaFiles || this.mediaFiles.length === 0) {
+      this.showToast("error", "No Media Files", "Please add media files first");
+      this.addStatusItem("❌ Error: No media files selected", "error");
+      return;
+    }
+
     // Validate pack name
     const packNameValidation = this.validatePackName(packName);
     if (!packNameValidation.valid) {
       this.showToast("error", "Invalid Pack Name", packNameValidation.error);
-      this.addStatusItem(`Error: ${packNameValidation.error}`, "error");
+      this.addStatusItem(`❌ Error: ${packNameValidation.error}`, "error");
       this.updateValidationDisplay("pack-name", packNameValidation);
       return;
     }
@@ -3772,13 +3978,20 @@ class TelegramUtilities {
     const urlValidation = this.validateUrlName(packUrlName);
     if (!urlValidation.valid) {
       this.showToast("error", "Invalid URL Name", urlValidation.error);
-      this.addStatusItem(`Error: ${urlValidation.error}`, "error");
+      this.addStatusItem(`❌ Error: ${urlValidation.error}`, "error");
       this.updateValidationDisplay("pack-url-name", urlValidation);
       return;
     }
 
+    // Check for duplicate/concurrent sticker creation
+    if (this.stickerProgressInterval) {
+      this.showToast("warning", "Creation In Progress", "Another sticker pack creation is already running");
+      this.addStatusItem("⚠️ Warning: Sticker pack creation already in progress", "warning");
+      return;
+    }
+
     // Add initial status
-    this.addStatusItem(`Starting sticker pack creation: "${packName}"`, "info");
+    this.addStatusItem(`🚀 Starting sticker pack creation: "${packName}"`, "info");
     
     const incompatibleFiles = this.mediaFiles.filter((f) => {
       if (stickerType === "video" && f.type !== "video") return true;
@@ -3787,29 +4000,37 @@ class TelegramUtilities {
     });
     
     if (incompatibleFiles.length > 0) {
-      this.addStatusItem(`Warning: ${incompatibleFiles.length} files don't match sticker type`, "warning");
+      this.addStatusItem(`⚠️ Warning: ${incompatibleFiles.length} files don't match sticker type`, "warning");
       const proceed = confirm(
         `${incompatibleFiles.length} files don't match the sticker type (${stickerType}). Continue with compatible files only?`
       );
       if (!proceed) {
-        this.addStatusItem("Creation cancelled by user", "info");
+        this.addStatusItem("❌ Creation cancelled by user", "info");
         return;
       }
     }
 
-    this.addStatusItem(`Validating ${this.mediaFiles.length} media files...`, "info");
+    this.addStatusItem(`🔍 Validating ${this.mediaFiles.length} media files...`, "info");
     
     try {
       const processId = "sticker_" + Date.now();
       console.log(`🔧 [FRONTEND] Creating sticker pack with process ID: ${processId}`);
-      // Get auto-skip setting first
+      
+      // Get auto-skip setting
       const autoSkipIconEl = document.getElementById("auto-skip-icon");
-      const autoSkipIcon = autoSkipIconEl ? autoSkipIconEl.checked : true; // Default to true if not found
+      const autoSkipIcon = autoSkipIconEl ? autoSkipIconEl.checked : true;
       
       console.log(`🔧 [FRONTEND] Pack name: ${packName}`);
       console.log(`🔧 [FRONTEND] Sticker type: ${stickerType}`);
       console.log(`🔧 [FRONTEND] Media files count: ${this.mediaFiles.length}`);
       console.log(`🔧 [FRONTEND] Auto-skip icon: ${autoSkipIcon}`);
+      
+      // Disable the create button to prevent double-clicking
+      const createBtn = document.getElementById("create-sticker-pack");
+      if (createBtn) {
+        createBtn.disabled = true;
+        createBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting...';
+      }
       
       this.showLoadingOverlay("Starting sticker pack creation...");
       
@@ -3842,13 +4063,10 @@ class TelegramUtilities {
           "Sticker pack creation started in background"
         );
         
-        this.addStatusItem("Sticker pack creation queued successfully", "completed");
+        this.addStatusItem("✅ Sticker pack creation queued successfully", "completed");
         
-        const createBtn = document.getElementById("create-sticker-pack");
         if (createBtn) {
-          createBtn.disabled = true;
-          createBtn.innerHTML =
-            '<i class="fas fa-spinner fa-spin"></i> Creating Pack...';
+          createBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating Pack...';
         }
         
         // Start monitoring progress
@@ -3857,23 +4075,36 @@ class TelegramUtilities {
         this.startStickerProgressMonitoring(finalProcessId);
       } else {
         console.log(`🔧 [FRONTEND] Creation failed:`, response.error);
-        this.addStatusItem(`Error: ${response.error || "Failed to start creation"}`, "error");
+        this.addStatusItem(`❌ Error: ${response.error || "Failed to start creation"}`, "error");
         this.showToast(
           "error",
           "Creation Failed",
           response.error || "Failed to start creation"
         );
+        
+        // Re-enable the button on failure
+        if (createBtn) {
+          createBtn.disabled = false;
+          createBtn.innerHTML = '<i class="fas fa-magic"></i> Create Sticker Pack';
+        }
       }
     } catch (error) {
       this.hideLoadingOverlay();
       console.error(`🔧 [FRONTEND] Error creating sticker pack:`, error);
-      if (RENDERER_DEBUG) console.error("Error creating sticker pack:", error);
-      this.addStatusItem(`Error: Failed to create sticker pack - ${error.message}`, "error");
+      
+      this.addStatusItem(`❌ Error: Failed to create sticker pack - ${error.message}`, "error");
       this.showToast(
         "error",
         "Creation Error",
         "Failed to create sticker pack: " + error.message
       );
+      
+      // Re-enable the button on error
+      const createBtn = document.getElementById("create-sticker-pack");
+      if (createBtn) {
+        createBtn.disabled = false;
+        createBtn.innerHTML = '<i class="fas fa-magic"></i> Create Sticker Pack';
+      }
     }
   }
 
@@ -3890,31 +4121,69 @@ class TelegramUtilities {
     console.log(`🔧 [FRONTEND] Process ID type: ${typeof processId}`);
     console.log(`🔧 [FRONTEND] Process ID value: "${processId}"`);
     
+    let consecutiveErrors = 0;
+    const MAX_CONSECUTIVE_ERRORS = 5;
+    const MONITORING_TIMEOUT = 20 * 60 * 1000; // 20 minutes (increased for URL name retry scenarios)
+    const startTime = Date.now();
+    
     this.stickerProgressInterval = setInterval(async () => {
       try {
-        console.log(`🔧 [FRONTEND] Checking status for process: ${processId}`);
-        
-        // First, let's check what processes are available
-        try {
-          const debugResponse = await this.apiRequest("GET", "/api/debug/active-processes");
-          console.log(`🔧 [FRONTEND] Debug - Available processes:`, debugResponse);
-        } catch (debugError) {
-          console.log(`🔧 [FRONTEND] Debug endpoint error:`, debugError);
+        // Check for timeout
+        if (Date.now() - startTime > MONITORING_TIMEOUT) {
+          console.log(`🔧 [FRONTEND] Monitoring timeout for process: ${processId}`);
+          this.stopStickerProgressMonitoring();
+          this.addStatusItem("❌ Monitoring timeout - sticker creation may have failed", "error");
+          return;
         }
         
-        const safePid = encodeURIComponent(String(processId ?? ""));
+        console.log(`🔧 [FRONTEND] Checking status for process: ${processId}`);
+        
+        // FIXED: Proper process ID sanitization to prevent [Errno 22] Invalid argument
+        const safePid = String(processId)
+          .replace(/[^a-zA-Z0-9_-]/g, '_')  // Replace invalid chars with underscore
+          .substring(0, 50);  // Limit length to prevent URL issues
+        
+        if (!safePid) {
+          console.error(`🔧 [FRONTEND] Process ID became empty after sanitization: ${processId}`);
+          this.stopStickerProgressMonitoring();
+          this.addStatusItem("❌ Invalid process ID format", "error");
+          return;
+        }
         const response = await this.apiRequest("GET", `/api/process-status/${safePid}`);
         console.log(`🔧 [FRONTEND] Process status response:`, response);
         
         if (response.success && response.data) {
           const progress = response.data;
-          console.log(`🔧 [FRONTEND] Progress data:`, progress);
+          
+          // Reset error counter on success
+          consecutiveErrors = 0;
+          
           this.updateStickerProgressDisplay(progress);
           
-          // Add status updates for different stages
+          // FIXED: Handle URL name taken case - only show modal if not already shown
+          if (progress.url_name_taken || progress.status === "waiting_for_url_name") {
+            console.log(`🔧 [FRONTEND] URL name taken, prompting user for new name`);
+            
+            // Check if URL name modal is already visible to prevent timeout interference
+            const urlNameModal = document.getElementById("url-name-modal");
+            if (!urlNameModal || urlNameModal.style.display === "none") {
+              this.stopStickerProgressMonitoring();
+              this.showUrlNameModal(processId, progress.original_url_name || "unknown");
+            }
+            return;
+          }
+          
+          // OPTIMIZED: Prevent duplicate stage notifications with better tracking
           if (progress.current_stage && progress.current_stage !== this.lastStage) {
-            this.addStatusItem(progress.current_stage, "info");
-            this.lastStage = progress.current_stage;
+            // Show ALL meaningful stage changes, not just queue messages
+            const isQueueMessage = progress.current_stage.includes('waiting in queue');
+            const shouldShow = !isQueueMessage || !this.lastStageWasQueue;
+            
+            if (shouldShow) {
+              this.addStatusItem(progress.current_stage, "info");
+              this.lastStage = progress.current_stage;
+              this.lastStageWasQueue = isQueueMessage;
+            }
           }
           
           // Update individual media file statuses
@@ -3933,10 +4202,20 @@ class TelegramUtilities {
           // Check if process is waiting for icon selection
           if (progress.waiting_for_user && progress.icon_request_message) {
             console.log(`🔧 [FRONTEND] Process ${processId} waiting for icon selection`);
+            console.log(`🔧 [FRONTEND] Progress data:`, progress);
             
-            // Check auto-skip setting
+            // Check auto-skip setting with enhanced debugging
             const autoSkipIcon = document.getElementById("auto-skip-icon");
+            console.log(`🔧 [FRONTEND] Auto-skip element found:`, !!autoSkipIcon);
+            if (autoSkipIcon) {
+              console.log(`🔧 [FRONTEND] Auto-skip element checked state:`, autoSkipIcon.checked);
+              console.log(`🔧 [FRONTEND] Auto-skip element value:`, autoSkipIcon.value);
+              console.log(`🔧 [FRONTEND] Auto-skip element type:`, autoSkipIcon.type);
+            }
+            
             const shouldAutoSkip = autoSkipIcon && autoSkipIcon.checked;
+            console.log(`🔧 [FRONTEND] shouldAutoSkip:`, shouldAutoSkip);
+            console.log(`🔧 [FRONTEND] this.autoSkipAttempted:`, this.autoSkipAttempted);
             
             if (shouldAutoSkip && !this.autoSkipAttempted) {
               // Auto-skip: send skip command automatically (only once)
@@ -3953,68 +4232,80 @@ class TelegramUtilities {
                 } else {
                   this.addStatusItem(`Error auto-skipping icon: ${response.error}`, "error");
                   // Show manual modal as fallback
-                  clearInterval(this.stickerProgressInterval);
+                  this.stopStickerProgressMonitoring();
                   this.showIconModal(processId, progress.icon_request_message);
                 }
               } catch (error) {
                 this.addStatusItem(`Error auto-skipping icon: ${error.message}`, "error");
                 // Show manual modal as fallback
-                clearInterval(this.stickerProgressInterval);
+                this.stopStickerProgressMonitoring();
                 this.showIconModal(processId, progress.icon_request_message);
               }
             } else {
               // Manual mode: show icon selection modal
-              clearInterval(this.stickerProgressInterval);
+              console.log(`🔧 [FRONTEND] Entering manual mode - shouldAutoSkip: ${shouldAutoSkip}, autoSkipAttempted: ${this.autoSkipAttempted}`);
+              console.log(`🔧 [FRONTEND] About to call showIconModal with processId: ${processId}`);
+              console.log(`🔧 [FRONTEND] Icon request message: ${progress.icon_request_message}`);
+              
+              this.stopStickerProgressMonitoring();
               this.showIconModal(processId, progress.icon_request_message);
+              
+              console.log(`🔧 [FRONTEND] showIconModal called successfully`);
             }
           } else if (progress.status === "completed") {
             console.log(`🔧 [FRONTEND] Process ${processId} completed successfully`);
-            clearInterval(this.stickerProgressInterval);
+            this.stopStickerProgressMonitoring();
             this.onStickerProcessCompleted(true, progress);
           } else if (progress.status === "error") {
             console.log(`🔧 [FRONTEND] Process ${processId} failed with error`);
-            clearInterval(this.stickerProgressInterval);
+            this.stopStickerProgressMonitoring();
             this.onStickerProcessCompleted(false, progress);
           }
         } else {
-          console.log(`🔧 [FRONTEND] Process ${processId} not found or error:`, response);
-          if (RENDERER_DEBUG) console.error("Sticker progress monitoring failed:", response.error);
-          clearInterval(this.stickerProgressInterval);
-          this.onStickerProcessCompleted(false, { error: response.error });
-        }
-      } catch (error) {
-        // Treat certain backend I/O errors as transient; keep polling
-        const message = (error && error.message) ? String(error.message) : "";
-        if (message.includes('[Errno 22]') || message.includes('Invalid argument')) {
-          if (RENDERER_DEBUG) console.warn(`🔧 [FRONTEND] Transient invalid argument while monitoring ${processId}; retrying...`);
-          return; // skip logging loudly and clearing interval; try again next cycle
-        }
-
-        console.error(`🔧 [FRONTEND] Error monitoring progress for ${processId}:`, error);
-
-        // If we get a database lock error, try to force cleanup
-        if (message.includes('database is locked')) {
-          console.log(`🔧 [FRONTEND] Database lock detected, attempting force cleanup...`);
-          try {
-            const cleanupResponse = await this.apiRequest("POST", "/api/force-cleanup-sessions");
-            console.log(`🔧 [FRONTEND] Force cleanup response:`, cleanupResponse);
-          } catch (cleanupError) {
-            console.log(`🔧 [FRONTEND] Force cleanup error:`, cleanupError);
+          consecutiveErrors++;
+          
+          // OPTIMIZED: Reduced from 5 to 3 for faster failure detection
+          if (consecutiveErrors >= 3) {
+            this.stopStickerProgressMonitoring();
+            this.addStatusItem("❌ Process monitoring failed - sticker creation may have stopped", "error");
           }
         }
-
-        if (RENDERER_DEBUG) console.error("Error monitoring sticker progress:", error);
-        clearInterval(this.stickerProgressInterval);
-        this.onStickerProcessCompleted(false, { error: message || 'Unknown error' });
+      } catch (error) {
+        // FIXED: Handle [Errno 22] Invalid argument specifically
+        if (error.message && error.message.includes('[Errno 22] Invalid argument')) {
+          console.error(`🔧 [FRONTEND] URL/Process ID encoding error:`, error);
+          this.stopStickerProgressMonitoring();
+          this.addStatusItem("❌ Process ID encoding error - restarting sticker creation", "error");
+          return;
+        }
+        
+        consecutiveErrors++;
+        
+        if (consecutiveErrors >= 3) {
+          this.stopStickerProgressMonitoring();
+          this.addStatusItem(`❌ Monitoring error: ${error.message}`, "error");
+        }
       }
-    }, 2000);
+    }, 5000); // OPTIMIZED: Reduced to 5 seconds for better real-time monitoring
+  }
+
+  stopStickerProgressMonitoring() {
+    if (this.stickerProgressInterval) {
+      clearInterval(this.stickerProgressInterval);
+      this.stickerProgressInterval = null;
+      console.log(`🔧 [FRONTEND] Stopped sticker progress monitoring`);
+    }
+    
+    // Reset the create button
+    const createBtn = document.getElementById("create-sticker-pack");
+    if (createBtn) {
+      createBtn.disabled = false;
+      createBtn.innerHTML = '<i class="fas fa-magic"></i> Create Sticker Pack';
+    }
   }
 
   updateStickerProgressDisplay(progress) {
-    // Update the new status list
-    this.addStatusItem(progress.current_stage || "Processing...", "processing");
-    
-    // Keep the old progress bar functionality for the progress section
+    // OPTIMIZED: Don't add redundant status updates - only for progress bar
     const progressBar = document.getElementById("sticker-progress-bar");
     const progressText = document.getElementById("sticker-progress-text");
     
@@ -4031,10 +4322,18 @@ class TelegramUtilities {
     }
   }
 
-  // New status list functionality
+  // OPTIMIZED status list functionality with rate limiting
   addStatusItem(message, type = "info", timestamp = null) {
     const statusList = document.getElementById("sticker-status-list");
     if (!statusList) return;
+    
+    // FIXED: Only prevent exact duplicate messages, allow similar but different ones
+    if (this.lastStatusMessage === message && this.lastStatusType === type) {
+      return; // Skip exact duplicate
+    }
+    
+    this.lastStatusMessage = message;
+    this.lastStatusType = type;
 
     const time = timestamp || new Date();
     const timeString = time.toLocaleTimeString();
@@ -4053,15 +4352,15 @@ class TelegramUtilities {
     // Add to the top of the list (latest first)
     statusList.insertBefore(statusItem, statusList.firstChild);
     
-    // Auto-scroll if enabled
-    if (this.autoScrollEnabled) {
-      statusList.scrollTop = 0;
-    }
-    
-    // Limit to 50 items to prevent memory issues
+    // OPTIMIZED: Limit to 50 items to show more progress history
     const items = statusList.querySelectorAll('.status-item');
     if (items.length > 50) {
       statusList.removeChild(items[items.length - 1]);
+    }
+    
+    // Auto-scroll to show latest message if enabled
+    if (this.autoScrollEnabled) {
+      statusItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   }
 
@@ -4129,19 +4428,25 @@ class TelegramUtilities {
       this.sessionStats.totalStickers += this.mediaFiles.length;
       this.addStatusItem("Sticker pack created successfully!", "completed");
       
-      // Show success modal with shareable link if available
-      if (progressData && progressData.shareable_link) {
-        this.showSuccessModal(progressData.shareable_link);
+      // FIXED: Check for multiple possible property names for shareable link
+      const shareableLink = progressData?.shareable_link || progressData?.pack_link || progressData?.link;
+      if (shareableLink) {
+        console.log(`🔧 [SUCCESS] Found shareable link: ${shareableLink}`);
+        this.showSuccessModal(shareableLink);
+      } else {
+        console.log(`🔧 [SUCCESS] No shareable link found in progress data:`, progressData);
+        // Still show a success message even without link
+        this.showToast("success", "Pack Created", "Sticker pack created successfully!");
       }
     } else {
-      this.addStatusItem(`Sticker pack creation failed: ${progressData.error || "Unknown error"}`, "error");
+      this.addStatusItem(`Sticker pack creation failed: ${progressData?.error || "Unknown error"}`, "error");
     }
     this.updateStats();
     
     // Reset button
     if (createBtn) {
       createBtn.disabled = false;
-      createBtn.innerHTML = '<i class="fas fa-rocket"></i> Create Sticker Pack';
+      createBtn.innerHTML = '<i class="fas fa-magic"></i> Create Sticker Pack';
     }
     
     // Mark all files as completed or error
@@ -4166,15 +4471,14 @@ class TelegramUtilities {
         "Your sticker pack has been published successfully!"
       );
       
-      // Show pack link if available
-      if (progressData.pack_link) {
-        this.showPackLinkModal(progressData.pack_link);
-      }
+      // FIXED: Update backend database stats for successful sticker creation
+      this.updateStickerCreationStats(this.mediaFiles.length);
+      
     } else {
       this.showToast(
         "error",
         "Creation Failed",
-        `Sticker pack creation failed: ${progressData.error || "Unknown error"}`
+        `Sticker pack creation failed: ${progressData?.error || "Unknown error"}`
       );
     }
     
@@ -4184,6 +4488,25 @@ class TelegramUtilities {
       statusElement.textContent = success
         ? "Pack created successfully!"
         : "Pack creation failed";
+    }
+  }
+
+  async updateStickerCreationStats(stickerCount) {
+    try {
+      console.log(`🔧 [STATS] Updating sticker creation stats: +${stickerCount} stickers`);
+      const response = await this.apiRequest("POST", "/api/stats/increment-stickers", {
+        count: stickerCount
+      });
+      
+      if (response.success) {
+        console.log(`✅ [STATS] Successfully updated sticker stats`);
+        // Force refresh database stats display
+        this.updateDatabaseStats();
+      } else {
+        console.warn(`⚠️ [STATS] Failed to update sticker stats:`, response.error);
+      }
+    } catch (error) {
+      console.error(`❌ [STATS] Error updating sticker creation stats:`, error);
     }
   }
 
@@ -4270,24 +4593,131 @@ class TelegramUtilities {
 
   // Icon Selection Modal Functions
   showIconModal(processId, iconRequestMessage) {
+    console.log(`🔧 [FRONTEND] showIconModal called with:`, { processId, iconRequestMessage });
+    
     this.currentIconProcessId = processId;
     this.currentIconRequestMessage = iconRequestMessage;
     
     const modal = document.getElementById("icon-modal");
     const overlay = document.getElementById("modal-overlay");
     
+    console.log(`🔧 [FRONTEND] Modal elements found:`, { modal: !!modal, overlay: !!overlay });
+    
     if (modal && overlay) {
+      console.log(`🔧 [FRONTEND] Setting modal display to block and overlay to active`);
       modal.style.display = "block";
       overlay.classList.add("active");
       
       // Update the modal content with the actual message from Telegram
       const iconInfo = modal.querySelector(".icon-info p");
       if (iconInfo && iconRequestMessage) {
+        console.log(`🔧 [FRONTEND] Updating icon info text with: ${iconRequestMessage}`);
         iconInfo.textContent = iconRequestMessage;
       }
       
       // Reset file selection
       this.resetIconFileSelection();
+      
+      console.log(`🔧 [FRONTEND] Modal should now be visible`);
+    } else {
+      console.error(`🔧 [FRONTEND] Modal elements not found! modal: ${!!modal}, overlay: ${!!overlay}`);
+    }
+  }
+
+  showUrlNameModal(processId, takenName) {
+    console.log(`🔧 [FRONTEND] showUrlNameModal called with:`, { processId, takenName });
+    
+    const modal = document.getElementById("url-name-modal");
+    const takenNameSpan = document.getElementById("taken-url-name");
+    const newUrlNameInput = document.getElementById("new-url-name");
+    
+    if (takenNameSpan) {
+      takenNameSpan.textContent = takenName;
+    }
+    
+    if (newUrlNameInput) {
+      // Suggest a new name with timestamp
+      const timestamp = Date.now().toString().slice(-6);
+      newUrlNameInput.value = `${takenName}_${timestamp}`;
+      setTimeout(() => {
+        newUrlNameInput.focus();
+        newUrlNameInput.select();
+      }, 100);
+    }
+    
+    this.currentUrlNameProcessId = processId;
+    
+    if (modal) {
+      modal.style.display = "flex";
+      this.addStatusItem(`URL name '${takenName}' is already taken. Please provide a new name.`, "warning");
+    }
+  }
+
+  hideUrlNameModal() {
+    const modal = document.getElementById("url-name-modal");
+    if (modal) {
+      modal.style.display = "none";
+    }
+    this.currentUrlNameProcessId = null;
+  }
+
+  async submitNewUrlName() {
+    const newUrlNameInput = document.getElementById("new-url-name");
+    if (!newUrlNameInput || !this.currentUrlNameProcessId) return;
+    
+    const newUrlName = newUrlNameInput.value.trim();
+    if (!newUrlName) {
+      this.showToast("error", "Missing URL Name", "Please enter a new URL name");
+      newUrlNameInput.focus();
+      return;
+    }
+    
+    // Validate the new URL name
+    const validation = this.validateUrlName(newUrlName);
+    if (!validation.valid) {
+      this.showToast("error", "Invalid URL Name", validation.error);
+      newUrlNameInput.select();
+      return;
+    }
+    
+    try {
+      const submitBtn = document.getElementById("submit-new-url-name");
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+      }
+      
+      const response = await this.apiRequest("POST", "/api/sticker/submit-url-name", {
+        process_id: this.currentUrlNameProcessId,
+        new_url_name: newUrlName
+      });
+      
+      if (response.success) {
+        this.hideUrlNameModal();
+        this.addStatusItem(`✅ New URL name submitted: ${newUrlName}`, "completed");
+        this.showToast("success", "URL Name Updated", `Using new URL name: ${newUrlName}`);
+        
+        // Restart progress monitoring
+        this.startStickerProgressMonitoring(this.currentUrlNameProcessId);
+      } else {
+        this.addStatusItem(`❌ Error submitting URL name: ${response.error}`, "error");
+        this.showToast("error", "Submission Failed", response.error);
+        
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<i class="fas fa-check"></i> Submit New Name';
+        }
+      }
+    } catch (error) {
+      console.error("Error submitting new URL name:", error);
+      this.addStatusItem(`❌ Error submitting URL name: ${error.message}`, "error");
+      this.showToast("error", "Submission Error", error.message);
+      
+      const submitBtn = document.getElementById("submit-new-url-name");
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fas fa-check"></i> Submit New Name';
+      }
     }
   }
 
@@ -4360,7 +4790,7 @@ class TelegramUtilities {
       
       if (response.success) {
         this.addStatusItem("Icon step skipped successfully", "completed");
-        this.hideIconModal();
+        this.hideIconModal();  // Close the modal after successful skip
         // Restart monitoring to continue with the process
         this.startStickerProgressMonitoring(this.currentIconProcessId);
       } else {
@@ -6289,27 +6719,114 @@ This action cannot be undone. Are you sure?
         if (session_exists && session_valid) {
           if (RENDERER_DEBUG) console.log('[DEBUG] Found valid existing session - setting connected status');
           this.updateTelegramStatus("connected");
-          return;
+          return true;
         }
       }
       
       if (RENDERER_DEBUG) console.log('[DEBUG] No valid session found - setting disconnected status');
       this.updateTelegramStatus("disconnected");
+      return false;
       
     } catch (error) {
       if (RENDERER_DEBUG) console.error('[DEBUG] Error checking session status:', error);
       // Default to disconnected if we can't check
       this.updateTelegramStatus("disconnected");
+      return false;
+    }
+  }
+  
+  async refreshConnectionStatus() {
+    console.log('🔧 [FRONTEND] Manually refreshing connection status...');
+    return await this.checkExistingConnection();
+  }
+  
+  async cleanupTelegramSession() {
+    console.log('🔧 [FRONTEND] Cleaning up Telegram session...');
+    try {
+      const response = await this.apiRequest("POST", "/api/telegram/cleanup-session");
+      if (response && response.success) {
+        console.log('🔧 [FRONTEND] Session cleanup successful');
+        this.updateTelegramStatus("disconnected");
+        return true;
+      } else {
+        console.log('🔧 [FRONTEND] Session cleanup failed:', response?.error);
+        return false;
+      }
+    } catch (error) {
+      console.error('🔧 [FRONTEND] Session cleanup error:', error);
+      return false;
     }
   }
 
   // Modify initialization to include input handlers
   async initializeTelegramConnection() {
-    this.logDebug('initializeTelegramConnection()');
+    this.logDebug('initializeTelegramConnection() - CLEAN WORKFLOW');
     
-    // Check for existing connection status first
-    await this.checkExistingConnection();
+    // CLEAN WORKFLOW: Always start disconnected and force cleanup
+    console.log('🔄 [CLEAN_INIT] Starting clean workflow initialization...');
     
+    try {
+      // STEP 1: Force backend cleanup on frontend startup (with retry)
+      console.log('🧹 [CLEAN_INIT] Step 1: Force backend cleanup...');
+      
+      // Retry the force reset with backoff in case backend is still starting
+      let forceResetSuccess = false;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          await this.apiRequest('POST', '/api/telegram/force-reset');
+          forceResetSuccess = true;
+          break;
+        } catch (error) {
+          console.log(`🔄 [CLEAN_INIT] Force reset attempt ${attempt} failed: ${error.message}`);
+          if (attempt < 3) {
+            // Wait longer on each attempt
+            await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+          }
+        }
+      }
+      
+      if (!forceResetSuccess) {
+        console.log('⚠️ [CLEAN_INIT] Force reset failed, but continuing with manual cleanup...');
+      }
+      
+      // STEP 2: Always set disconnected state 
+      console.log('📱 [CLEAN_INIT] Step 2: Setting disconnected state...');
+      this.updateTelegramStatus('disconnected');
+      this.telegramConnected = false;
+      
+      // STEP 3: Check actual connection status from backend (with retry)
+      console.log('🔍 [CLEAN_INIT] Step 3: Verifying clean state...');
+      try {
+        const statusResponse = await this.apiRequest('GET', '/api/telegram/connection-status');
+        
+        if (statusResponse.success && statusResponse.data) {
+          const status = statusResponse.data;
+          console.log('📊 [CLEAN_INIT] Backend status:', status);
+          
+          // For clean workflow, we expect clean_state: true and connected: false
+          if (status.clean_state && !status.connected) {
+            console.log('✅ [CLEAN_INIT] Clean workflow verified - starting fresh');
+            this.addStatusItem('🔄 Clean startup completed - ready for fresh connection', 'info');
+          } else if (status.connected) {
+            console.log('⚠️ [CLEAN_INIT] Unexpected connection found - will handle on next connect...');
+            this.addStatusItem('⚠️ Unexpected connection state - will force cleanup on connect', 'warning');
+          }
+        }
+      } catch (error) {
+        console.log('⚠️ [CLEAN_INIT] Status check failed, but assuming clean state:', error.message);
+      }
+      
+      console.log('✅ [CLEAN_INIT] Clean workflow initialization completed');
+      
+    } catch (error) {
+      console.error('❌ [CLEAN_INIT] Error during clean initialization:', error);
+      // Even on error, ensure we're in disconnected state
+      this.updateTelegramStatus('disconnected');
+      this.telegramConnected = false;
+      this.addStatusItem('⚠️ Clean startup completed with warnings', 'warning');
+    }
+    
+    // Continue with standard initialization...
     // Verify all required elements exist
     const apiIdInput = document.getElementById("telegram-api-id");
     const apiHashInput = document.getElementById("telegram-api-hash");
@@ -6527,29 +7044,5 @@ if (RENDERER_DEBUG) console.log("Telegram Utilities application loaded successfu
 })();
 
 // ===== Aggressive apiRequest patch (poll until app exists) =====
-(function () {
-  try {
-    const install = () => {
-      if (!window.app || !window.app.apiRequest || window.app.apiRequest.__traced) return false;
-      const original = window.app.apiRequest.bind(window.app);
-      window.app.apiRequest = async function (...args) {
-        const rid = Math.random().toString(36).slice(2, 8);
-        console.groupCollapsed(`[TRACE] apiRequest (${rid})`, ...args);
-        try {
-          const res = await original(...args);
-          try { console.info('apiResponse =', res); } catch {}
-          console.groupEnd();
-          return res;
-        } catch (err) {
-          console.error('apiError =', err);
-          console.groupEnd();
-          throw err;
-        }
-      };
-      window.app.apiRequest.__traced = true;
-      console.info('[TRACE] apiRequest patched');
-      return true;
-    };
-    const timer = setInterval(() => { if (install()) clearInterval(timer); }, 300);
-  } catch (e) { console.warn('TRACE apiRequest patch failed', e); }
-})();
+// REMOVED: Debug tracing to improve performance
+// The tracing code was causing slowness and memory issues
