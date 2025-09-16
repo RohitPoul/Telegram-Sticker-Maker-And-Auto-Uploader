@@ -952,6 +952,9 @@
           <div class="modal-body">
             <div class="url-name-content">
               <div class="url-name-info">
+                <div class="attempt-counter" id="url-name-attempt-info" style="display: none; margin-bottom: 1rem; padding: 0.5rem; background: rgba(255, 193, 7, 0.1); border-left: 3px solid var(--warning-color); color: var(--warning-color); font-weight: bold;">
+                  <i class="fas fa-redo"></i> Attempt 1 of 3
+                </div>
                 <p>The URL name "<span id="taken-url-name" style="font-weight: bold; color: var(--error-color);">unknown</span>" is already taken by another sticker pack.</p>
                 <p>Please choose a different URL name for your sticker pack:</p>
               </div>
@@ -969,7 +972,7 @@
                     pattern="[a-zA-Z][a-zA-Z0-9_]*"
                   />
                 </div>
-                <small class="help-text">5-32 characters, start with letter, use letters/numbers/underscores only</small>
+                <div class="validation-message" id="new-url-name-validation"></div>
               </div>
             </div>
           </div>
