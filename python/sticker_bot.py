@@ -522,11 +522,11 @@ class StickerBotCore:
     
     def cleanup_connection(self):
         """
-        COMPLETE connection cleanup for clean workflow implementation
-        Ensures proper disconnection and session cleanup
+        Gentle connection cleanup for session reuse implementation
+        Disconnects but preserves sessions for reuse
         """
         thread_name = threading.current_thread().name
-        logging.info(f"[STICKER_CLEANUP] Starting complete cleanup in thread: {thread_name}")
+        logging.info(f"[STICKER_CLEANUP] Starting gentle cleanup in thread: {thread_name}")
         
         with self._connection_lock:
             try:
@@ -540,33 +540,33 @@ class StickerBotCore:
                         logging.warning(f"[STICKER_CLEANUP] Error stopping conversation manager: {e}")
                     self.conversation_manager = None
                 
-                # STEP 2: Use telegram handler for proper cleanup
+                # STEP 2: Use telegram handler for gentle cleanup (preserves sessions)
                 try:
                     from telegram_connection_handler import get_telegram_handler
                     handler = get_telegram_handler()
                     if handler:
-                        logging.info(f"[STICKER_CLEANUP] Using handler for force cleanup...")
-                        handler.force_disconnect_and_cleanup()
-                        logging.info(f"[STICKER_CLEANUP] Handler cleanup completed")
+                        logging.info(f"[STICKER_CLEANUP] Using handler for gentle disconnect...")
+                        handler.force_disconnect_and_cleanup()  # This is now gentle
+                        logging.info(f"[STICKER_CLEANUP] Handler gentle disconnect completed")
                     else:
                         logging.warning(f"[STICKER_CLEANUP] No handler available for cleanup")
                 except Exception as e:
                     logging.error(f"[STICKER_CLEANUP] Handler cleanup error: {e}")
                 
-                # STEP 3: Clear our references
+                # STEP 3: Clear our references (but don't destroy session files)
                 self.client = None
                 self.bot_peer = None
-                self.session_file = None
+                # Don't clear session_file - keep it for potential reuse
                 
-                # STEP 4: Force garbage collection
+                # STEP 4: Optional garbage collection
                 try:
                     import gc
                     gc.collect()
-                    logging.info(f"[STICKER_CLEANUP] Forced garbage collection completed")
+                    logging.info(f"[STICKER_CLEANUP] Garbage collection completed")
                 except Exception as e:
                     logging.warning(f"[STICKER_CLEANUP] Error during garbage collection: {e}")
                 
-                logging.info(f"[STICKER_CLEANUP] Complete cleanup finished successfully")
+                logging.info(f"[STICKER_CLEANUP] Gentle cleanup finished successfully")
                 
             except Exception as e:
                 logging.error(f"[STICKER_CLEANUP] Critical cleanup error: {e}")
@@ -576,7 +576,6 @@ class StickerBotCore:
                 self.conversation_manager = None
                 self.client = None
                 self.bot_peer = None
-                self.session_file = None
 
     def create_sticker_pack(self, pack_name: str, pack_url_name: str, sticker_type: str, media_files: List[Dict], process_id: str, auto_skip_icon: bool = True):
         """REAL sticker pack creation with EXACT advanced logic from Python version"""
@@ -772,11 +771,11 @@ class StickerBotCore:
             raise
 
     def is_connected(self):
-        """Check if Telegram connection is available - CLEAN WORKFLOW VERSION"""
+        """Check if Telegram connection is available - SESSION REUSE VERSION"""
         try:
-            logging.info("[STICKER_CONNECTION] Checking connection status for clean workflow...")
+            logging.info("[STICKER_CONNECTION] Checking connection status for session reuse...")
             
-            # For clean workflow, we check the actual connection status from handler
+            # For session reuse, we check the actual connection status from handler
             try:
                 from telegram_connection_handler import get_telegram_handler
                 handler = get_telegram_handler()
@@ -841,7 +840,7 @@ class StickerBotCore:
     
     def connect_telegram(self, api_id: str, api_hash: str, phone_param: str, process_id: str, retry_count: int = 0) -> Dict:
         """
-        Clean workflow Telegram connection - always starts fresh
+        Session reuse Telegram connection - uses existing sessions when possible
         
         :param api_id: Telegram API ID
         :param api_hash: Telegram API Hash
@@ -851,7 +850,7 @@ class StickerBotCore:
         :return: Connection result dictionary
         """
         # DEBUG: Log function entry
-        logging.info(f"🚀 STICKER_BOT.connect_telegram CLEAN WORKFLOW STARTING")
+        logging.info(f"🚀 STICKER_BOT.connect_telegram SESSION REUSE STARTING")
         logging.info(f"📱 Phone: ***{str(phone_param)[-4:]}, Process: {process_id}")
         
         # Initialize safe variables to prevent scoping issues
@@ -861,7 +860,7 @@ class StickerBotCore:
         safe_process_id = process_id if process_id else ''
         
         thread_name = threading.current_thread().name
-        logging.info(f"[STICKER_CONNECT] Clean connection in thread: {thread_name}")
+        logging.info(f"[STICKER_CONNECT] Session reuse connection in thread: {thread_name}")
         
         # Validate inputs
         if not all([safe_api_id, safe_api_hash, safe_phone_number]):
@@ -875,11 +874,7 @@ class StickerBotCore:
             }
         
         try:
-            # CLEAN WORKFLOW: Always force cleanup before connecting
-            logging.info("[STICKER_CONNECT] CLEAN WORKFLOW: Force cleanup before fresh connection...")
-            self.cleanup_connection()
-            
-            # Use the handler for clean connection
+            # Use the handler for session reuse connection
             from telegram_connection_handler import get_telegram_handler
             handler = get_telegram_handler()
             
@@ -893,8 +888,8 @@ class StickerBotCore:
                     "phone_number": safe_phone_number
                 }
             
-            # Force clean connection (always fresh as per requirements)
-            logging.info("[STICKER_CONNECT] Requesting FRESH connection from handler...")
+            # Request session reuse connection
+            logging.info("[STICKER_CONNECT] Requesting session reuse connection from handler...")
             result = handler.connect_telegram(safe_api_id, safe_api_hash, safe_phone_number)
             
             # Update our references if connection successful
@@ -917,6 +912,14 @@ class StickerBotCore:
                     # Run setup on handler's event loop
                     handler.run_async(setup_bot_interaction())
                     logging.info(f"[STICKER_CONNECT] Bot interaction set up successfully")
+                    
+                    # Log session reuse information
+                    if result.get('reused_session'):
+                        logging.info(f"[STICKER_CONNECT] ✅ Successfully reused existing session")
+                    elif result.get('existing_session'):
+                        logging.info(f"[STICKER_CONNECT] ✅ Used existing authorized session")
+                    else:
+                        logging.info(f"[STICKER_CONNECT] ✅ Created new session")
                     
                 except Exception as e:
                     logging.error(f"[STICKER_CONNECT] Error setting up bot interaction: {e}")
@@ -1211,11 +1214,13 @@ class StickerBotCore:
                             # Instead of auto-generating, mark for user input
                             if process_id in active_processes:
                                 active_processes[process_id]["status"] = "waiting_for_url_name"
-                                active_processes[process_id]["current_stage"] = f"URL name '{pack_url_name}' is taken. Waiting for new URL name..."
+                                active_processes[process_id]["current_stage"] = f"URL name '{pack_url_name}' is taken. Waiting for new URL name (attempt {url_name_attempts}/{max_attempts})..."
                                 active_processes[process_id]["waiting_for_user"] = True
                                 active_processes[process_id]["url_name_taken"] = True
-                                active_processes[process_id]["original_url_name"] = pack_url_name
-                                self.logger.info(f"[STICKER] URL name taken, waiting for user to provide new name")
+                                active_processes[process_id]["original_url_name"] = pack_url_name  # Store the actual input URL name
+                                active_processes[process_id]["url_name_attempts"] = url_name_attempts
+                                active_processes[process_id]["max_url_attempts"] = max_attempts
+                                self.logger.info(f"[STICKER] URL name taken, waiting for user to provide new name (attempt {url_name_attempts}/{max_attempts})")
                             return {"success": False, "error": "URL name taken", "waiting_for_user": True, "url_name_taken": True}
                         else:
                             self.logger.error(f"[STICKER] Unexpected response for URL name: {response.message}")
@@ -1226,10 +1231,12 @@ class StickerBotCore:
                         # Mark for user input instead of failing after timeout
                         if process_id in active_processes:
                             active_processes[process_id]["status"] = "waiting_for_url_name"
-                            active_processes[process_id]["current_stage"] = f"URL name timeout. Please provide a new URL name."
+                            active_processes[process_id]["current_stage"] = f"URL name timeout. Please provide a new URL name (attempt {url_name_attempts}/{max_attempts})."
                             active_processes[process_id]["waiting_for_user"] = True
                             active_processes[process_id]["url_name_taken"] = True
-                            active_processes[process_id]["original_url_name"] = pack_url_name
+                            active_processes[process_id]["original_url_name"] = pack_url_name  # Store the actual URL name that timed out
+                            active_processes[process_id]["url_name_attempts"] = url_name_attempts
+                            active_processes[process_id]["max_url_attempts"] = max_attempts
                         return {"success": False, "error": "URL name timeout", "waiting_for_user": True, "url_name_taken": True}
                     
                     except Exception as e:
@@ -1238,10 +1245,12 @@ class StickerBotCore:
                         if url_name_attempts >= max_attempts:
                             if process_id in active_processes:
                                 active_processes[process_id]["status"] = "waiting_for_url_name"
-                                active_processes[process_id]["current_stage"] = f"URL name error. Please provide a new URL name."
+                                active_processes[process_id]["current_stage"] = f"URL name error. All {max_attempts} attempts exhausted. Please provide a new URL name."
                                 active_processes[process_id]["waiting_for_user"] = True
                                 active_processes[process_id]["url_name_taken"] = True
-                                active_processes[process_id]["original_url_name"] = pack_url_name
+                                active_processes[process_id]["original_url_name"] = pack_url_name  # Store the actual URL name
+                                active_processes[process_id]["url_name_attempts"] = url_name_attempts
+                                active_processes[process_id]["max_url_attempts"] = max_attempts
                             return {"success": False, "error": "URL name error", "waiting_for_user": True, "url_name_taken": True}
 
             # Step 4: Process each media item
@@ -1375,49 +1384,17 @@ class StickerBotCore:
                 # Auto-skip is disabled, wait for user decision
                 self.logger.info("[STICKER] Auto-skip disabled, waiting for user decision on icon selection...")
                 
-                # Wait for either skip command or icon file
-                try:
-                    # Wait for the next response (either /skip or icon file)
-                    response = await self.conversation_manager.wait_for_response(
-                        BotResponseType.ICON_ACCEPTED, timeout=300.0  # 5 minutes timeout for user action
-                    )
-                    
-                    self.logger.info(f"[STICKER] Icon step completed: {response.message[:100]}...")
-                    
-                    if process_id in active_processes:
-                        active_processes[process_id]["waiting_for_user"] = False
-                        active_processes[process_id]["current_stage"] = "Sticker pack created successfully"
-                        active_processes[process_id]["progress"] = 100
-                        active_processes[process_id]["status"] = "completed"
-                        
-                        # Extract the shareable link from the response
-                        if "https://t.me/addstickers/" in response.message:
-                            import re
-                            link_match = re.search(r'https://t\.me/addstickers/[a-zA-Z0-9_]+', response.message)
-                            if link_match:
-                                shareable_link = link_match.group(0)
-                                active_processes[process_id]["shareable_link"] = shareable_link
-                                self.logger.info(f"[STICKER] Shareable link extracted: {shareable_link}")
-                    
-                    # FIXED: Increment sticker creation stats in backend
-                    try:
-                        from stats_tracker import stats_tracker
-                        sticker_count = len(media_items)
-                        stats_tracker.increment_stickers(sticker_count)
-                        self.logger.info(f"[STICKER] Updated backend stats: +{sticker_count} stickers")
-                    except Exception as stats_error:
-                        self.logger.warning(f"[STICKER] Failed to update backend stats: {stats_error}")
-                    
-                    self.logger.info("[STICKER] PACK CREATION COMPLETED SUCCESSFULLY!")
-                    return {"success": True, "message": "Sticker pack created successfully"}
-                    
-                except TimeoutError:
-                    self.logger.error("[STICKER] Timeout waiting for icon selection")
-                    if process_id in active_processes:
-                        active_processes[process_id]["waiting_for_user"] = False
-                        active_processes[process_id]["status"] = "error"
-                        active_processes[process_id]["current_stage"] = "Timeout waiting for icon selection"
-                    raise RuntimeError("Timeout waiting for icon selection")
+                # Mark process as waiting for user - NO TIMEOUT, wait indefinitely
+                if process_id in active_processes:
+                    active_processes[process_id]["current_stage"] = "Waiting for icon selection (no timeout)..."
+                    active_processes[process_id]["waiting_for_user"] = True
+                    active_processes[process_id]["icon_request_message"] = response.message
+                    active_processes[process_id]["progress"] = 90
+                
+                # Return success - the process will continue when user clicks skip/upload
+                # No timeout here - user controls when to proceed
+                self.logger.info("[STICKER] Process marked as waiting for user icon selection (indefinite wait)")
+                return {"success": True, "message": "Waiting for user icon selection", "waiting_for_user": True}
 
         except Exception as e:
             self.logger.error(f"[STICKER] Pack creation error: {e}")
@@ -2056,19 +2033,28 @@ def register_sticker_routes(app):
             # Send skip command using the conversation manager
             async def send_skip_command():
                 try:
-                    # Use URL_NAME_REQUEST like the main auto-skip logic
+                    logging.info(f"[SKIP_ICON] Starting skip command for process {process_id}")
+                    
+                    # Use URL_NAME_REQUEST like the main auto-skip logic with increased timeout
                     response = await sticker_bot.conversation_manager.send_and_wait(
-                        "/skip", BotResponseType.URL_NAME_REQUEST, timeout=30.0
+                        "/skip", BotResponseType.URL_NAME_REQUEST, timeout=60.0  # Increased timeout
                     )
+                    
+                    logging.info(f"[SKIP_ICON] Skip command successful, received URL name request")
                     
                     # Get the pack URL name for this process
                     pack_url_name = active_processes.get(process_id, {}).get('pack_url_name', '')
+                    logging.info(f"[SKIP_ICON] Pack URL name for process {process_id}: {pack_url_name}")
                     
                     if pack_url_name:
-                        # Send the URL name automatically
+                        logging.info(f"[SKIP_ICON] Sending URL name '{pack_url_name}' to Telegram")
+                        
+                        # Send the URL name automatically with increased timeout
                         url_response = await sticker_bot.conversation_manager.send_and_wait(
-                            pack_url_name, BotResponseType.PACK_SUCCESS, timeout=30.0
+                            pack_url_name, BotResponseType.PACK_SUCCESS, timeout=60.0  # Increased timeout
                         )
+                        
+                        logging.info(f"[SKIP_ICON] URL name submission successful")
                         
                         # Update process status after successful completion
                         with process_lock:
@@ -2085,6 +2071,15 @@ def register_sticker_routes(app):
                                     if link_match:
                                         active_processes[process_id]['shareable_link'] = link_match.group(0)
                         
+                        # FIXED: Increment sticker creation stats in backend
+                        try:
+                            from stats_tracker import stats_tracker
+                            sticker_count = active_processes.get(process_id, {}).get('total_files', 1)
+                            stats_tracker.increment_stickers(sticker_count)
+                            logging.info(f"[STICKER] Updated backend stats: +{sticker_count} stickers")
+                        except Exception as stats_error:
+                            logging.warning(f"[STICKER] Failed to update backend stats: {stats_error}")
+                        
                         return {"success": True, "message": "Sticker pack created successfully"}
                     else:
                         # Update process status after successful skip
@@ -2096,8 +2091,37 @@ def register_sticker_routes(app):
                         
                         return {"success": True, "message": "Icon skipped, please provide URL name"}
                         
+                except (asyncio.TimeoutError, TimeoutError) as timeout_error:
+                    logging.warning(f"[STICKER] Timeout during skip icon: {timeout_error}")
+                    # Handle timeout by marking as waiting for URL name instead of failing
+                    pack_url_name = active_processes.get(process_id, {}).get('pack_url_name', '')
+                    with process_lock:
+                        if process_id in active_processes:
+                            active_processes[process_id]['status'] = 'waiting_for_url_name'
+                            active_processes[process_id]['current_stage'] = f'Icon skipped with timeout. Please provide URL name.'
+                            active_processes[process_id]['waiting_for_user'] = True
+                            active_processes[process_id]['url_name_taken'] = True  # Trigger URL name modal
+                            active_processes[process_id]['original_url_name'] = pack_url_name or 'timeout_pack'
+                            active_processes[process_id]['url_name_attempts'] = 1
+                            active_processes[process_id]['max_url_attempts'] = 3
+                    
+                    return {"success": False, "error": "Icon skip timeout", "waiting_for_user": True, "url_name_taken": True}
+                    
                 except Exception as e:
-                    return {"success": False, "error": str(e)}
+                    logging.error(f"[STICKER] Error during skip icon: {e}")
+                    # Handle other errors by marking as waiting for URL name
+                    pack_url_name = active_processes.get(process_id, {}).get('pack_url_name', '')
+                    with process_lock:
+                        if process_id in active_processes:
+                            active_processes[process_id]['status'] = 'waiting_for_url_name'
+                            active_processes[process_id]['current_stage'] = f'Icon skip error. Please provide URL name.'
+                            active_processes[process_id]['waiting_for_user'] = True
+                            active_processes[process_id]['url_name_taken'] = True  # Trigger URL name modal
+                            active_processes[process_id]['original_url_name'] = pack_url_name or 'error_pack'
+                            active_processes[process_id]['url_name_attempts'] = 1
+                            active_processes[process_id]['max_url_attempts'] = 3
+                    
+                    return {"success": False, "error": "Icon skip error", "waiting_for_user": True, "url_name_taken": True}
             
             # Run the async function
             result = run_telegram_coroutine(send_skip_command())
@@ -2118,6 +2142,8 @@ def register_sticker_routes(app):
             data = request.get_json()
             process_id = data.get('process_id', '') if data else ''
             new_url_name = data.get('new_url_name', '') if data else ''
+            current_attempt = data.get('current_attempt', 1) if data else 1
+            max_attempts = data.get('max_attempts', 3) if data else 3
             
             if not process_id:
                 return jsonify({"success": False, "error": "Process ID is required"}), 400
@@ -2140,13 +2166,14 @@ def register_sticker_routes(app):
                 if active_processes[process_id].get('status') != 'waiting_for_url_name':
                     return jsonify({"success": False, "error": "Process is not waiting for URL name"}), 400
                 
-                # Update process with new URL name and resume
+                # Update process with new URL name and attempt information
                 active_processes[process_id]['pack_url_name'] = new_url_name
-                active_processes[process_id]['current_stage'] = f'Resuming with new URL name: {new_url_name}'
+                active_processes[process_id]['current_stage'] = f'Trying new URL name: {new_url_name} (attempt {current_attempt}/{max_attempts})'
                 active_processes[process_id]['status'] = 'processing'
                 active_processes[process_id]['waiting_for_user'] = False
                 active_processes[process_id]['url_name_taken'] = False
-                active_processes[process_id]['url_name_attempts'] = active_processes[process_id].get('url_name_attempts', 0) + 1
+                active_processes[process_id]['url_name_attempts'] = current_attempt
+                active_processes[process_id]['max_url_attempts'] = max_attempts
             
             # Get the process data and resume sticker creation in background
             process_data = active_processes[process_id]
@@ -2154,20 +2181,126 @@ def register_sticker_routes(app):
             sticker_type = process_data.get('sticker_type', 'video')
             auto_skip_icon = process_data.get('auto_skip_icon', True)
             
-            # Convert media files back to the expected format
-            media_files = []
-            for i in range(process_data.get('total_files', 0)):
-                # We'll need to reconstruct this from the original request
-                # For now, we'll mark the process as needing to be restarted
-                pass
+            # Resume URL name submission to Telegram
+            async def submit_url_name_to_telegram():
+                try:
+                    # Send the new URL name to Telegram
+                    url_response = await sticker_bot.conversation_manager.send_and_wait(
+                        new_url_name, BotResponseType.URL_NAME_ACCEPTED, timeout=45.0
+                    )
+                    
+                    # Check response type
+                    if url_response.response_type == BotResponseType.URL_NAME_ACCEPTED:
+                        # URL name accepted - continue with sticker creation
+                        logging.info(f"[URL_NAME] New URL name accepted: {new_url_name}")
+                        
+                        # Continue with the rest of sticker pack creation process
+                        with process_lock:
+                            if process_id in active_processes:
+                                active_processes[process_id]['waiting_for_user'] = False
+                                active_processes[process_id]['current_stage'] = 'URL name accepted, finalizing pack creation...'
+                                active_processes[process_id]['progress'] = 95
+                                active_processes[process_id]['status'] = 'completed'
+                                
+                                # Extract shareable link
+                                if "https://t.me/addstickers/" in url_response.message:
+                                    import re
+                                    link_match = re.search(r'https://t\.me/addstickers/[a-zA-Z0-9_]+', url_response.message)
+                                    if link_match:
+                                        active_processes[process_id]['shareable_link'] = link_match.group(0)
+                        
+                        # FIXED: Increment sticker creation stats in backend
+                        try:
+                            from stats_tracker import stats_tracker
+                            sticker_count = active_processes.get(process_id, {}).get('total_files', 1)
+                            stats_tracker.increment_stickers(sticker_count)
+                            logging.info(f"[STICKER] Updated backend stats: +{sticker_count} stickers")
+                        except Exception as stats_error:
+                            logging.warning(f"[STICKER] Failed to update backend stats: {stats_error}")
+                        
+                        return {"success": True, "message": "Sticker pack created successfully"}
+                    
+                    elif url_response.response_type == BotResponseType.URL_NAME_TAKEN:
+                        # URL name still taken - check if we have more attempts
+                        logging.warning(f"[URL_NAME] New URL name also taken: {new_url_name}")
+                        
+                        if current_attempt < max_attempts:
+                            # Still have attempts left - mark for user input again
+                            with process_lock:
+                                if process_id in active_processes:
+                                    active_processes[process_id]['status'] = 'waiting_for_url_name'
+                                    active_processes[process_id]['current_stage'] = f'URL name "{new_url_name}" is also taken. Attempt {current_attempt + 1}/{max_attempts}'
+                                    active_processes[process_id]['waiting_for_user'] = True
+                                    active_processes[process_id]['url_name_taken'] = True
+                                    active_processes[process_id]['original_url_name'] = new_url_name
+                                    active_processes[process_id]['url_name_attempts'] = current_attempt + 1
+                            
+                            return {"success": False, "error": f"URL name '{new_url_name}' is already taken", "url_name_taken": True}
+                        else:
+                            # No more attempts - mark as completed with manual instruction
+                            logging.warning(f"[URL_NAME] All {max_attempts} attempts exhausted for URL names")
+                            
+                            with process_lock:
+                                if process_id in active_processes:
+                                    active_processes[process_id]['status'] = 'completed_manual'
+                                    active_processes[process_id]['current_stage'] = f'All {max_attempts} URL name attempts exhausted. Manual completion required.'
+                                    active_processes[process_id]['waiting_for_user'] = False
+                                    active_processes[process_id]['manual_completion_required'] = True
+                                    active_processes[process_id]['progress'] = 100
+                            
+                            return {"success": True, "message": "Manual completion required", "manual_completion_required": True}
+                    
+                    else:
+                        # Unexpected response
+                        logging.error(f"[URL_NAME] Unexpected response: {url_response.message}")
+                        return {"success": False, "error": f"Unexpected response from Telegram: {url_response.message}"}
+                    
+                except Exception as e:
+                    logging.error(f"[URL_NAME] Error submitting URL name to Telegram: {e}")
+                    return {"success": False, "error": f"Failed to submit URL name to Telegram: {str(e)}"}
             
-            logging.info(f"[API] URL name updated for process {process_id}: {new_url_name}")
+            # Try to submit the URL name to Telegram
+            telegram_result = run_telegram_coroutine(submit_url_name_to_telegram())
             
-            return jsonify({
-                "success": True, 
-                "message": f"URL name updated to: {new_url_name}",
-                "new_url_name": new_url_name
-            })
+            if telegram_result["success"]:
+                if telegram_result.get("manual_completion_required"):
+                    logging.info(f"[API] All URL name attempts exhausted for process {process_id}. Manual completion required.")
+                    return jsonify({
+                        "success": True, 
+                        "message": f"All {max_attempts} attempts exhausted. Please complete manually in Telegram bot.",
+                        "manual_completion_required": True,
+                        "completed": True
+                    })
+                else:
+                    logging.info(f"[API] URL name submitted successfully for process {process_id}: {new_url_name}")
+                    return jsonify({
+                        "success": True, 
+                        "message": f"Sticker pack created with URL name: {new_url_name}",
+                        "new_url_name": new_url_name,
+                        "completed": True
+                    })
+            else:
+                # Check if this is a URL name taken error to continue retry flow
+                if telegram_result.get("url_name_taken") and current_attempt < max_attempts:
+                    logging.warning(f"[API] URL name '{new_url_name}' taken, attempt {current_attempt + 1}/{max_attempts}")
+                    return jsonify({
+                        "success": False, 
+                        "error": telegram_result["error"],
+                        "url_name_taken": True
+                    })
+                else:
+                    logging.error(f"[API] Failed to submit URL name to Telegram for process {process_id}: {telegram_result['error']}")
+                    # Mark process as failed
+                    with process_lock:
+                        if process_id in active_processes:
+                            active_processes[process_id]['status'] = 'error'
+                            active_processes[process_id]['current_stage'] = f"Failed to submit URL name: {telegram_result['error']}"
+                            active_processes[process_id]['waiting_for_user'] = False
+                    
+                    return jsonify({
+                        "success": False, 
+                        "error": telegram_result['error']
+                    }), 500
             
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500
