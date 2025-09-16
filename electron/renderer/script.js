@@ -204,7 +204,7 @@ class TelegramUtilities {
     
     // OPTIMIZED: Add timeout to prevent hanging requests
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout for skip operations
     
     try {
       const res = await fetch(url, {
@@ -235,10 +235,13 @@ class TelegramUtilities {
       
       // FIXED: Better error handling for specific error types
       if (error.name === 'AbortError') {
-        throw new Error('Request timeout - server may be overloaded');
+        throw new Error('Request timeout - server may be overloaded. Please try again.');
       }
       if (error.message && error.message.includes('[Errno 22]')) {
         throw new Error('Invalid request format - please try again');
+      }
+      if (error.message && error.message.includes('timeout')) {
+        throw new Error('Request timeout - server may be overloaded. Please try again.');
       }
       throw error;
     }
@@ -3219,11 +3222,49 @@ class TelegramUtilities {
         } else {
           // Successful connection
           if (RENDERER_DEBUG) console.log('[DEBUG] Connection successful - updating UI');
-          this.showToast('success', 'Connected', 'Successfully connected to Telegram');
+          
+          // Show session reuse information
+          let successMessage = 'Successfully connected to Telegram';
+          if (result && result.reused_session) {
+            successMessage += ' (Reused existing session - no rate limits!)';
+            this.showToast('success', 'Session Reused', 'Used existing session to avoid rate limiting', 6000);
+            this.addStatusItem('✅ Session reused successfully', 'success');
+          } else if (result && result.existing_session) {
+            successMessage += ' (Used existing authorized session)';
+            this.showToast('success', 'Session Found', 'Found existing authorized session', 5000);
+            this.addStatusItem('✅ Existing session found and used', 'success');
+          } else {
+            successMessage += ' (Created new session)';
+            this.showToast('success', 'Connected', successMessage);
+            this.addStatusItem('✅ New session created', 'success');
+          }
+          
           this.updateTelegramStatus("connected");
         }
       } else {
         if (RENDERER_DEBUG) console.error('[DEBUG] Connection failed - response not successful:', response);
+        
+        // Handle rate limiting specifically
+        if (response && response.rate_limited) {
+          const waitTime = response.wait_time_human || 'some time';
+          this.showToast(
+            'warning', 
+            'Rate Limited', 
+            `${response.error}
+
+Too many requests. Please wait ${waitTime} before trying again.
+
+Tip: Next time, the app will reuse your session automatically to avoid this!`,
+            12000  // Show for 12 seconds
+          );
+          
+          // Show detailed rate limit info
+          this.addStatusItem(`⚠️ Telegram rate limit: Wait ${waitTime}`, "warning");
+          this.addStatusItem(`💡 Next connection will reuse session to avoid limits`, "info");
+          
+          return; // Don't proceed further
+        }
+        
         const errorMsg = (response && response.error) || 'Unknown error occurred';
         this.showToast('error', 'Connection Failed', errorMsg);
       }
@@ -3232,13 +3273,24 @@ class TelegramUtilities {
       this.hideLoadingOverlay();
       
       let errorMsg = error.message || 'Failed to connect';
-      if (errorMsg.includes('database is locked')) {
+      
+      // Handle specific error types
+      if (errorMsg.includes('rate limit') || errorMsg.includes('wait') || errorMsg.includes('FloodWaitError')) {
+        this.showToast(
+          'warning', 
+          'Rate Limited', 
+          'Too many requests to Telegram. Please wait before trying again.',
+          8000
+        );
+      } else if (errorMsg.includes('database is locked')) {
         errorMsg = 'Database is locked. Please try again in a moment.';
+        this.showToast('error', 'Connection Error', errorMsg);
       } else if (errorMsg.includes('connect_telegram')) {
         errorMsg = 'Connection service unavailable. Please restart the application.';
+        this.showToast('error', 'Connection Error', errorMsg);
+      } else {
+        this.showToast('error', 'Connection Error', errorMsg);
       }
-      
-      this.showToast('error', 'Connection Error', errorMsg);
       
     } finally {
       // Reset connection flag
@@ -4162,13 +4214,47 @@ class TelegramUtilities {
           
           // FIXED: Handle URL name taken case - only show modal if not already shown
           if (progress.url_name_taken || progress.status === "waiting_for_url_name") {
-            console.log(`🔧 [FRONTEND] URL name taken, prompting user for new name`);
+            console.log(`🔧 [FRONTEND] URL name taken detected:`, {
+              url_name_taken: progress.url_name_taken,
+              status: progress.status,
+              original_url_name: progress.original_url_name,
+              url_name_attempts: progress.url_name_attempts,
+              max_url_attempts: progress.max_url_attempts
+            });
             
-            // Check if URL name modal is already visible to prevent timeout interference
+            // Check if URL name modal is already visible to prevent duplicate modals
             const urlNameModal = document.getElementById("url-name-modal");
             if (!urlNameModal || urlNameModal.style.display === "none") {
               this.stopStickerProgressMonitoring();
-              this.showUrlNameModal(processId, progress.original_url_name || "unknown");
+              
+              // Get current attempt information from progress - ensure proper defaults
+              const currentAttempt = progress.url_name_attempts || 1;
+              const maxAttempts = progress.max_url_attempts || 3;
+              const originalUrlName = progress.original_url_name || "my_pack";
+              
+              console.log(`🔧 [FRONTEND] Showing URL name modal:`, {
+                processId,
+                originalUrlName,
+                currentAttempt,
+                maxAttempts
+              });
+              
+              // Check if we've exhausted all attempts
+              if (currentAttempt > maxAttempts) {
+                // All attempts exhausted - show manual completion message
+                this.addStatusItem(`❌ All ${maxAttempts} URL name attempts exhausted. Please add sticker pack manually in Telegram bot.`, "error");
+                this.showToast("warning", "Manual Setup Required", "Please complete the sticker pack creation manually in the Telegram bot (@Stickers)");
+                
+                // Mark as completed with manual instruction
+                this.onStickerProcessCompleted(true, {
+                  manual_completion_required: true,
+                  message: "Please complete sticker pack creation manually in Telegram bot"
+                });
+                return;
+              }
+              
+              // Show retry modal with attempt information
+              this.showUrlNameModal(processId, originalUrlName, currentAttempt, maxAttempts);
             }
             return;
           }
@@ -4242,15 +4328,16 @@ class TelegramUtilities {
                 this.showIconModal(processId, progress.icon_request_message);
               }
             } else {
-              // Manual mode: show icon selection modal
+              // Manual mode: show icon selection modal and STOP monitoring
+              // Process will wait indefinitely for user action - no timeout
               console.log(`🔧 [FRONTEND] Entering manual mode - shouldAutoSkip: ${shouldAutoSkip}, autoSkipAttempted: ${this.autoSkipAttempted}`);
               console.log(`🔧 [FRONTEND] About to call showIconModal with processId: ${processId}`);
               console.log(`🔧 [FRONTEND] Icon request message: ${progress.icon_request_message}`);
               
-              this.stopStickerProgressMonitoring();
+              this.stopStickerProgressMonitoring(); // Stop monitoring - user controls when to continue
               this.showIconModal(processId, progress.icon_request_message);
               
-              console.log(`🔧 [FRONTEND] showIconModal called successfully`);
+              console.log(`🔧 [FRONTEND] showIconModal called successfully, monitoring stopped`);
             }
           } else if (progress.status === "completed") {
             console.log(`🔧 [FRONTEND] Process ${processId} completed successfully`);
@@ -4426,17 +4513,27 @@ class TelegramUtilities {
     // Update stats
     if (success) {
       this.sessionStats.totalStickers += this.mediaFiles.length;
-      this.addStatusItem("Sticker pack created successfully!", "completed");
       
-      // FIXED: Check for multiple possible property names for shareable link
-      const shareableLink = progressData?.shareable_link || progressData?.pack_link || progressData?.link;
-      if (shareableLink) {
-        console.log(`🔧 [SUCCESS] Found shareable link: ${shareableLink}`);
-        this.showSuccessModal(shareableLink);
+      // Check if manual completion is required
+      if (progressData?.manual_completion_required) {
+        this.addStatusItem("Sticker pack processing completed - manual completion required in Telegram bot", "warning");
+        this.showToast("warning", "Manual Setup Required", "Please complete sticker pack creation manually in the Telegram bot (@Stickers)");
+        
+        // Show special modal for manual completion
+        this.showManualCompletionModal();
       } else {
-        console.log(`🔧 [SUCCESS] No shareable link found in progress data:`, progressData);
-        // Still show a success message even without link
-        this.showToast("success", "Pack Created", "Sticker pack created successfully!");
+        this.addStatusItem("Sticker pack created successfully!", "completed");
+        
+        // FIXED: Check for multiple possible property names for shareable link
+        const shareableLink = progressData?.shareable_link || progressData?.pack_link || progressData?.link;
+        if (shareableLink) {
+          console.log(`🔧 [SUCCESS] Found shareable link: ${shareableLink}`);
+          this.showSuccessModal(shareableLink);
+        } else {
+          console.log(`🔧 [SUCCESS] No shareable link found in progress data:`, progressData);
+          // Still show a success message even without link
+          this.showToast("success", "Pack Created", "Sticker pack created successfully!");
+        }
       }
     } else {
       this.addStatusItem(`Sticker pack creation failed: ${progressData?.error || "Unknown error"}`, "error");
@@ -4460,16 +4557,18 @@ class TelegramUtilities {
     
     // Show completion notification
     if (success) {
-      this.showToast(
-        "success",
-        "Pack Created",
-        "Sticker pack created successfully!"
-      );
-      this.playNotificationSound();
-      this.showSystemNotification(
-        "Sticker Pack Created",
-        "Your sticker pack has been published successfully!"
-      );
+      if (!progressData?.manual_completion_required) {
+        this.showToast(
+          "success",
+          "Pack Created",
+          "Sticker pack created successfully!"
+        );
+        this.playNotificationSound();
+        this.showSystemNotification(
+          "Sticker Pack Created",
+          "Your sticker pack has been published successfully!"
+        );
+      }
       
       // FIXED: Update backend database stats for successful sticker creation
       this.updateStickerCreationStats(this.mediaFiles.length);
@@ -4486,7 +4585,7 @@ class TelegramUtilities {
     const statusElement = document.getElementById("sticker-status");
     if (statusElement) {
       statusElement.textContent = success
-        ? "Pack created successfully!"
+        ? (progressData?.manual_completion_required ? "Manual completion required" : "Pack created successfully!")
         : "Pack creation failed";
     }
   }
@@ -4557,38 +4656,98 @@ class TelegramUtilities {
     this.showToast("info", "Opening", "Opening sticker pack in Telegram...");
   }
 
+  showManualCompletionModal() {
+    const modal = document.getElementById("info-modal");
+    if (!modal) return;
+    
+    const modalHtml = `
+      <div class="modal-header">
+        <h3><i class="fas fa-hand-paper text-warning"></i> Manual Completion Required</h3>
+      </div>
+      <div class="modal-body">
+        <div class="manual-completion-content">
+          <p><strong>All URL name retry attempts have been exhausted.</strong></p>
+          <p>Your sticker pack has been partially created but needs to be completed manually.</p>
+          
+          <div class="instructions">
+            <h4><i class="fas fa-list-ol"></i> Next Steps:</h4>
+            <ol>
+              <li>Open Telegram and go to <strong>@Stickers</strong> bot</li>
+              <li>Choose a unique URL name for your sticker pack</li>
+              <li>Complete the sticker pack creation process</li>
+              <li>Your stickers have been uploaded and are ready to publish</li>
+            </ol>
+          </div>
+          
+          <div class="help-note">
+            <i class="fas fa-info-circle text-info"></i>
+            <span>The bot will guide you through the final steps to publish your pack.</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="window.electronAPI.openExternal('https://t.me/stickers')">
+          <i class="fas fa-external-link-alt"></i> Open @Stickers Bot
+        </button>
+        <button class="btn btn-success" onclick="app.hideModal()">
+          <i class="fas fa-check"></i> Got It
+        </button>
+      </div>
+    `;
+    
+    modal.innerHTML = modalHtml;
+    this.showModal("info-modal");
+  }
+
   // =============================================
   // UTILITY METHODS
   // =============================================
   showModal(modalId) {
-    const overlay = document.getElementById("modal-overlay");
-    const modal = document.getElementById(modalId);
-    
-    if (overlay && modal) {
-      overlay.classList.add("active");
-      modal.style.display = "block";
+    // Performance optimization: use requestAnimationFrame for smooth rendering
+    requestAnimationFrame(() => {
+      const overlay = document.getElementById("modal-overlay");
+      const modal = document.getElementById(modalId);
       
-      // Focus first input if available
-      const firstInput = modal.querySelector("input, textarea, select");
-      if (firstInput) {
-        setTimeout(() => firstInput.focus(), 100);
+      if (overlay && modal) {
+        // Use GPU-accelerated transforms for better performance
+        overlay.style.willChange = 'opacity';
+        modal.style.willChange = 'transform, opacity';
+        
+        overlay.classList.add("active");
+        modal.style.display = "block";
+        
+        // Focus management with shorter delay
+        const firstInput = modal.querySelector("input, textarea, select");
+        if (firstInput) {
+          setTimeout(() => firstInput.focus(), 50);  // Reduced from 100ms
+        }
+        
+        // Clean up GPU acceleration hints after animation
+        setTimeout(() => {
+          overlay.style.willChange = 'auto';
+          modal.style.willChange = 'auto';
+        }, 250);
       }
-    }
+    });
   }
 
   hideModal() {
-    const overlay = document.getElementById("modal-overlay");
-    if (overlay) {
-      overlay.classList.remove("active");
-    }
-    
-    const modals = document.querySelectorAll(".modal");
-    modals.forEach((modal) => {
-      modal.style.display = "none";
+    // Performance optimization: batch DOM updates
+    requestAnimationFrame(() => {
+      const overlay = document.getElementById("modal-overlay");
+      if (overlay) {
+        overlay.classList.remove("active");
+      }
+      
+      // Batch all modal hiding operations
+      const modals = document.querySelectorAll(".modal");
+      modals.forEach((modal) => {
+        modal.style.display = "none";
+      });
+      
+      // Clear modal inputs
+      this.clearModalInputs();
     });
-    
-    // Clear modal inputs
-    this.clearModalInputs();
   }
 
   // Icon Selection Modal Functions
@@ -4598,58 +4757,108 @@ class TelegramUtilities {
     this.currentIconProcessId = processId;
     this.currentIconRequestMessage = iconRequestMessage;
     
-    const modal = document.getElementById("icon-modal");
-    const overlay = document.getElementById("modal-overlay");
-    
-    console.log(`🔧 [FRONTEND] Modal elements found:`, { modal: !!modal, overlay: !!overlay });
-    
-    if (modal && overlay) {
-      console.log(`🔧 [FRONTEND] Setting modal display to block and overlay to active`);
-      modal.style.display = "block";
-      overlay.classList.add("active");
+    // Performance optimization: batch DOM updates
+    requestAnimationFrame(() => {
+      const modal = document.getElementById("icon-modal");
+      const overlay = document.getElementById("modal-overlay");
       
-      // Update the modal content with the actual message from Telegram
-      const iconInfo = modal.querySelector(".icon-info p");
-      if (iconInfo && iconRequestMessage) {
-        console.log(`🔧 [FRONTEND] Updating icon info text with: ${iconRequestMessage}`);
-        iconInfo.textContent = iconRequestMessage;
+      console.log(`🔧 [FRONTEND] Modal elements found:`, { modal: !!modal, overlay: !!overlay });
+      
+      if (modal && overlay) {
+        console.log(`🔧 [FRONTEND] Setting modal display to block and overlay to active`);
+        
+        // GPU acceleration for smooth animation
+        modal.style.willChange = 'transform, opacity';
+        overlay.style.willChange = 'opacity';
+        
+        modal.style.display = "block";
+        overlay.classList.add("active");
+        
+        // Update the modal content with the actual message from Telegram
+        const iconInfo = modal.querySelector(".icon-info p");
+        if (iconInfo && iconRequestMessage) {
+          console.log(`🔧 [FRONTEND] Updating icon info text with: ${iconRequestMessage}`);
+          iconInfo.textContent = iconRequestMessage;
+        }
+        
+        // Reset file selection
+        this.resetIconFileSelection();
+        
+        // Clean up GPU hints after animation
+        setTimeout(() => {
+          modal.style.willChange = 'auto';
+          overlay.style.willChange = 'auto';
+        }, 250);
+        
+        console.log(`🔧 [FRONTEND] Modal should now be visible`);
+      } else {
+        console.error(`🔧 [FRONTEND] Modal elements not found! modal: ${!!modal}, overlay: ${!!overlay}`);
       }
-      
-      // Reset file selection
-      this.resetIconFileSelection();
-      
-      console.log(`🔧 [FRONTEND] Modal should now be visible`);
-    } else {
-      console.error(`🔧 [FRONTEND] Modal elements not found! modal: ${!!modal}, overlay: ${!!overlay}`);
-    }
+    });
   }
 
-  showUrlNameModal(processId, takenName) {
-    console.log(`🔧 [FRONTEND] showUrlNameModal called with:`, { processId, takenName });
+  getCurrentPackUrlName() {
+    const packUrlNameInput = document.getElementById("pack-url-name");
+    return packUrlNameInput ? packUrlNameInput.value.trim() : null;
+  }
+
+  showUrlNameModal(processId, takenName, currentAttempt = 1, maxAttempts = 3) {
+    console.log(`🔧 [FRONTEND] showUrlNameModal called with:`, { processId, takenName, currentAttempt, maxAttempts });
     
     const modal = document.getElementById("url-name-modal");
     const takenNameSpan = document.getElementById("taken-url-name");
     const newUrlNameInput = document.getElementById("new-url-name");
+    const attemptInfo = document.getElementById("url-name-attempt-info");
     
     if (takenNameSpan) {
       takenNameSpan.textContent = takenName;
+    }
+    
+    // Update attempt counter in modal
+    if (attemptInfo) {
+      if (currentAttempt <= maxAttempts) {
+        attemptInfo.innerHTML = `<i class="fas fa-redo"></i> Attempt ${currentAttempt} of ${maxAttempts}`;
+        attemptInfo.style.display = "block";
+      } else {
+        attemptInfo.style.display = "none";
+      }
     }
     
     if (newUrlNameInput) {
       // Suggest a new name with timestamp
       const timestamp = Date.now().toString().slice(-6);
       newUrlNameInput.value = `${takenName}_${timestamp}`;
+      
+      // Add real-time validation to the modal input
+      newUrlNameInput.addEventListener('input', () => {
+        const validation = this.validateUrlName(newUrlNameInput.value.trim());
+        this.updateValidationDisplay('new-url-name', validation);
+      });
+      
       setTimeout(() => {
         newUrlNameInput.focus();
         newUrlNameInput.select();
       }, 100);
     }
     
+    // Store retry information
     this.currentUrlNameProcessId = processId;
+    this.currentUrlAttempt = currentAttempt;
+    this.maxUrlAttempts = maxAttempts;
     
     if (modal) {
       modal.style.display = "flex";
-      this.addStatusItem(`URL name '${takenName}' is already taken. Please provide a new name.`, "warning");
+      
+      // Add more descriptive status messages based on attempt
+      if (currentAttempt <= maxAttempts) {
+        if (currentAttempt === 1) {
+          this.addStatusItem(`⚠️ URL name '${takenName}' is already taken. Please try a different name (Attempt ${currentAttempt}/${maxAttempts})`, "warning");
+        } else {
+          this.addStatusItem(`⚠️ URL name '${takenName}' is also taken. Retry attempt ${currentAttempt}/${maxAttempts}`, "warning");
+        }
+      } else {
+        this.addStatusItem(`❌ All retry attempts exhausted for URL name '${takenName}'. Please add manually in Telegram bot.`, "error");
+      }
     }
   }
 
@@ -4689,17 +4898,58 @@ class TelegramUtilities {
       
       const response = await this.apiRequest("POST", "/api/sticker/submit-url-name", {
         process_id: this.currentUrlNameProcessId,
-        new_url_name: newUrlName
+        new_url_name: newUrlName,
+        current_attempt: this.currentUrlAttempt || 1,
+        max_attempts: this.maxUrlAttempts || 3
       });
       
       if (response.success) {
         this.hideUrlNameModal();
-        this.addStatusItem(`✅ New URL name submitted: ${newUrlName}`, "completed");
-        this.showToast("success", "URL Name Updated", `Using new URL name: ${newUrlName}`);
         
-        // Restart progress monitoring
-        this.startStickerProgressMonitoring(this.currentUrlNameProcessId);
+        if (response.completed) {
+          // Sticker pack creation completed successfully
+          this.addStatusItem(`✅ Sticker pack created successfully with URL name: ${newUrlName}`, "completed");
+          this.showToast("success", "Pack Created", `Sticker pack created: ${newUrlName}`);
+          
+          // Stop monitoring and show success
+          this.stopStickerProgressMonitoring();
+          this.onStickerProcessCompleted(true, { 
+            shareable_link: `https://t.me/addstickers/${newUrlName}`,
+            pack_url_name: newUrlName 
+          });
+        } else {
+          // URL name updated, continue monitoring
+          this.addStatusItem(`✅ New URL name submitted: ${newUrlName}`, "completed");
+          this.showToast("success", "URL Name Updated", `Using new URL name: ${newUrlName}`);
+          
+          // Restart progress monitoring
+          this.startStickerProgressMonitoring(this.currentUrlNameProcessId);
+        }
       } else {
+        // Check if this was a URL name taken error and we have retries left
+        if (response.error && response.error.includes("already taken") && response.url_name_taken) {
+          const nextAttempt = (this.currentUrlAttempt || 1) + 1;
+          
+          if (nextAttempt <= (this.maxUrlAttempts || 3)) {
+            // Show retry modal with updated attempt count
+            this.addStatusItem(`❌ URL name '${newUrlName}' is taken. Retry ${nextAttempt}/${this.maxUrlAttempts}`, "warning");
+            this.showUrlNameModal(this.currentUrlNameProcessId, newUrlName, nextAttempt, this.maxUrlAttempts);
+            return; // Don't re-enable the button, show new modal
+          } else {
+            // Exhausted all retries - mark as completed with manual instruction
+            this.addStatusItem(`❌ All ${this.maxUrlAttempts} retry attempts exhausted. Please add sticker pack manually in Telegram bot.`, "error");
+            this.showToast("warning", "Manual Setup Required", `Please complete the sticker pack creation manually in the Telegram bot (@Stickers)`); 
+            
+            // Mark process as completed (user needs to complete manually)
+            this.stopStickerProgressMonitoring();
+            this.onStickerProcessCompleted(true, {
+              manual_completion_required: true,
+              message: "Please complete sticker pack creation manually in Telegram bot"
+            });
+            return;
+          }
+        }
+        
         this.addStatusItem(`❌ Error submitting URL name: ${response.error}`, "error");
         this.showToast("error", "Submission Failed", response.error);
         
@@ -4794,11 +5044,44 @@ class TelegramUtilities {
         // Restart monitoring to continue with the process
         this.startStickerProgressMonitoring(this.currentIconProcessId);
       } else {
-        this.addStatusItem(`Error skipping icon: ${response.error}`, "error");
+        // Check if the error is due to timeout or requires URL name input
+        if (response.waiting_for_user && response.url_name_taken) {
+          this.addStatusItem("Skip request timeout - please provide URL name manually", "warning");
+          this.hideIconModal();
+          // Get the original URL name from response, fallback to process data
+          const originalUrlName = response.original_url_name || this.getCurrentPackUrlName() || "my_pack";
+          console.log(`🔧 [FRONTEND] Skip timeout, showing URL name modal with:`, {
+            processId: this.currentIconProcessId,
+            originalUrlName,
+            attempts: 1,
+            maxAttempts: 3
+          });
+          // Show URL name modal for user input with proper attempt tracking
+          this.showUrlNameModal(this.currentIconProcessId, originalUrlName, 1, 3);
+        } else {
+          this.addStatusItem(`Error skipping icon: ${response.error}`, "error");
+        }
       }
     } catch (error) {
       console.error("Error skipping icon:", error);
-      this.addStatusItem(`Error skipping icon: ${error.message}`, "error");
+      
+      // Handle timeout or server overload errors
+      if (error.message && error.message.includes('timeout')) {
+        this.addStatusItem("Skip request timeout - please provide URL name manually", "warning");
+        this.hideIconModal();
+        // Get the current pack URL name for the modal
+        const originalUrlName = this.getCurrentPackUrlName() || "timeout_pack";
+        console.log(`🔧 [FRONTEND] Skip timeout error, showing URL name modal with:`, {
+          processId: this.currentIconProcessId,
+          originalUrlName,
+          attempts: 1,
+          maxAttempts: 3
+        });
+        // Show URL name modal as fallback with proper attempt tracking
+        this.showUrlNameModal(this.currentIconProcessId, originalUrlName, 1, 3);
+      } else {
+        this.addStatusItem(`Error skipping icon: ${error.message}`, "error");
+      }
     }
   }
 
@@ -4886,7 +5169,7 @@ class TelegramUtilities {
     }
   }
 
-  showToast(type, title, message) {
+  showToast(type, title, message, duration = 5000) {
     const toastContainer = document.getElementById("toast-container");
     if (!toastContainer) return;
     
@@ -4917,14 +5200,14 @@ class TelegramUtilities {
     
     toastContainer.appendChild(toast);
     
-    // Auto-remove after 5 seconds
+    // Auto-remove after specified duration
     setTimeout(() => {
       const toastElement = document.getElementById(toastId);
       if (toastElement) {
         toastElement.style.animation = "slideOutRight 0.3s ease forwards";
         setTimeout(() => toastElement.remove(), 300);
       }
-    }, 5000);
+    }, duration);
     
     // Add click to dismiss
     toast.addEventListener("click", () => {
