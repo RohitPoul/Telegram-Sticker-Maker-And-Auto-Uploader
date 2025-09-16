@@ -38,7 +38,8 @@ current_session_file = None
 
 class TelegramConnectionHandler:
     """
-    Clean Disconnection Workflow Handler - Always starts fresh, properly disconnects
+    Session Reuse Handler - Uses existing sessions when available, creates new ones only when needed
+    Prevents database locks by proper session management
     """
     _instance = None
     _lock = threading.Lock()
@@ -61,11 +62,13 @@ class TelegramConnectionHandler:
         self._loop_thread = None
         self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="TelegramLoop")
         self._initialized = True
-        self._startup_cleanup_done = False
-        logger.debug(f"[INIT] Handler initialized id={id(self)}")
+        self._current_session_file = None
+        self._session_phone = None
+        logger.debug(f"[INIT] Session Reuse Handler initialized id={id(self)}")
         
-        # CRITICAL: Force clean start - remove ALL session files on initialization
-        self._force_clean_startup()
+        # Clean up only very old sessions (30+ days) and corrupted files
+        self._cleanup_old_sessions_on_startup()
+        
         self._ensure_loop_thread()
         
     def _ensure_loop_thread(self):
@@ -135,11 +138,36 @@ class TelegramConnectionHandler:
             raise
     
     def is_session_valid(self):
-        """Check if we have a valid session - ALWAYS FALSE for clean workflow"""
-        # For clean disconnection workflow, we never want to reuse sessions
-        # Always return False to force fresh connections
-        logger.info("[SESSION] Clean workflow: session is always invalid (fresh start required)")
-        return False
+        """Check if we have a valid session that can be reused"""
+        try:
+            if not self._client:
+                logger.debug("[SESSION] No client available")
+                return False
+            
+            if not self._current_session_file or not os.path.exists(self._current_session_file):
+                logger.debug("[SESSION] No session file or file doesn't exist")
+                return False
+            
+            # Check if client is connected and authorized
+            async def _check_session():
+                try:
+                    if not self._client.is_connected():
+                        await self._client.connect()
+                    
+                    is_authorized = await self._client.is_user_authorized()
+                    logger.debug(f"[SESSION] Authorization status: {is_authorized}")
+                    return is_authorized
+                except Exception as e:
+                    logger.warning(f"[SESSION] Session validation error: {e}")
+                    return False
+            
+            result = self.run_async(_check_session())
+            logger.info(f"[SESSION] Session validation result: {result}")
+            return result
+            
+        except Exception as e:
+            logger.warning(f"[SESSION] Error checking session validity: {e}")
+            return False
     
     def has_active_connection(self):
         """Check if there's actually an active connection right now"""
@@ -171,75 +199,132 @@ class TelegramConnectionHandler:
     def get_session_info(self):
         """Get information about the current session"""
         if not self._client:
-            return {"connected": False, "authorized": False, "session_file": None}
+            return {"connected": False, "authorized": False, "session_file": None, "phone": None}
         
         try:
-            session_file = None
-            if hasattr(self._client, 'session') and getattr(self._client.session, 'filename', None):
-                session_file = self._client.session.filename
-            
             return {
                 "connected": self._client.is_connected(),
                 "authorized": self.is_session_valid(),
-                "session_file": session_file
+                "session_file": self._current_session_file,
+                "phone": self._session_phone
             }
         except Exception as e:
             logger.debug(f"[SESSION] Error getting session info: {e}")
-            return {"connected": False, "authorized": False, "session_file": None}
+            return {"connected": False, "authorized": False, "session_file": None, "phone": None}
     
     def connect_telegram(self, api_id: str, api_hash: str, phone_number: str) -> Dict[str, Any]:
-        """Connect to Telegram - ALWAYS FRESH SESSION as per requirements"""
-        logger.info(f"[CONNECT] FRESH CONNECTION requested for phone: ***{str(phone_number)[-4:]}")
+        """Connect to Telegram - Reuse existing session if valid, create new if needed"""
+        logger.info(f"[CONNECT] Session reuse connection requested for phone: ***{str(phone_number)[-4:]}")
         
         with self._lock:
-            # STEP 1: Force disconnect and logout any existing client
-            if self._client:
+            # STEP 1: Check if we have a valid existing session for this phone
+            if self._session_phone == phone_number and self.is_session_valid():
+                logger.info("[CONNECT] Valid existing session found, reusing...")
+                return {
+                    "success": True, 
+                    "needs_code": False, 
+                    "needs_password": False, 
+                    "phone_number": phone_number,
+                    "session_file": self._current_session_file,
+                    "reused_session": True
+                }
+            
+            # STEP 2: Clean up old session if phone number changed or session invalid
+            if self._client and (self._session_phone != phone_number or not self.is_session_valid()):
+                logger.info("[CONNECT] Cleaning up old/invalid session...")
                 try:
-                    async def _force_disconnect():
+                    async def _cleanup_old():
                         try:
                             if self._client.is_connected():
-                                logger.info("[CONNECT] Logging out existing client...")
-                                await self._client.log_out()
                                 await self._client.disconnect()
-                                logger.info("[CONNECT] Existing client disconnected and logged out")
                         except Exception as e:
-                            logger.debug(f"[CONNECT] Error during forced disconnect: {e}")
+                            logger.debug(f"[CONNECT] Error during old session cleanup: {e}")
                     
-                    self.run_async(_force_disconnect())
+                    self.run_async(_cleanup_old())
                 except Exception as e:
                     logger.debug(f"[CONNECT] Error during cleanup: {e}")
                 finally:
                     self._client = None
+                    self._current_session_file = None
+                    self._session_phone = None
             
-            # STEP 2: FORCE CLEAN ALL SESSION FILES - start completely fresh
-            logger.info("[CONNECT] Removing ALL existing session files for fresh start...")
-            self._cleanup_all_session_files()
-            
-            # STEP 3: Create completely new session
+            # STEP 3: Create new session with persistent filename
             async def _connect():
                 try:
                     from telethon import TelegramClient
                     
-                    # Use timestamp-based session file to avoid any conflicts
+                    # Use phone-based session file for persistence
                     base_dir = os.path.dirname(__file__)
-                    import time
-                    session_file = os.path.join(base_dir, f"telegram_session_fresh_{int(time.time())}")
+                    # Clean phone number for filename
+                    clean_phone = phone_number.replace("+", "").replace(" ", "").replace("-", "")
+                    session_file = os.path.join(base_dir, f"telegram_session_{clean_phone}")
                     
-                    logger.info(f"[CONNECT] Creating FRESH session: {session_file}")
+                    logger.info(f"[CONNECT] Creating/using session: {session_file}")
                     self._client = TelegramClient(session_file, int(api_id), api_hash)
+                    self._current_session_file = session_file
+                    self._session_phone = phone_number
                     
                     await self._client.connect()
                     
-                    # Since we start fresh, we always need to authorize
-                    logger.info("[CONNECT] Fresh session - sending code request")
-                    await self._client.send_code_request(phone_number)
-                    return {
-                        "success": True, 
-                        "needs_code": True, 
-                        "needs_password": False, 
-                        "phone_number": phone_number,
-                        "session_file": session_file
-                    }
+                    # Check if already authorized
+                    if await self._client.is_user_authorized():
+                        logger.info("[CONNECT] Session already authorized!")
+                        return {
+                            "success": True, 
+                            "needs_code": False, 
+                            "needs_password": False, 
+                            "phone_number": phone_number,
+                            "session_file": session_file,
+                            "existing_session": True
+                        }
+                    else:
+                        # Need to authorize
+                        logger.info("[CONNECT] Session needs authorization - sending code request")
+                        try:
+                            await self._client.send_code_request(phone_number)
+                            return {
+                                "success": True, 
+                                "needs_code": True, 
+                                "needs_password": False, 
+                                "phone_number": phone_number,
+                                "session_file": session_file
+                            }
+                        except Exception as code_error:
+                            # Handle FloodWaitError specifically
+                            if "FloodWaitError" in str(type(code_error)) or "wait" in str(code_error).lower():
+                                # Extract wait time from error message
+                                import re
+                                wait_match = re.search(r'(\d+)', str(code_error))
+                                wait_seconds = int(wait_match.group(1)) if wait_match else 0
+                                
+                                # Convert to human readable time
+                                def convert_to_human_readable(seconds):
+                                    hours = seconds // 3600
+                                    minutes = (seconds % 3600) // 60
+                                    secs = seconds % 60
+                                    
+                                    time_str = ""
+                                    if hours > 0:
+                                        time_str += f"{hours} hour{'s' if hours != 1 else ''} "
+                                    if minutes > 0:
+                                        time_str += f"{minutes} minute{'s' if minutes != 1 else ''} "
+                                    if secs > 0 or not time_str:
+                                        time_str += f"{secs} second{'s' if secs != 1 else ''}"
+                                    return time_str
+                                
+                                time_str = convert_to_human_readable(wait_seconds)
+                                
+                                logger.warning(f"[CONNECT] Telegram rate limit: wait {time_str}")
+                                return {
+                                    "success": False, 
+                                    "error": f"Telegram rate limit: Please wait {time_str.strip()} before requesting another code. This is Telegram's anti-spam protection.",
+                                    "rate_limited": True,
+                                    "wait_seconds": wait_seconds,
+                                    "wait_time_human": time_str.strip(),
+                                    "phone_number": phone_number
+                                }
+                            else:
+                                raise code_error
                         
                 except Exception as e:
                     logger.error(f"[CONNECT] Connection error: {e}")
@@ -253,7 +338,7 @@ class TelegramConnectionHandler:
             
             try:
                 result = self.run_async(_connect())
-                logger.info(f"[CONNECT] Fresh connection result: {result}")
+                logger.info(f"[CONNECT] Session reuse connection result: {result}")
                 return result
             except Exception as e:
                 logger.error(f"[CONNECT] Failed: {e}")
@@ -339,100 +424,74 @@ class TelegramConnectionHandler:
         return status
     
     def force_disconnect_and_cleanup(self):
-        """FORCE complete disconnection and cleanup - implements clean workflow"""
-        logger.info("[FORCE_CLEANUP] Starting COMPLETE disconnection and cleanup...")
+        """Disconnect current session but preserve it for reuse"""
+        logger.info("[DISCONNECT] Disconnecting current session (preserving for reuse)...")
         
         with self._lock:
             try:
-                # STEP 1: Force logout and disconnect client
+                # STEP 1: Disconnect client but don't log out (preserve session)
                 if self._client:
-                    logger.info("[FORCE_CLEANUP] Logging out and disconnecting client...")
+                    logger.info("[DISCONNECT] Disconnecting client (keeping session)...")
                     try:
-                        async def _force_logout():
+                        async def _gentle_disconnect():
                             try:
                                 if self._client.is_connected():
-                                    # Log out to invalidate the session on Telegram's side
-                                    await self._client.log_out()
-                                    logger.info("[FORCE_CLEANUP] Logged out from Telegram")
-                                    
-                                    # Disconnect to close the connection
+                                    # Just disconnect, don't log out to preserve session
                                     await self._client.disconnect()
-                                    logger.info("[FORCE_CLEANUP] Disconnected from Telegram")
+                                    logger.info("[DISCONNECT] Client disconnected (session preserved)")
                             except Exception as e:
-                                logger.warning(f"[FORCE_CLEANUP] Error during logout/disconnect: {e}")
-                                # Try force disconnect even if logout fails
-                                try:
-                                    await self._client.disconnect()
-                                except Exception as e2:
-                                    logger.warning(f"[FORCE_CLEANUP] Error during force disconnect: {e2}")
+                                logger.warning(f"[DISCONNECT] Error during disconnect: {e}")
                         
-                        self.run_async(_force_logout())
+                        self.run_async(_gentle_disconnect())
                     except Exception as e:
-                        logger.warning(f"[FORCE_CLEANUP] Client cleanup error: {e}")
-                    finally:
-                        self._client = None
-                        logger.info("[FORCE_CLEANUP] Client reference cleared")
+                        logger.warning(f"[DISCONNECT] Client disconnect error: {e}")
+                    # Don't clear client reference - keep it for potential reuse
                 
-                # STEP 2: Stop the event loop
-                if self._loop and not self._loop.is_closed():
-                    logger.info("[FORCE_CLEANUP] Stopping event loop")
-                    try:
-                        self._loop.call_soon_threadsafe(self._loop.stop)
-                    except Exception as e:
-                        logger.warning(f"[FORCE_CLEANUP] Error stopping loop: {e}")
-                
-                # STEP 3: Wait for thread to finish
-                if self._loop_thread and self._loop_thread.is_alive():
-                    logger.info("[FORCE_CLEANUP] Waiting for loop thread to finish")
-                    self._loop_thread.join(timeout=5)  # Increased timeout
-                
-                # STEP 4: Shutdown executor
-                if self._executor:
-                    logger.info("[FORCE_CLEANUP] Shutting down executor")
-                    self._executor.shutdown(wait=False)
-                
-                # STEP 5: Reset all state
-                self._running = False
-                self._loop = None
-                self._loop_thread = None
-                
-                # STEP 6: FORCE cleanup of ALL session files
-                logger.info("[FORCE_CLEANUP] Removing ALL session files...")
-                self._cleanup_all_session_files()
-                
-                # STEP 7: Force garbage collection
-                try:
-                    import gc
-                    gc.collect()
-                    logger.info("[FORCE_CLEANUP] Forced garbage collection")
-                except Exception as gc_e:
-                    logger.warning(f"[FORCE_CLEANUP] Error during garbage collection: {gc_e}")
-                
-                logger.info("[FORCE_CLEANUP] COMPLETE cleanup finished successfully")
+                logger.info("[DISCONNECT] Gentle disconnect completed")
                 
             except Exception as e:
-                logger.error(f"[FORCE_CLEANUP] CRITICAL cleanup error: {e}")
+                logger.error(f"[DISCONNECT] Error during gentle disconnect: {e}")
                 logger.error(traceback.format_exc())
-                # Even on error, try to clean session files
-                try:
-                    self._cleanup_all_session_files()
-                    logger.info("[FORCE_CLEANUP] Session files cleaned despite error")
-                except Exception as cleanup_e:
-                    logger.error(f"[FORCE_CLEANUP] Failed to clean session files: {cleanup_e}")
     
     def cleanup(self):
         """Legacy cleanup method - delegates to force cleanup"""
         self.force_disconnect_and_cleanup()
     
     def cleanup_invalid_session(self):
-        """Remove all session files and force disconnect"""
-        logger.info("[CLEANUP_SESSION] Starting complete session cleanup and disconnect...")
+        """Remove current session if it's invalid and prepare for new connection"""
+        logger.info("[CLEANUP_SESSION] Cleaning up invalid session...")
         
-        # Force complete disconnection and cleanup
-        self.force_disconnect_and_cleanup()
-        
-        logger.info("[CLEANUP_SESSION] Complete session cleanup finished")
-        return 1
+        with self._lock:
+            try:
+                # Disconnect current client
+                if self._client:
+                    try:
+                        async def _disconnect():
+                            if self._client.is_connected():
+                                await self._client.disconnect()
+                        self.run_async(_disconnect())
+                    except Exception as e:
+                        logger.warning(f"[CLEANUP_SESSION] Error disconnecting: {e}")
+                
+                # Remove current session file if it exists and is invalid
+                if self._current_session_file and os.path.exists(self._current_session_file):
+                    try:
+                        os.remove(self._current_session_file)
+                        logger.info(f"[CLEANUP_SESSION] Removed invalid session: {self._current_session_file}")
+                    except Exception as e:
+                        logger.warning(f"[CLEANUP_SESSION] Could not remove session file: {e}")
+                
+                # Reset state
+                self._client = None
+                self._current_session_file = None
+                self._session_phone = None
+                
+                logger.info("[CLEANUP_SESSION] Invalid session cleanup completed")
+                return 1
+                
+            except Exception as e:
+                logger.error(f"[CLEANUP_SESSION] Error during session cleanup: {e}")
+                return 0
     
     def is_connected_and_ready(self):
         """Check if client is connected, authorized, and ready for sticker operations"""
@@ -445,114 +504,110 @@ class TelegramConnectionHandler:
             "authorized": False,
             "ready_for_stickers": False,
             "session_file": None,
-            "clean_state": True  # Always clean in this workflow
+            "phone": None,
+            "session_reused": False
         }
         
         if self._client:
             try:
-                status["session_file"] = getattr(self._client.session, 'filename', None)
+                status["session_file"] = self._current_session_file
+                status["phone"] = self._session_phone
                 status["connected"] = self.has_active_connection()
                 status["authorized"] = status["connected"]
                 status["ready_for_stickers"] = status["authorized"]
+                status["session_reused"] = bool(self._current_session_file and os.path.exists(self._current_session_file))
             except Exception as e:
                 logger.debug(f"[STATUS] Error getting connection status: {e}")
         
         return status
     
-    def _force_clean_startup(self):
-        """FORCE clean startup - remove ALL sessions before initializing"""
-        if self._startup_cleanup_done:
-            return
-            
-        logger.info("[STARTUP_CLEANUP] Removing ALL existing session files for clean start...")
+    def cleanup_expired_sessions(self):
+        """Clean up only expired or corrupted session files, keep valid ones"""
         try:
             import glob
             import time
             
             base_dir = os.path.dirname(__file__)
+            session_pattern = os.path.join(base_dir, "telegram_session_*.session*")
             
-            # Remove ALL session-related files with aggressive patterns
-            patterns = [
-                os.path.join(base_dir, "telegram_session*"),
-                os.path.join(base_dir, "*.session*"),
-                os.path.join(base_dir, "*.session-journal"),
-                os.path.join(base_dir, "*.session-wal"),
-                os.path.join(base_dir, "*.session-shm"),
-                # Also check parent directory
-                os.path.join(os.path.dirname(base_dir), "telegram_session*"),
-                os.path.join(os.path.dirname(base_dir), "*.session*")
-            ]
-            
+            current_time = time.time()
             cleaned_count = 0
-            for pattern in patterns:
-                for file_path in glob.glob(pattern):
-                    try:
-                        # Extra check to avoid removing important files
-                        if 'session' in os.path.basename(file_path).lower():
-                            os.remove(file_path)
-                            logger.info(f"[STARTUP_CLEANUP] Removed: {file_path}")
-                            cleaned_count += 1
-                    except Exception as e:
-                        logger.warning(f"[STARTUP_CLEANUP] Could not remove {file_path}: {e}")
             
-            logger.info(f"[STARTUP_CLEANUP] Cleaned {cleaned_count} session files at startup")
+            for session_file in glob.glob(session_pattern):
+                try:
+                    # Skip if it's our current session
+                    if session_file == self._current_session_file:
+                        continue
+                    
+                    # Check if session is older than 7 days or corrupted
+                    file_age = current_time - os.path.getctime(session_file)
+                    if file_age > (7 * 24 * 3600):  # 7 days
+                        os.remove(session_file)
+                        logger.info(f"[CLEANUP] Removed old session: {session_file}")
+                        cleaned_count += 1
+                except Exception as e:
+                    logger.warning(f"[CLEANUP] Could not process {session_file}: {e}")
             
-            # Small delay to ensure file system has processed the deletions
-            time.sleep(0.1)
-            
-            self._startup_cleanup_done = True
-            
+            if cleaned_count > 0:
+                logger.info(f"[CLEANUP] Cleaned {cleaned_count} expired session files")
+            else:
+                logger.debug("[CLEANUP] No expired sessions found to clean")
+                
         except Exception as e:
-            logger.error(f"[STARTUP_CLEANUP] Error during startup cleanup: {e}")
+            logger.warning(f"[CLEANUP] Error during expired session cleanup: {e}")
     
-    def _cleanup_all_session_files(self):
-        """Clean ALL session files - comprehensive cleanup"""
+    def _cleanup_old_sessions_on_startup(self):
+        """Gentle startup cleanup - only remove very old sessions and corrupted lock files"""
         try:
             import glob
             import time
             
             base_dir = os.path.dirname(__file__)
+            current_time = time.time()
+            cleaned_count = 0
             
-            # Remove ALL session-related files with comprehensive patterns
-            patterns = [
-                os.path.join(base_dir, "telegram_session*"),
-                os.path.join(base_dir, "*.session*"),
+            # Clean up very old sessions (30+ days) - these are likely abandoned
+            old_session_pattern = os.path.join(base_dir, "telegram_session_*.session*")
+            for session_file in glob.glob(old_session_pattern):
+                try:
+                    file_age = current_time - os.path.getctime(session_file)
+                    if file_age > (30 * 24 * 3600):  # 30 days
+                        os.remove(session_file)
+                        logger.info(f"[STARTUP_CLEANUP] Removed very old session: {session_file}")
+                        cleaned_count += 1
+                except Exception as e:
+                    logger.warning(f"[STARTUP_CLEANUP] Could not remove old session {session_file}: {e}")
+            
+            # Clean up orphaned lock files and temp files that can cause database locks
+            lock_patterns = [
                 os.path.join(base_dir, "*.session-journal"),
                 os.path.join(base_dir, "*.session-wal"), 
                 os.path.join(base_dir, "*.session-shm"),
-                # Also check parent directory
-                os.path.join(os.path.dirname(base_dir), "telegram_session*"),
-                os.path.join(os.path.dirname(base_dir), "*.session*"),
-                # Check for any missed session files
-                os.path.join(base_dir, "*fresh*"),
+                os.path.join(base_dir, "*.lock"),
                 os.path.join(base_dir, "*temp*session*")
             ]
             
-            cleaned_count = 0
-            for pattern in patterns:
-                for file_path in glob.glob(pattern):
+            for pattern in lock_patterns:
+                for lock_file in glob.glob(pattern):
                     try:
-                        # Safety check to avoid removing non-session files
-                        filename = os.path.basename(file_path).lower()
-                        if any(keyword in filename for keyword in ['session', 'fresh', 'temp']):
-                            os.remove(file_path)
-                            logger.info(f"[CLEANUP] Removed: {file_path}")
+                        # Only remove files older than 1 hour to avoid interfering with active processes
+                        file_age = current_time - os.path.getctime(lock_file)
+                        if file_age > 3600:  # 1 hour
+                            os.remove(lock_file)
+                            logger.info(f"[STARTUP_CLEANUP] Removed orphaned lock file: {lock_file}")
                             cleaned_count += 1
                     except Exception as e:
-                        logger.warning(f"[CLEANUP] Could not remove {file_path}: {e}")
+                        logger.warning(f"[STARTUP_CLEANUP] Could not remove lock file {lock_file}: {e}")
             
             if cleaned_count > 0:
-                logger.info(f"[CLEANUP] Cleaned {cleaned_count} session files")
+                logger.info(f"[STARTUP_CLEANUP] Gentle cleanup: removed {cleaned_count} old/orphaned files")
             else:
-                logger.debug("[CLEANUP] No session files found to clean")
+                logger.debug("[STARTUP_CLEANUP] No old files found to clean")
                 
-            # Force garbage collection and small delay
-            import gc
-            gc.collect()
-            time.sleep(0.1)
-            
         except Exception as e:
-            logger.warning(f"[CLEANUP] Error during session file cleanup: {e}")
+            logger.warning(f"[STARTUP_CLEANUP] Error during gentle startup cleanup: {e}")
+    
+
 
 # Global instance
 telegram_handler = TelegramConnectionHandler()
