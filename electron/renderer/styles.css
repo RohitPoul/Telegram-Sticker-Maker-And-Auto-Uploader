@@ -1,7 +1,33 @@
+/* Performance optimizations for smooth UI */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  /* Enable hardware acceleration for smooth animations */
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+}
+
+/* Optimize interactive elements for better performance */
+.btn, .form-control, .modal, .nav-item {
+  /* Use GPU compositing for smoother interactions */
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+}
+
+/* Remove will-change when not needed to save memory */
+.btn:not(:hover):not(:active):not(:focus),
+.form-control:not(:focus),
+.modal:not(.animating) {
+  will-change: auto;
+}
+
+/* Optimize scrolling performance */
+.media-files-list, .status-content, .emoji-categories, .tab-content {
+  /* Enable momentum scrolling on touch devices */
+  -webkit-overflow-scrolling: touch;
+  /* Create stacking context for better performance */
+  transform: translateZ(0);
 }
 
 :root {
@@ -1330,7 +1356,7 @@ html {
   font-weight: 500;
 }
 
-/* Modal Dialogs */
+/* Modal Dialogs - Optimized for Performance */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -1343,10 +1369,14 @@ html {
   justify-content: center;
   z-index: 3000;
   backdrop-filter: blur(4px);
+  /* GPU acceleration for smoother performance */
+  will-change: opacity;
+  transform: translateZ(0);
 }
 
 .modal-overlay.active {
   display: flex;
+  animation: fadeIn 0.15s ease-out;
 }
 
 .modal {
@@ -1358,9 +1388,34 @@ html {
   max-width: 500px;
   max-height: 90vh;
   overflow-y: auto;
-  animation: modalIn 0.3s ease;
+  /* GPU acceleration for smooth animations */
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  animation: modalSlideIn 0.2s ease-out;
 }
 
+/* Faster, hardware-accelerated animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modalSlideIn {
+  from {
+    transform: translate3d(0, -20px, 0) scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Remove old slow animation */
 @keyframes modalIn {
   from {
     transform: scale(0.9);
@@ -1399,6 +1454,79 @@ html {
   display: flex;
   gap: 0.75rem;
   justify-content: flex-end;
+}
+
+/* URL Name Modal Enhancements */
+.attempt-counter {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  border-radius: 4px;
+}
+
+.attempt-counter i {
+  animation: rotateOnce 0.3s ease-in-out;
+}
+
+@keyframes rotateOnce {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Manual Completion Modal Styles */
+.manual-completion-content {
+  text-align: left;
+}
+
+.manual-completion-content .instructions {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background: rgba(33, 150, 243, 0.1);
+  border-left: 3px solid var(--primary-color);
+  border-radius: 4px;
+}
+
+.manual-completion-content .instructions h4 {
+  color: var(--primary-color);
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.manual-completion-content ol {
+  margin: 0;
+  padding-left: 1.5rem;
+}
+
+.manual-completion-content ol li {
+  margin-bottom: 0.5rem;
+  line-height: 1.5;
+}
+
+.manual-completion-content .help-note {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: rgba(0, 188, 212, 0.1);
+  border-radius: 4px;
+  font-size: 0.9rem;
+  margin-top: 1rem;
+}
+
+.text-warning {
+  color: var(--warning-color) !important;
+}
+
+.text-info {
+  color: var(--info-color) !important;
+}
+
+/* Enhanced button styles for manual completion */
+.modal-footer .btn {
+  min-width: 140px;
 }
 
 /* Warning Box for Kill Processes Modal */
