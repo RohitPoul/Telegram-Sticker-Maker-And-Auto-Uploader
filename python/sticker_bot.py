@@ -279,6 +279,7 @@ class AdvancedResponseMatcher:
                 r"this\s*short\s*name\s*is\s*already\s*taken",
                 r"short\s*name\s*is\s*already\s*taken",
                 r"name\s*is\s*already\s*taken",
+                r"already\s*taken",
             ],
             BotResponseType.FILE_UPLOADED: [
                 r"thanks!\s*now\s*send\s*me\s*an\s*emoji",
@@ -437,9 +438,30 @@ class SimpleConversationManager:
                 self.logger.warning(f"[WAIT] Error while waiting: {e}")
                 await asyncio.sleep(0.1)  # Small delay before retrying
         
-        raise TimeoutError(f"Timeout waiting for {expected_type.value}")
+    async def wait_for_response_types(self, expected_types: list, timeout: float = 30.0):
+        """Wait for any of multiple response types"""
+        start_time = time.time()
+        
+        while time.time() - start_time < timeout:
+            try:
+                response = await asyncio.wait_for(self.response_queue.get(), timeout=0.5)
+                if response.response_type in expected_types:
+                    self.logger.info(f"[WAIT] Received expected response: {response.response_type.value}")
+                    return response
+                else:
+                    self.logger.warning(f"[WAIT] Unexpected response: {response.response_type.value}, expected one of {[t.value for t in expected_types]}")
+                    # Put it back and continue waiting
+                    await self.response_queue.put(response)
+                    
+            except asyncio.TimeoutError:
+                continue
+            except Exception as e:
+                self.logger.warning(f"[WAIT] Error while waiting: {e}")
+                await asyncio.sleep(0.1)  # Small delay before retrying
+        
+        raise TimeoutError(f"Timeout waiting for any of {[t.value for t in expected_types]}")
 
-    async def send_and_wait(self, message: str, expected_response: BotResponseType, timeout: float = 30.0):
+    async def send_and_wait(self, message: str, expected_response, timeout: float = 30.0):
         self.logger.info(f"[MSG] Sending: {message}")
         
         # Clear pending responses
@@ -457,8 +479,13 @@ class SimpleConversationManager:
             await self.client.send_message(self.bot_peer, message)
             self.logger.info(f"[MSG] Sent message: {message}")
 
-        # Wait for response
-        response = await self.wait_for_response(expected_response, timeout)
+        # Handle both single expected response and list of expected responses
+        if isinstance(expected_response, list):
+            # Wait for any of the expected response types
+            response = await self.wait_for_response_types(expected_response, timeout)
+        else:
+            # Wait for specific response type
+            response = await self.wait_for_response(expected_response, timeout)
         return response
 
     async def send_file_and_wait(self, file_path: str, expected_response: BotResponseType, timeout: float = 60.0):
@@ -680,7 +707,7 @@ class StickerBotCore:
             raise
 
     async def _create_sticker_pack_async(self, pack_name: str, pack_url_name: str, sticker_type: str, media_items: List[MediaItem], process_id: str, auto_skip_icon: bool = True):
-        """EXACT STICKER CREATION LOGIC FROM PYTHON VERSION"""
+        """UNIFIED STICKER CREATION LOGIC - REMOVED DUPLICATION"""
         try:
             # Import active_processes from shared state
             from shared_state import active_processes, process_lock, add_process, update_process
@@ -708,7 +735,7 @@ class StickerBotCore:
 
             self.logger.info(f"[STICKER] Pack name accepted: {response.message[:100]}...")
 
-            # Step 3: Upload stickers
+            # Step 3: Upload stickers using send_file_and_wait
             for i, media_item in enumerate(media_items):
                 filename = os.path.basename(media_item.file_path)
                 self.logger.info(f"[STICKER] Processing sticker {i+1}/{len(media_items)}: {filename}")
@@ -721,7 +748,7 @@ class StickerBotCore:
                         active_processes[process_id]['progress'] = (i / len(media_items)) * 100
 
                 try:
-                    # Upload file
+                    # Upload file using send_file_and_wait method as specified
                     self.logger.info(f"[STICKER] Uploading file: {filename}")
                     response = await self.conversation_manager.send_file_and_wait(
                         media_item.file_path, BotResponseType.FILE_UPLOADED, timeout=60.0
@@ -752,19 +779,110 @@ class StickerBotCore:
             # Step 4: Publish pack
             self.logger.info(f"[STICKER] Publishing pack...")
             response = await self.conversation_manager.send_and_wait(
-                "/publish", BotResponseType.PACK_PUBLISHED, timeout=30.0
+                "/publish", BotResponseType.ICON_REQUEST, timeout=30.0
             )
 
-            self.logger.info(f"[STICKER] Pack published: {response.message[:100]}...")
-
-            # Update final status
+            self.logger.info(f"[STICKER] Received icon request: {response.message[:100]}...")
+            
+            # Step 5: Handle icon selection
             with process_lock:
                 if process_id in active_processes:
-                    active_processes[process_id]['status'] = 'completed'
-                    active_processes[process_id]['current_stage'] = 'Sticker pack created successfully'
-                    active_processes[process_id]['progress'] = 100
+                    active_processes[process_id]["current_stage"] = "Waiting for icon selection..."
+                    active_processes[process_id]["waiting_for_user"] = True
+                    active_processes[process_id]["icon_request_message"] = response.message
+                    active_processes[process_id]["progress"] = 80
 
-            return {"success": True, "message": "Sticker pack created successfully"}
+            # Check if auto-skip is enabled
+            if auto_skip_icon:
+                self.logger.info("[STICKER] Auto-skip enabled, automatically skipping icon selection...")
+                
+                # Send skip command automatically - expect URL_NAME_REQUEST not ICON_ACCEPTED
+                response = await self.conversation_manager.send_and_wait(
+                    "/skip", BotResponseType.URL_NAME_REQUEST, timeout=30.0
+                )
+                
+                self.logger.info(f"[STICKER] Icon step skipped, received URL name request: {response.message[:100]}...")
+                
+                # Update process status - now waiting for URL name
+                with process_lock:
+                    if process_id in active_processes:
+                        active_processes[process_id]["current_stage"] = "Providing URL name..."
+                        active_processes[process_id]["waiting_for_user"] = False
+                        active_processes[process_id]["progress"] = 85
+                
+                # Send the URL name that was already provided
+                response = await self.conversation_manager.send_and_wait(
+                    pack_url_name, [BotResponseType.PACK_SUCCESS, BotResponseType.URL_NAME_TAKEN], timeout=30.0
+                )
+                
+                # Check if URL name was taken
+                if response.response_type == BotResponseType.URL_NAME_TAKEN:
+                    self.logger.warning(f"[STICKER] URL name '{pack_url_name}' is already taken")
+                    
+                    # Mark process as waiting for user input with retry mechanism
+                    with process_lock:
+                        if process_id in active_processes:
+                            active_processes[process_id]["current_stage"] = f"URL name '{pack_url_name}' is already taken. Please provide a new name."
+                            active_processes[process_id]["waiting_for_user"] = True
+                            active_processes[process_id]["url_name_taken"] = True
+                            active_processes[process_id]["original_url_name"] = pack_url_name
+                            active_processes[process_id]["url_name_attempts"] = 1
+                            active_processes[process_id]["max_url_attempts"] = 3
+                            active_processes[process_id]["status"] = "waiting_for_url_name"
+                            active_processes[process_id]["progress"] = 85
+                            # CRITICAL FIX: Prevent race condition - clear any completion flags
+                            active_processes[process_id].pop("shareable_link", None)
+                    
+                    return {"success": False, "error": f"URL name '{pack_url_name}' is already taken", "waiting_for_user": True, "url_name_taken": True}
+                
+                self.logger.info(f"[STICKER] Pack published successfully: {response.message[:100]}...")
+                
+                # Update process status - completed
+                with process_lock:
+                    if process_id in active_processes:
+                        active_processes[process_id]["current_stage"] = "Sticker pack created successfully"
+                        active_processes[process_id]["waiting_for_user"] = False
+                        active_processes[process_id]["progress"] = 100
+                        active_processes[process_id]["status"] = "completed"
+                        # CRITICAL FIX: Clear URL name taken flags when pack is completed
+                        active_processes[process_id]["url_name_taken"] = False
+                        active_processes[process_id].pop("original_url_name", None)
+                        
+                        # Extract the shareable link from the response
+                        if "https://t.me/addstickers/" in response.message:
+                            import re
+                            link_match = re.search(r'https://t\.me/addstickers/[a-zA-Z0-9_]+', response.message)
+                            if link_match:
+                                shareable_link = link_match.group(0)
+                                active_processes[process_id]["shareable_link"] = shareable_link
+                                self.logger.info(f"[STICKER] Shareable link extracted: {shareable_link}")
+                
+                # FIXED: Increment sticker creation stats in backend
+                try:
+                    from stats_tracker import stats_tracker
+                    sticker_count = len(media_items)
+                    stats_tracker.increment_stickers(sticker_count)
+                    self.logger.info(f"[STICKER] Updated backend stats: +{sticker_count} stickers")
+                except Exception as stats_error:
+                    self.logger.warning(f"[STICKER] Failed to update stats: {stats_error}")
+                
+                return {"success": True, "message": "Sticker pack created successfully"}
+            else:
+                # Auto-skip is disabled, wait for user decision
+                self.logger.info("[STICKER] Auto-skip disabled, waiting for user decision on icon selection...")
+                
+                # Mark process as waiting for user - NO TIMEOUT, wait indefinitely
+                with process_lock:
+                    if process_id in active_processes:
+                        active_processes[process_id]["current_stage"] = "Waiting for icon selection (no timeout)..."
+                        active_processes[process_id]["waiting_for_user"] = True
+                        active_processes[process_id]["icon_request_message"] = response.message
+                        active_processes[process_id]["progress"] = 90
+                
+                # Return success - the process will continue when user clicks skip/upload
+                # No timeout here - user controls when to proceed
+                self.logger.info("[STICKER] Process marked as waiting for user icon selection (indefinite wait)")
+                return {"success": True, "message": "Waiting for user icon selection", "waiting_for_user": True}
 
         except Exception as e:
             self.logger.error(f"[STICKER] Pack creation error: {e}")
@@ -1151,253 +1269,6 @@ class StickerBotCore:
 
         except Exception as e:
             self.logger.error(f"[STICKER] Pack creation error for process {process_id}: {e}")
-            raise
-
-    async def _create_sticker_pack_async(self, pack_name: str, pack_url_name: str, sticker_type: str, media_items: List[MediaItem], process_id: str, auto_skip_icon: bool = True):
-        """EXACT STICKER CREATION LOGIC FROM PYTHON VERSION"""
-        try:
-            # Import active_processes from shared state
-            from shared_state import active_processes, process_lock, add_process, update_process
-            self.logger.info(f"[STICKER] Successfully imported active_processes, current processes: {list(active_processes.keys())}")
-
-            self.logger.info(f"[STICKER] Starting pack creation: {pack_name}")
-            self.logger.info(f"[STICKER] Process ID: {process_id}")
-            self.logger.info(f"[STICKER] Available processes: {list(active_processes.keys())}")
-
-            # Step 1: Create new sticker pack
-            command = "/newvideo" if sticker_type == "video" else "/newpack"
-            self.logger.info(f"[STICKER] Sending command: {command}")
-            
-            response = await self.conversation_manager.send_and_wait(
-                command, BotResponseType.NEW_PACK_CREATED, timeout=30.0
-            )
-
-            self.logger.info(f"[STICKER] Pack creation confirmed: {response.message[:100]}...")
-
-            # Step 2: Send pack name
-            self.logger.info(f"[STICKER] Sending pack name: {pack_name}")
-            
-            response = await self.conversation_manager.send_and_wait(
-                pack_name, BotResponseType.PACK_NAME_ACCEPTED, timeout=30.0
-            )
-
-            self.logger.info(f"[STICKER] Pack name accepted: {response.message[:100]}...")
-
-            # Step 3: Send URL name (if requested)
-            if "please provide a short name" in response.message.lower() or "short name" in response.message.lower():
-                self.logger.info(f"[STICKER] URL name requested, sending: {pack_url_name}")
-                
-                # Try URL name up to 3 times
-                url_name_attempts = 0
-                max_attempts = 3
-                
-                while url_name_attempts < max_attempts:
-                    url_name_attempts += 1
-                    self.logger.info(f"[STICKER] URL name attempt {url_name_attempts}/{max_attempts}")
-                    
-                    # Update process status
-                    if process_id in active_processes:
-                        active_processes[process_id]["current_stage"] = f"Trying URL name (attempt {url_name_attempts}/{max_attempts})"
-                        active_processes[process_id]["url_name_attempts"] = url_name_attempts
-                    
-                    try:
-                        response = await self.conversation_manager.send_and_wait(
-                            pack_url_name, BotResponseType.URL_NAME_ACCEPTED, timeout=45.0  # Increased timeout
-                        )
-                        
-                        # Check if URL name was accepted
-                        if response.response_type == BotResponseType.URL_NAME_ACCEPTED:
-                            self.logger.info(f"[STICKER] URL name accepted: {pack_url_name}")
-                            break
-                        elif response.response_type == BotResponseType.URL_NAME_TAKEN:
-                            self.logger.warning(f"[STICKER] URL name taken: {pack_url_name}")
-                            # Instead of auto-generating, mark for user input
-                            if process_id in active_processes:
-                                active_processes[process_id]["status"] = "waiting_for_url_name"
-                                active_processes[process_id]["current_stage"] = f"URL name '{pack_url_name}' is taken. Waiting for new URL name (attempt {url_name_attempts}/{max_attempts})..."
-                                active_processes[process_id]["waiting_for_user"] = True
-                                active_processes[process_id]["url_name_taken"] = True
-                                active_processes[process_id]["original_url_name"] = pack_url_name
-                                active_processes[process_id]["url_name_attempts"] = url_name_attempts
-                                active_processes[process_id]["max_url_attempts"] = max_attempts
-                                self.logger.info(f"[STICKER] URL name taken, waiting for user to provide new name (attempt {url_name_attempts}/{max_attempts})")
-                            return {"success": False, "error": "URL name taken", "waiting_for_user": True, "url_name_taken": True}
-                        else:
-                            self.logger.error(f"[STICKER] Unexpected response for URL name: {response.message}")
-                            # Continue the loop to retry (don't fail immediately on unexpected responses)
-                    
-                    except (asyncio.TimeoutError, TimeoutError) as e:
-                        self.logger.warning(f"[STICKER] Timeout waiting for URL name response (attempt {url_name_attempts})")
-                        # Mark for user input instead of failing after timeout
-                        if process_id in active_processes:
-                            active_processes[process_id]["status"] = "waiting_for_url_name"
-                            active_processes[process_id]["current_stage"] = f"URL name timeout. Please provide a new URL name (attempt {url_name_attempts}/{max_attempts})."
-                            active_processes[process_id]["waiting_for_user"] = True
-                            active_processes[process_id]["url_name_taken"] = True
-                            active_processes[process_id]["original_url_name"] = pack_url_name
-                            active_processes[process_id]["url_name_attempts"] = url_name_attempts
-                            active_processes[process_id]["max_url_attempts"] = max_attempts
-                        return {"success": False, "error": "URL name timeout", "waiting_for_user": True, "url_name_taken": True}
-                    
-                    except Exception as e:
-                        self.logger.error(f"[STICKER] Error during URL name attempt {url_name_attempts}: {e}")
-                        # Continue to next attempt unless it's the last one
-                        if url_name_attempts >= max_attempts:
-                            if process_id in active_processes:
-                                active_processes[process_id]["status"] = "waiting_for_url_name"
-                                active_processes[process_id]["current_stage"] = f"URL name error. All {max_attempts} attempts exhausted. Please provide a new URL name."
-                                active_processes[process_id]["waiting_for_user"] = True
-                                active_processes[process_id]["url_name_taken"] = True
-                                active_processes[process_id]["original_url_name"] = pack_url_name
-                                active_processes[process_id]["url_name_attempts"] = url_name_attempts
-                                active_processes[process_id]["max_url_attempts"] = max_attempts
-                            return {"success": False, "error": "URL name error", "waiting_for_user": True, "url_name_taken": True}
-
-            # Step 4: Process each media item
-            for i, media_item in enumerate(media_items):
-                filename = os.path.basename(media_item.file_path)
-                self.logger.info(f"[STICKER] Processing item {i+1}/{len(media_items)}: {filename}")
-
-                # Update progress
-                if process_id in active_processes:
-                    active_processes[process_id]["progress"] = (i / len(media_items)) * 100
-                    active_processes[process_id]["current_file"] = filename
-                    active_processes[process_id]["current_stage"] = f"Processing {filename}"
-
-                try:
-                    # Upload file
-                    media_item.processing_stage = "uploading"
-                    self.logger.info(f"[STICKER] Uploading file: {filename}")
-                    
-                    if process_id in active_processes:
-                        active_processes[process_id]["current_stage"] = f"Uploading {filename}..."
-
-                    response = await self.conversation_manager.send_and_wait(
-                        media_item.file_path, BotResponseType.FILE_UPLOADED, timeout=60.0
-                    )
-
-                    self.logger.info(f"[STICKER] File uploaded successfully: {response.message[:100]}...")
-
-                    # Send emoji
-                    media_item.processing_stage = "emoji_sending"
-                    self.logger.info(f"[STICKER] Sending emoji: {media_item.emoji}")
-                    
-                    if process_id in active_processes:
-                        active_processes[process_id]["current_stage"] = f"Sending emoji {media_item.emoji}..."
-
-                    response = await self.conversation_manager.send_and_wait(
-                        media_item.emoji, BotResponseType.EMOJI_ACCEPTED, timeout=30.0
-                    )
-
-                    self.logger.info(f"[STICKER] Emoji accepted: {response.message[:100]}...")
-
-                    # Mark as completed
-                    media_item.processed = True
-                    media_item.processing_stage = "completed"
-                    
-                    if process_id in active_processes:
-                        active_processes[process_id]["completed_files"] = i + 1
-                        active_processes[process_id]["current_stage"] = f"Completed {filename}"
-
-                    self.logger.info(f"[STICKER] Successfully processed: {filename}")
-
-                except Exception as e:
-                    error_msg = str(e)
-                    self.logger.error(f"[STICKER] Error processing {filename}: {error_msg}")
-                    media_item.error_message = error_msg
-                    media_item.processing_stage = "error"
-                    
-                    if process_id in active_processes:
-                        active_processes[process_id]["current_stage"] = f"Error with {filename}: {error_msg}"
-                    continue
-
-            # Step 4: Publish the pack
-            self.logger.info("[STICKER] Publishing sticker pack...")
-            
-            if process_id in active_processes:
-                active_processes[process_id]["current_stage"] = "Publishing pack..."
-
-            response = await self.conversation_manager.send_and_wait(
-                "/publish", BotResponseType.ICON_REQUEST, timeout=30.0
-            )
-
-            self.logger.info(f"[STICKER] Received icon request: {response.message[:100]}...")
-            
-            # Step 5: Handle icon selection
-            if process_id in active_processes:
-                active_processes[process_id]["current_stage"] = "Waiting for icon selection..."
-                active_processes[process_id]["waiting_for_user"] = True
-                active_processes[process_id]["icon_request_message"] = response.message
-
-            # Check if auto-skip is enabled
-            if auto_skip_icon:
-                self.logger.info("[STICKER] Auto-skip enabled, automatically skipping icon selection...")
-                
-                # Send skip command automatically - expect URL_NAME_REQUEST not ICON_ACCEPTED
-                response = await self.conversation_manager.send_and_wait(
-                    "/skip", BotResponseType.URL_NAME_REQUEST, timeout=30.0
-                )
-                
-                self.logger.info(f"[STICKER] Icon step skipped, received URL name request: {response.message[:100]}...")
-                
-                # Update process status - now waiting for URL name
-                if process_id in active_processes:
-                    active_processes[process_id]["current_stage"] = "Providing URL name..."
-                    active_processes[process_id]["waiting_for_user"] = False
-                    active_processes[process_id]["progress"] = 85
-                
-                # Send the URL name that was already provided
-                response = await self.conversation_manager.send_and_wait(
-                    pack_url_name, BotResponseType.PACK_SUCCESS, timeout=30.0
-                )
-                
-                self.logger.info(f"[STICKER] Pack published successfully: {response.message[:100]}...")
-                
-                # Update process status - completed
-                if process_id in active_processes:
-                    active_processes[process_id]["current_stage"] = "Sticker pack created successfully"
-                    active_processes[process_id]["waiting_for_user"] = False
-                    active_processes[process_id]["progress"] = 100
-                    active_processes[process_id]["status"] = "completed"
-                    
-                    # Extract the shareable link from the response
-                    if "https://t.me/addstickers/" in response.message:
-                        import re
-                        link_match = re.search(r'https://t\.me/addstickers/[a-zA-Z0-9_]+', response.message)
-                        if link_match:
-                            shareable_link = link_match.group(0)
-                            active_processes[process_id]["shareable_link"] = shareable_link
-                            self.logger.info(f"[STICKER] Shareable link extracted: {shareable_link}")
-                
-                # FIXED: Increment sticker creation stats in backend
-                try:
-                    from stats_tracker import stats_tracker
-                    sticker_count = len(media_items)
-                    stats_tracker.increment_stickers(sticker_count)
-                    self.logger.info(f"[STICKER] Updated backend stats: +{sticker_count} stickers")
-                except Exception as stats_error:
-                    self.logger.warning(f"[STICKER] Failed to update backend stats: {stats_error}")
-                
-                self.logger.info("[STICKER] PACK CREATION COMPLETED SUCCESSFULLY!")
-                return {"success": True, "message": "Sticker pack created successfully"}
-            else:
-                # Auto-skip is disabled, wait for user decision
-                self.logger.info("[STICKER] Auto-skip disabled, waiting for user decision on icon selection...")
-                
-                # Mark process as waiting for user - NO TIMEOUT, wait indefinitely
-                if process_id in active_processes:
-                    active_processes[process_id]["current_stage"] = "Waiting for icon selection (no timeout)..."
-                    active_processes[process_id]["waiting_for_user"] = True
-                    active_processes[process_id]["icon_request_message"] = response.message
-                    active_processes[process_id]["progress"] = 90
-                
-                # Return success - the process will continue when user clicks skip/upload
-                # No timeout here - user controls when to proceed
-                self.logger.info("[STICKER] Process marked as waiting for user icon selection (indefinite wait)")
-                return {"success": True, "message": "Waiting for user icon selection", "waiting_for_user": True}
-
-        except Exception as e:
-            self.logger.error(f"[STICKER] Pack creation error: {e}")
             raise
 
 # Removed duplicate TelegramSessionManager class - using EnhancedTelegramSessionManager instead
@@ -1856,27 +1727,13 @@ def register_sticker_routes(app):
             return '', 200
             
         try:
-            # Better error handling for JSON data
-            try:
-                data = request.get_json()
-                if data is None:
-                    return jsonify({
-                        "success": False, 
-                        "error": "No JSON data received or invalid Content-Type header"
-                    }), 400
-            except Exception as json_error:
-                logging.error(f"[API] JSON parsing error: {json_error}")
-                return jsonify({
-                    "success": False, 
-                    "error": f"Invalid JSON format: {str(json_error)}"
-                }), 400
-            
-            pack_name = data.get('pack_name', '')
-            pack_url_name = data.get('pack_url_name', '')
-            sticker_type = data.get('sticker_type', 'video')
-            media_files = data.get('media_files', [])
-            process_id = data.get('process_id', f'sticker_{int(time.time())}')
-            auto_skip_icon = data.get('auto_skip_icon', True)  # Default to True
+            data = request.get_json()
+            pack_name = data.get('pack_name', '') if data else ''
+            pack_url_name = data.get('pack_url_name', '') if data else ''
+            sticker_type = data.get('sticker_type', 'video') if data else 'video'
+            media_files = data.get('media_files', []) if data else []
+            process_id = data.get('process_id', f'sticker_{int(time.time())}') if data else f'sticker_{int(time.time())}'
+            auto_skip_icon = data.get('auto_skip_icon', True) if data else True  # Default to True
 
             # Import active_processes from shared state
             from shared_state import active_processes, process_lock, add_process, get_next_process_id
@@ -2063,10 +1920,31 @@ def register_sticker_routes(app):
                     if pack_url_name:
                         logging.info(f"[SKIP_ICON] Sending URL name '{pack_url_name}' to Telegram")
                         
-                        # Send the URL name automatically with increased timeout
+                        # Send the URL name automatically with increased timeout - expect SUCCESS or TAKEN
                         url_response = await sticker_bot.conversation_manager.send_and_wait(
-                            pack_url_name, BotResponseType.PACK_SUCCESS, timeout=60.0  # Increased timeout
+                            pack_url_name, [BotResponseType.PACK_SUCCESS, BotResponseType.URL_NAME_TAKEN], timeout=60.0
                         )
+                        
+                        # Check if URL name was taken
+                        if url_response.response_type == BotResponseType.URL_NAME_TAKEN:
+                            logging.warning(f"[SKIP_ICON] URL name '{pack_url_name}' is already taken")
+                            
+                            # Mark process as waiting for user input with retry mechanism
+                            with process_lock:
+                                if process_id in active_processes:
+                                    active_processes[process_id]['status'] = 'waiting_for_url_name'
+                                    active_processes[process_id]['current_stage'] = f'URL name "{pack_url_name}" is already taken. Please provide a new name.'
+                                    active_processes[process_id]['waiting_for_user'] = True
+                                    active_processes[process_id]['url_name_taken'] = True
+                                    active_processes[process_id]['original_url_name'] = pack_url_name
+                                    active_processes[process_id]['url_name_attempts'] = 1
+                                    active_processes[process_id]['max_url_attempts'] = 3
+                                    active_processes[process_id]['progress'] = 85
+                                    # CRITICAL FIX: Prevent race condition - clear any completion flags
+                                    active_processes[process_id].pop('shareable_link', None)
+                                    active_processes[process_id]['progress'] = 85
+                            
+                            return {"success": False, "error": f"URL name '{pack_url_name}' is already taken", "waiting_for_user": True, "url_name_taken": True}
                         
                         logging.info(f"[SKIP_ICON] URL name submission successful")
                         
@@ -2077,6 +1955,9 @@ def register_sticker_routes(app):
                                 active_processes[process_id]['current_stage'] = 'Sticker pack created successfully'
                                 active_processes[process_id]['progress'] = 100
                                 active_processes[process_id]['status'] = 'completed'
+                                # CRITICAL FIX: Clear URL name taken flags when pack is completed
+                                active_processes[process_id]['url_name_taken'] = False
+                                active_processes[process_id].pop('original_url_name', None)
                                 
                                 # Extract shareable link
                                 if "https://t.me/addstickers/" in url_response.message:
@@ -2194,13 +2075,13 @@ def register_sticker_routes(app):
             # Resume URL name submission to Telegram
             async def submit_url_name_to_telegram():
                 try:
-                    # Send the new URL name to Telegram
+                    # Send the new URL name to Telegram - expect SUCCESS or TAKEN
                     url_response = await sticker_bot.conversation_manager.send_and_wait(
-                        new_url_name, BotResponseType.URL_NAME_ACCEPTED, timeout=45.0
+                        new_url_name, [BotResponseType.URL_NAME_ACCEPTED, BotResponseType.URL_NAME_TAKEN, BotResponseType.PACK_SUCCESS], timeout=45.0
                     )
                     
                     # Check response type
-                    if url_response.response_type == BotResponseType.URL_NAME_ACCEPTED:
+                    if url_response.response_type in [BotResponseType.URL_NAME_ACCEPTED, BotResponseType.PACK_SUCCESS]:
                         # URL name accepted - continue with sticker creation
                         logging.info(f"[URL_NAME] New URL name accepted: {new_url_name}")
                         
@@ -2211,13 +2092,23 @@ def register_sticker_routes(app):
                                 active_processes[process_id]['current_stage'] = 'URL name accepted, finalizing pack creation...'
                                 active_processes[process_id]['progress'] = 95
                                 active_processes[process_id]['status'] = 'completed'
+                                # CRITICAL FIX: Clear URL name taken flags when URL is accepted
+                                active_processes[process_id]['url_name_taken'] = False
+                                active_processes[process_id].pop('original_url_name', None)
+                                active_processes[process_id]['status'] = 'completed'
                                 
-                                # Extract shareable link
+                                # Extract shareable link from the response
                                 if "https://t.me/addstickers/" in url_response.message:
                                     import re
                                     link_match = re.search(r'https://t\.me/addstickers/[a-zA-Z0-9_]+', url_response.message)
                                     if link_match:
                                         active_processes[process_id]['shareable_link'] = link_match.group(0)
+                                    else:
+                                        # Fallback: construct link from URL name
+                                        active_processes[process_id]['shareable_link'] = f"https://t.me/addstickers/{new_url_name}"
+                                else:
+                                    # Fallback: construct link from URL name
+                                    active_processes[process_id]['shareable_link'] = f"https://t.me/addstickers/{new_url_name}"
                         
                         # FIXED: Increment sticker creation stats in backend
                         try:
@@ -2244,6 +2135,8 @@ def register_sticker_routes(app):
                                     active_processes[process_id]['url_name_taken'] = True
                                     active_processes[process_id]['original_url_name'] = new_url_name
                                     active_processes[process_id]['url_name_attempts'] = current_attempt + 1
+                                    # CRITICAL FIX: Prevent race condition - clear any completion flags
+                                    active_processes[process_id].pop('shareable_link', None)
                             
                             return {"success": False, "error": f"URL name '{new_url_name}' is already taken", "url_name_taken": True}
                         else:
