@@ -454,61 +454,8 @@ class TelegramConnectionHandler:
                 logger.error(traceback.format_exc())
     
     def cleanup(self):
-        """Legacy cleanup method - delegates to force cleanup"""
+        """Legacy cleanup method - delegates to gentle disconnect"""
         self.force_disconnect_and_cleanup()
-    
-    def force_disconnect_and_cleanup(self):
-        """Force disconnect and cleanup all sessions - for clean startup"""
-        logger.info("[FORCE_CLEANUP] Starting force disconnect and cleanup...")
-        
-        with self._lock:
-            try:
-                # Force disconnect client if exists
-                if self._client:
-                    try:
-                        async def _force_disconnect():
-                            try:
-                                if hasattr(self._client, 'is_connected') and self._client.is_connected():
-                                    await self._client.disconnect()
-                                    logger.info("[FORCE_CLEANUP] Client force disconnected")
-                            except Exception as e:
-                                logger.debug(f"[FORCE_CLEANUP] Error during force disconnect: {e}")
-                        
-                        # Try to run disconnect, but don't fail if event loop is unavailable
-                        try:
-                            self.run_async(_force_disconnect())
-                        except Exception as e:
-                            logger.debug(f"[FORCE_CLEANUP] Could not run async disconnect: {e}")
-                        
-                    except Exception as e:
-                        logger.debug(f"[FORCE_CLEANUP] Error during client cleanup: {e}")
-                    finally:
-                        self._client = None
-                
-                # Reset all session tracking
-                self._current_session_file = None
-                self._session_phone = None
-                
-                # Stop and cleanup event loop
-                if self._loop and not self._loop.is_closed():
-                    try:
-                        self._loop.call_soon_threadsafe(self._loop.stop)
-                        # Give it a moment to stop
-                        import time
-                        time.sleep(0.1)
-                    except Exception as e:
-                        logger.debug(f"[FORCE_CLEANUP] Error stopping loop: {e}")
-                
-                self._running = False
-                self._loop = None
-                
-                # Clean up session lock files (but keep main session files for reuse)
-                self._cleanup_session_locks()
-                
-                logger.info("[FORCE_CLEANUP] Force cleanup completed")
-                
-            except Exception as e:
-                logger.error(f"[FORCE_CLEANUP] Error during force cleanup: {e}")
     
     def _cleanup_session_locks(self):
         """Clean up session lock files while preserving main session files"""
