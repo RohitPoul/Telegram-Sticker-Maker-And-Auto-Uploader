@@ -89,22 +89,17 @@ function createWindow() {
                 mainWindow.destroy();
             }, 15000); // Increased timeout for thorough cleanup
             
-            // CLEAN WORKFLOW CLEANUP SEQUENCE
-            console.log("[CLOSE] Step 1: Force Telegram reset and disconnection...");
+            // PRESERVE SESSIONS CLEANUP SEQUENCE - Only clean locks and temp files
+            console.log("[CLOSE] Step 1: Stop active processes...");
             await Promise.allSettled([
-                // Force complete Telegram reset (disconnect + cleanup)
-                axios.post(`${BACKEND_URL}/api/telegram/force-reset`, {}, { timeout: 5000 }),
-                // Stop all active processes
+                // Stop all active processes but don't force disconnect
                 axios.post(`${BACKEND_URL}/api/stop-process`, { process_id: 'ALL' }, { timeout: 3000 })
             ]);
             
-            console.log("[CLOSE] Step 2: Comprehensive session cleanup...");
+            console.log("[CLOSE] Step 2: Clean temporary files and locks only...");
             await Promise.allSettled([
-                // Clear all sessions and lock files
-                axios.post(`${BACKEND_URL}/api/clear-session`, {}, { timeout: 3000 }),
-                axios.post(`${BACKEND_URL}/api/force-cleanup-sessions`, {}, { timeout: 3000 }),
-                // Clean up Telegram session specifically
-                axios.post(`${BACKEND_URL}/api/telegram/cleanup-session`, {}, { timeout: 3000 })
+                // Clear ONLY temporary sessions and lock files - preserve main sessions
+                axios.post(`${BACKEND_URL}/api/clear-session`, {}, { timeout: 3000 })
             ]);
             
             console.log("[CLOSE] Step 3: Process cleanup...");
@@ -352,11 +347,10 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", () => {
-    // CLEAN WORKFLOW: Force cleanup on exit
+    // PRESERVE SESSIONS: Only clean temp files and processes
     (async () => {
         try { 
-            await axios.post(`${BACKEND_URL}/api/telegram/force-reset`).catch(() => {}); 
-            await axios.post(`${BACKEND_URL}/api/force-cleanup-sessions`).catch(() => {}); 
+            await axios.post(`${BACKEND_URL}/api/clear-session`).catch(() => {}); 
             await axios.post(`${BACKEND_URL}/api/kill-our-processes`).catch(() => {});
         } catch {}
     })().finally(() => cleanupPythonProcess());
@@ -366,9 +360,8 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
-    // Attempt graceful backend teardown
-    try { exec(`curl -s -X POST ${BACKEND_URL}/api/sticker/reset-connection`); } catch {}
-    try { exec(`curl -s -X POST -H \"Content-Type: application/json\" -d '{\\"process_id\\":\\"ALL\\"}' ${BACKEND_URL}/api/stop-process`); } catch {}
+    // Gentle backend shutdown - preserve sessions
+    try { exec(`curl -s -X POST -H \"Content-Type: application/json\" -d '{"process_id":"ALL"}' ${BACKEND_URL}/api/stop-process`); } catch {}
     try { exec(`curl -s -X POST ${BACKEND_URL}/api/clear-session`); } catch {}
     cleanupPythonProcess();
 });
