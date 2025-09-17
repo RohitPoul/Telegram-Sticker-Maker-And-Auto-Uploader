@@ -144,7 +144,7 @@ class TelegramUtilities {
     }
   }
 
-  // ---- Debug warning function (was missing) ----
+  // Debug warning method for detailed UI debugging
   debugWarn(label, payload = undefined) {
     try {
       const ts = new Date().toISOString();
@@ -165,18 +165,8 @@ class TelegramUtilities {
       throw new Error('Invalid API path');
     }
     
-    // FIXED: Better path handling to prevent [Errno 22] Invalid argument
-    // Only sanitize the dynamic parts, not the entire path
-    let safePath = path;
-    if (path.includes('/process-status/')) {
-      const parts = path.split('/');
-      const lastPart = parts[parts.length - 1];
-      const sanitizedLastPart = lastPart.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 50);
-      parts[parts.length - 1] = sanitizedLastPart;
-      safePath = parts.join('/');
-    }
-    
-    const url = `http://127.0.0.1:5000${safePath}`;
+    // FIXED: Direct path usage - backend handles sanitization
+    const url = `http://127.0.0.1:5000${path}`;
     
     // OPTIMIZED: Add timeout to prevent hanging requests
     const controller = new AbortController();
@@ -317,6 +307,7 @@ class TelegramUtilities {
     document.getElementById("connect-telegram").addEventListener("click", () => this.connectTelegram());
     document.getElementById("clear-media").addEventListener("click", () => this.clearMedia());
     document.getElementById("create-sticker-pack").addEventListener("click", () => this.createStickerPack());
+    document.getElementById("reset-sticker-form").addEventListener("click", () => this.resetStickerForm());
     
     // Icon Selection Modal Events
     document.getElementById("upload-icon-btn").addEventListener("click", () => this.selectIconFile());
@@ -898,6 +889,14 @@ class TelegramUtilities {
         }
       }
       
+      // Ctrl/Cmd + R: Reset form (sticker bot only)
+      if ((e.ctrlKey || e.metaKey) && e.key === "r") {
+        if (document.querySelector(".tab-content.active").id === "sticker-bot") {
+          e.preventDefault();
+          this.resetStickerForm();
+        }
+      }
+      
       // Escape: Close modals
       if (e.key === "Escape") {
         this.hideModal();
@@ -1262,15 +1261,20 @@ class TelegramUtilities {
   }
 
   createAnotherPack() {
+    console.log('🔄 [RESET] Starting complete process reset...');
+    
     this.hideSuccessModal();
-    // Clear the form and reset to initial state
+    
+    // STEP 1: Clear form inputs and reset to initial state
     document.getElementById("pack-name").value = "";
     document.getElementById("pack-url-name").value = "";
+    
+    // STEP 2: Clear media files and reset arrays
     this.mediaFiles = [];
     this.updateMediaList();
     this.updatePackActions();
     
-    // Reset validation display (clear any existing validation)
+    // STEP 3: Reset validation display (clear any existing validation)
     const packNameInput = document.getElementById("pack-name");
     const urlNameInput = document.getElementById("pack-url-name");
     const packNameValidation = document.getElementById("pack-name-validation");
@@ -1286,6 +1290,91 @@ class TelegramUtilities {
       urlNameInput.classList.remove('valid', 'invalid');
       urlNameValidation.classList.remove('valid', 'invalid');
       urlNameValidation.textContent = '';
+    }
+    
+    // STEP 4: Reset progress monitoring and UI state
+    this.stopStickerProgressMonitoring();
+    
+    // STEP 5: Clear status history and reset to ready state
+    this.clearStatusHistory();
+    
+    // STEP 6: Reset progress bar
+    const progressBar = document.getElementById("sticker-progress-bar");
+    const progressText = document.getElementById("sticker-progress-text");
+    if (progressBar) {
+      progressBar.style.width = "0%";
+    }
+    if (progressText) {
+      progressText.textContent = "0/0 files processed";
+    }
+    
+    // STEP 7: Reset create button to initial state
+    const createBtn = document.getElementById("create-sticker-pack");
+    if (createBtn) {
+      createBtn.disabled = false;
+      createBtn.innerHTML = '<i class="fas fa-magic"></i> Create Sticker Pack';
+    }
+    
+    // STEP 8: Reset any internal flags
+    this.autoSkipAttempted = false;
+    this.lastStage = null;
+    this.lastStageWasQueue = false;
+    this.currentIconProcessId = null;
+    this.currentUrlNameProcessId = null;
+    this.currentUrlAttempt = null;
+    this.maxUrlAttempts = null;
+    this.currentEmojiIndex = null;
+    
+    // STEP 9: Hide any modals that might be open
+    this.hideModal();
+    this.hideIconModal();
+    this.hideUrlNameModal();
+    this.hideLoadingOverlay();
+    
+    // STEP 10: Focus on pack name input for immediate use
+    setTimeout(() => {
+      if (packNameInput) {
+        packNameInput.focus();
+      }
+    }, 100);
+    
+    console.log('🔄 [RESET] Complete process reset finished!');
+    this.showToast("success", "Ready for New Pack", "Form cleared - ready to create another sticker pack!");
+    this.addStatusItem("🔄 Ready to create new sticker pack", "ready");
+  }
+
+  resetStickerForm() {
+    // Ask for confirmation if there are files or form data
+    const hasData = this.mediaFiles.length > 0 || 
+                    document.getElementById("pack-name").value.trim() !== "" ||
+                    document.getElementById("pack-url-name").value.trim() !== "";
+    
+    if (hasData) {
+      const confirmed = confirm("This will clear all your current form data and media files. Are you sure?");
+      if (!confirmed) {
+        return;
+      }
+    }
+    
+    console.log('🔄 [MANUAL_RESET] User initiated form reset...');
+    
+    // Optional: Clear any active sticker processes in the backend
+    this.clearActiveProcesses();
+    
+    // Call the same comprehensive reset function used by "Create Another Pack"
+    this.createAnotherPack();
+  }
+
+  async clearActiveProcesses() {
+    try {
+      // This is optional - clear any running sticker processes
+      const response = await this.apiRequest("POST", "/api/clear-sticker-processes");
+      if (response.success) {
+        console.log('🔄 [RESET] Backend sticker processes cleared');
+      }
+    } catch (error) {
+      // Don't block reset if this fails
+      console.log('🔄 [RESET] Backend process clearing skipped:', error.message);
     }
   }
 
@@ -4311,28 +4400,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         this.startStickerProgressMonitoring(finalProcessId);
       } else {
         console.log(`🔧 [FRONTEND] Creation failed:`, response.error);
-        
-        // Check if this is a URL name taken error that should trigger retry modal
-        if (response.error && (
-          response.error.includes("already taken") || 
-          response.error.includes("short name is already taken") ||
-          response.error.includes("name is already taken") ||
-          response.error.toLowerCase().includes("taken")
-        )) {
-          console.log(`🔧 [FRONTEND] URL name taken detected in initial creation - showing retry modal`);
-          
-          // Set up retry variables
-          this.currentUrlNameProcessId = response.process_id || processId;
-          this.currentUrlAttempt = 1;
-          this.maxUrlAttempts = 3;
-          
-          // Show URL retry modal immediately
-          this.showUrlNameModal(this.currentUrlNameProcessId, packUrlName, 1, 3);
-          
-          // Don't show error toast - let the modal handle it
-          return;
-        }
-        
         this.addStatusItem(`❌ Error: ${response.error || "Failed to start creation"}`, "error");
         this.showToast(
           "error",
@@ -4349,27 +4416,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     } catch (error) {
       this.hideLoadingOverlay();
       console.error(`🔧 [FRONTEND] Error creating sticker pack:`, error);
-      
-      // Check if this is a URL name error
-      if (error.message && (
-        error.message.includes("already taken") || 
-        error.message.includes("short name is already taken") ||
-        error.message.includes("name is already taken") ||
-        error.message.toLowerCase().includes("taken")
-      )) {
-        console.log(`🔧 [FRONTEND] URL name taken detected in error - showing retry modal`);
-        
-        // Set up retry variables
-        this.currentUrlNameProcessId = processId; // Use the generated process ID
-        this.currentUrlAttempt = 1;
-        this.maxUrlAttempts = 3;
-        
-        // Show URL retry modal immediately
-        this.showUrlNameModal(this.currentUrlNameProcessId, packUrlName, 1, 3);
-        
-        // Don't show error toast - let the modal handle it
-        return;
-      }
       
       this.addStatusItem(`❌ Error: Failed to create sticker pack - ${error.message}`, "error");
       this.showToast(
@@ -4417,18 +4463,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         
         console.log(`🔧 [FRONTEND] Checking status for process: ${processId}`);
         
-        // FIXED: Proper process ID sanitization to prevent [Errno 22] Invalid argument
-        const safePid = String(processId)
-          .replace(/[^a-zA-Z0-9_-]/g, '_')  // Replace invalid chars with underscore
-          .substring(0, 50);  // Limit length to prevent URL issues
-        
-        if (!safePid) {
-          console.error(`🔧 [FRONTEND] Process ID became empty after sanitization: ${processId}`);
-          this.stopStickerProgressMonitoring();
-          this.addStatusItem("❌ Invalid process ID format", "error");
-          return;
-        }
-        const response = await this.apiRequest("GET", `/api/process-status/${safePid}`);
+        // Use the original process ID directly - let backend handle any sanitization
+        const response = await this.apiRequest("GET", `/api/process-status/${processId}`);
         console.log(`🔧 [FRONTEND] Process status response:`, response);
         
         if (response.success && response.data) {
@@ -4443,8 +4479,35 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           // Update UI progress indicators
           this.updateStickerProgressDisplay(progress);
           
-          // Check for different process states
+          // CRITICAL FIX: Check URL_NAME_TAKEN first to prevent race condition with completed status
+          // This ensures retry modal shows even if status becomes 'completed' simultaneously
+          if (progress.url_name_taken && progress.waiting_for_user) {
+            // URL name is taken, show retry modal (PRIORITY OVER COMPLETED STATUS)
+            console.log(`🔧 [FRONTEND] URL name taken detected, showing retry modal (priority check)`);
+            this.stopStickerProgressMonitoring();
+            
+            const currentAttempt = progress.url_name_attempts || 1;
+            const maxAttempts = progress.max_url_attempts || 3;
+            
+            if (currentAttempt > maxAttempts) {
+              this.addStatusItem(`❌ All ${maxAttempts} URL name attempts exhausted. Please add sticker pack manually in Telegram bot.`, "error");
+              this.showToast("warning", "Manual Setup Required", "Please complete the sticker pack creation manually in the Telegram bot (@Stickers)");
+              
+              this.onStickerProcessCompleted(true, {
+                manual_completion_required: true,
+                message: "Please complete sticker pack creation manually in Telegram bot"
+              });
+              return;
+            }
+            
+            this.showUrlNameModal(processId, progress.original_url_name || "unknown", currentAttempt, maxAttempts);
+            return;
+          }
+          
+          // Check for different process states (AFTER URL_NAME_TAKEN check)
           if (progress.status === "completed") {
+            console.log(`🔧 [FRONTEND] Process completed with data:`, progress);
+            console.log(`🔧 [FRONTEND] Shareable link in progress data: ${progress.shareable_link}`);
             this.addStatusItem("✅ Sticker pack creation completed successfully!", "completed");
             this.stopStickerProgressMonitoring();
             this.onStickerProcessCompleted(true, progress);
@@ -4455,74 +4518,18 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
             this.onStickerProcessCompleted(false, progress);
             return;
           } else if (progress.status === "waiting_for_user") {
-            // Handle specific user interaction requirements
-            if (progress.waiting_for_user && progress.url_name_taken) {
-              // URL name is taken, show retry modal
-              console.log(`🔧 [FRONTEND] URL name taken, showing modal`);
-              this.stopStickerProgressMonitoring();
-              
-              const currentAttempt = progress.url_name_attempts || 1;
-              const maxAttempts = progress.max_url_attempts || 3;
-              
-              if (currentAttempt > maxAttempts) {
-                this.addStatusItem(`❌ All ${maxAttempts} URL name attempts exhausted. Please add sticker pack manually in Telegram bot.`, "error");
-                this.showToast("warning", "Manual Setup Required", "Please complete the sticker pack creation manually in the Telegram bot (@Stickers)");
-                
-                this.onStickerProcessCompleted(true, {
-                  manual_completion_required: true,
-                  message: "Please complete sticker pack creation manually in Telegram bot"
-                });
-                return;
-              }
-              
-              this.showUrlNameModal(safePid, progress.original_url_name || "unknown", currentAttempt, maxAttempts);
-              return;
-            }
-            
+            // Handle other user interaction requirements (icon selection, etc.)
             if (progress.waiting_for_user && progress.icon_request) {
               // Icon selection is required
               console.log(`🔧 [FRONTEND] Icon selection required`);
               this.stopStickerProgressMonitoring();
-              this.showIconModal(safePid, progress.icon_request_message);
+              this.showIconModal(processId, progress.icon_request_message);
               return;
             }
           }
           consecutiveErrors = 0;
           
           this.updateStickerProgressDisplay(progress);
-          
-          // FIXED: Handle URL name taken case - only show modal if not already shown
-          if (progress.url_name_taken || progress.status === "waiting_for_url_name") {
-            console.log(`🔧 [FRONTEND] URL name taken, prompting user for new name`);
-            
-            // Check if URL name modal is already visible to prevent timeout interference
-            const urlNameModal = document.getElementById("url-name-modal");
-            if (!urlNameModal || urlNameModal.style.display === "none") {
-              this.stopStickerProgressMonitoring();
-              
-              // Get current attempt information from progress
-              const currentAttempt = progress.url_name_attempts || 1;
-              const maxAttempts = progress.max_url_attempts || 3;
-              
-              // Check if we've exhausted all attempts
-              if (currentAttempt > maxAttempts) {
-                // All attempts exhausted - show manual completion message
-                this.addStatusItem(`❌ All ${maxAttempts} URL name attempts exhausted. Please add sticker pack manually in Telegram bot.`, "error");
-                this.showToast("warning", "Manual Setup Required", "Please complete the sticker pack creation manually in the Telegram bot (@Stickers)");
-                
-                // Mark as completed with manual instruction
-                this.onStickerProcessCompleted(true, {
-                  manual_completion_required: true,
-                  message: "Please complete sticker pack creation manually in Telegram bot"
-                });
-                return;
-              }
-              
-              // Show retry modal with attempt information
-              this.showUrlNameModal(processId, progress.original_url_name || "unknown", currentAttempt, maxAttempts);
-            }
-            return;
-          }
           
           // OPTIMIZED: Prevent duplicate stage notifications with better tracking
           if (progress.current_stage && progress.current_stage !== this.lastStage) {
@@ -4623,14 +4630,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           }
         }
       } catch (error) {
-        // FIXED: Handle [Errno 22] Invalid argument specifically
-        if (error.message && error.message.includes('[Errno 22] Invalid argument')) {
-          console.error(`🔧 [FRONTEND] URL/Process ID encoding error:`, error);
-          this.stopStickerProgressMonitoring();
-          this.addStatusItem("❌ Process ID encoding error - restarting sticker creation", "error");
-          return;
-        }
-        
         consecutiveErrors++;
         
         if (consecutiveErrors >= 3) {
@@ -4775,6 +4774,11 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   onStickerProcessCompleted(success, progressData) {
     const createBtn = document.getElementById("create-sticker-pack");
     
+    console.log(`🔧 [SUCCESS_HANDLER] Called with success: ${success}`);
+    console.log(`🔧 [SUCCESS_HANDLER] Progress data:`, progressData);
+    console.log(`🔧 [SUCCESS_HANDLER] Shareable link check: ${progressData?.shareable_link}`);
+    console.log(`🔧 [SUCCESS_HANDLER] ALL PROGRESS DATA KEYS:`, Object.keys(progressData || {}));
+    
     // Update stats
     if (success) {
       this.sessionStats.totalStickers += this.mediaFiles.length;
@@ -4789,13 +4793,20 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       } else {
         this.addStatusItem("Sticker pack created successfully!", "completed");
         
-        // FIXED: Check for multiple possible property names for shareable link
+        // ENHANCED: Check for multiple possible property names for shareable link with detailed logging
         const shareableLink = progressData?.shareable_link || progressData?.pack_link || progressData?.link;
+        console.log(`🔧 [SUCCESS] Detailed link check:`);
+        console.log(`🔧 [SUCCESS] - progressData.shareable_link: ${progressData?.shareable_link}`);
+        console.log(`🔧 [SUCCESS] - progressData.pack_link: ${progressData?.pack_link}`);
+        console.log(`🔧 [SUCCESS] - progressData.link: ${progressData?.link}`);
+        console.log(`🔧 [SUCCESS] - Final shareableLink: ${shareableLink}`);
+        
         if (shareableLink) {
-          console.log(`🔧 [SUCCESS] Found shareable link: ${shareableLink}`);
+          console.log(`🔧 [SUCCESS] SHOWING SUCCESS MODAL with link: ${shareableLink}`);
           this.showSuccessModal(shareableLink);
         } else {
-          console.log(`🔧 [SUCCESS] No shareable link found in progress data:`, progressData);
+          console.log(`🔧 [SUCCESS] NO SHAREABLE LINK FOUND - showing toast instead`);
+          console.log(`🔧 [SUCCESS] Available data keys:`, Object.keys(progressData || {}));
           // Still show a success message even without link
           this.showToast("success", "Pack Created", "Sticker pack created successfully!");
         }
@@ -5071,6 +5082,11 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     const newUrlNameInput = document.getElementById("new-url-name");
     const attemptInfo = document.getElementById("url-name-attempt-info");
     
+    if (!modal || !overlay) {
+      console.error(`🔧 [FRONTEND] Modal elements not found!`);
+      return;
+    }
+    
     if (takenNameSpan) {
       takenNameSpan.textContent = takenName;
     }
@@ -5122,15 +5138,13 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     this.maxUrlAttempts = maxAttempts;
     
     // Show modal with proper overlay
-    if (modal && overlay) {
-      overlay.classList.add("active");
-      modal.style.display = "flex";
-      
-      if (currentAttempt <= maxAttempts) {
-        this.addStatusItem(`URL name '${takenName}' is already taken. Retry attempt ${currentAttempt}/${maxAttempts}`, "warning");
-      } else {
-        this.addStatusItem(`All retry attempts exhausted for URL name '${takenName}'. Please add manually in Telegram bot.`, "error");
-      }
+    overlay.classList.add("active");
+    modal.style.display = "flex";
+    
+    if (currentAttempt <= maxAttempts) {
+      this.addStatusItem(`URL name '${takenName}' is already taken. Retry attempt ${currentAttempt}/${maxAttempts}`, "warning");
+    } else {
+      this.addStatusItem(`All retry attempts exhausted for URL name '${takenName}'. Please add manually in Telegram bot.`, "error");
     }
   }
 
