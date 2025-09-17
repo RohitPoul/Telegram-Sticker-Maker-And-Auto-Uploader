@@ -2283,11 +2283,20 @@ html {
 .section-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 1rem;
   margin-bottom: 2rem;
   padding-bottom: 1rem;
   border-bottom: 2px solid var(--border-color);
   position: relative;
+}
+
+.section-header > div:first-child,
+.section-header > h2 {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 1;
 }
 
 .section-header i {
@@ -2305,6 +2314,20 @@ html {
   font-size: 2rem;
   font-weight: 600;
   word-wrap: break-word;
+}
+
+.section-header .reset-header-btn {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.section-header .reset-header-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .section-header::after {
@@ -3952,6 +3975,35 @@ html {
   font-weight: 500;
   white-space: nowrap;
   user-select: none;
+}
+
+/* Pack Actions Container */
+.pack-actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius);
+  border: 1px solid var(--border-color);
+}
+
+.pack-actions .btn-large {
+  max-width: 300px;
+  min-width: 250px;
+}
+
+/* Responsive pack actions */
+@media (max-width: 768px) {
+  .pack-actions {
+    padding: 1rem;
+  }
+  
+  .pack-actions .btn {
+    width: 100%;
+    max-width: none;
+  }
 }
 
 .input-group .form-control {
