@@ -1217,7 +1217,7 @@ class StickerBotCore:
                                 active_processes[process_id]["current_stage"] = f"URL name '{pack_url_name}' is taken. Waiting for new URL name (attempt {url_name_attempts}/{max_attempts})..."
                                 active_processes[process_id]["waiting_for_user"] = True
                                 active_processes[process_id]["url_name_taken"] = True
-                                active_processes[process_id]["original_url_name"] = pack_url_name  # Store the actual input URL name
+                                active_processes[process_id]["original_url_name"] = pack_url_name
                                 active_processes[process_id]["url_name_attempts"] = url_name_attempts
                                 active_processes[process_id]["max_url_attempts"] = max_attempts
                                 self.logger.info(f"[STICKER] URL name taken, waiting for user to provide new name (attempt {url_name_attempts}/{max_attempts})")
@@ -1234,7 +1234,7 @@ class StickerBotCore:
                             active_processes[process_id]["current_stage"] = f"URL name timeout. Please provide a new URL name (attempt {url_name_attempts}/{max_attempts})."
                             active_processes[process_id]["waiting_for_user"] = True
                             active_processes[process_id]["url_name_taken"] = True
-                            active_processes[process_id]["original_url_name"] = pack_url_name  # Store the actual URL name that timed out
+                            active_processes[process_id]["original_url_name"] = pack_url_name
                             active_processes[process_id]["url_name_attempts"] = url_name_attempts
                             active_processes[process_id]["max_url_attempts"] = max_attempts
                         return {"success": False, "error": "URL name timeout", "waiting_for_user": True, "url_name_taken": True}
@@ -1248,7 +1248,7 @@ class StickerBotCore:
                                 active_processes[process_id]["current_stage"] = f"URL name error. All {max_attempts} attempts exhausted. Please provide a new URL name."
                                 active_processes[process_id]["waiting_for_user"] = True
                                 active_processes[process_id]["url_name_taken"] = True
-                                active_processes[process_id]["original_url_name"] = pack_url_name  # Store the actual URL name
+                                active_processes[process_id]["original_url_name"] = pack_url_name
                                 active_processes[process_id]["url_name_attempts"] = url_name_attempts
                                 active_processes[process_id]["max_url_attempts"] = max_attempts
                             return {"success": False, "error": "URL name error", "waiting_for_user": True, "url_name_taken": True}
@@ -1856,13 +1856,27 @@ def register_sticker_routes(app):
             return '', 200
             
         try:
-            data = request.get_json()
-            pack_name = data.get('pack_name', '') if data else ''
-            pack_url_name = data.get('pack_url_name', '') if data else ''
-            sticker_type = data.get('sticker_type', 'video') if data else 'video'
-            media_files = data.get('media_files', []) if data else []
-            process_id = data.get('process_id', f'sticker_{int(time.time())}') if data else f'sticker_{int(time.time())}'
-            auto_skip_icon = data.get('auto_skip_icon', True) if data else True  # Default to True
+            # Better error handling for JSON data
+            try:
+                data = request.get_json()
+                if data is None:
+                    return jsonify({
+                        "success": False, 
+                        "error": "No JSON data received or invalid Content-Type header"
+                    }), 400
+            except Exception as json_error:
+                logging.error(f"[API] JSON parsing error: {json_error}")
+                return jsonify({
+                    "success": False, 
+                    "error": f"Invalid JSON format: {str(json_error)}"
+                }), 400
+            
+            pack_name = data.get('pack_name', '')
+            pack_url_name = data.get('pack_url_name', '')
+            sticker_type = data.get('sticker_type', 'video')
+            media_files = data.get('media_files', [])
+            process_id = data.get('process_id', f'sticker_{int(time.time())}')
+            auto_skip_icon = data.get('auto_skip_icon', True)  # Default to True
 
             # Import active_processes from shared state
             from shared_state import active_processes, process_lock, add_process, get_next_process_id
@@ -2101,9 +2115,7 @@ def register_sticker_routes(app):
                             active_processes[process_id]['current_stage'] = f'Icon skipped with timeout. Please provide URL name.'
                             active_processes[process_id]['waiting_for_user'] = True
                             active_processes[process_id]['url_name_taken'] = True  # Trigger URL name modal
-                            active_processes[process_id]['original_url_name'] = pack_url_name or 'timeout_pack'
-                            active_processes[process_id]['url_name_attempts'] = 1
-                            active_processes[process_id]['max_url_attempts'] = 3
+                            active_processes[process_id]['original_url_name'] = pack_url_name or 'unknown'
                     
                     return {"success": False, "error": "Icon skip timeout", "waiting_for_user": True, "url_name_taken": True}
                     
@@ -2117,9 +2129,7 @@ def register_sticker_routes(app):
                             active_processes[process_id]['current_stage'] = f'Icon skip error. Please provide URL name.'
                             active_processes[process_id]['waiting_for_user'] = True
                             active_processes[process_id]['url_name_taken'] = True  # Trigger URL name modal
-                            active_processes[process_id]['original_url_name'] = pack_url_name or 'error_pack'
-                            active_processes[process_id]['url_name_attempts'] = 1
-                            active_processes[process_id]['max_url_attempts'] = 3
+                            active_processes[process_id]['original_url_name'] = pack_url_name or 'unknown'
                     
                     return {"success": False, "error": "Icon skip error", "waiting_for_user": True, "url_name_taken": True}
             
