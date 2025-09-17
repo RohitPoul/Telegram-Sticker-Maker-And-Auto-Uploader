@@ -187,9 +187,11 @@ def cleanup_telegram_and_sessions():
         
         # Clean up telegram_connection_handler
         try:
-            from telegram_connection_handler import telegram_handler
-            if telegram_handler:
-                telegram_handler.cleanup()
+            from telegram_connection_handler import get_telegram_handler
+            handler = get_telegram_handler()
+            if handler:
+                # Force disconnect and cleanup
+                handler.force_disconnect_and_cleanup()
                 logger.info("[CLEANUP] Telegram handler cleaned up")
         except Exception as e:
             logger.warning(f"[CLEANUP] Error cleaning up telegram handler: {e}")
@@ -202,8 +204,7 @@ def cleanup_telegram_and_sessions():
         except Exception as e:
             logger.warning(f"[CLEANUP] Error during garbage collection: {e}")
         
-        # Clean up ONLY temporary session files and database lock files
-        # DO NOT delete the main persistent session file (telegram_session.session)
+        # Enhanced session cleanup - only remove lock/journal files, keep main session
         session_patterns = [
             'temp_session_*.session*',  # Only temporary sessions
             '*.session-journal',        # SQLite journal files (safe to delete)
@@ -211,23 +212,30 @@ def cleanup_telegram_and_sessions():
             '*.session-shm',           # SQLite shared memory files
             'session_*.session-journal', # Session journal files (safe to delete)
             'session_*.session-wal',    # Session WAL files (safe to delete)
-            'telegram_session.session-journal', # Our session's journal (safe to delete)
-            'telegram_session.session-wal',     # Our session's WAL (safe to delete)
-            'telegram_session_*.session*',      # Process-specific sessions
+            'telegram_session_*.session-journal', # Phone-specific session journals
+            'telegram_session_*.session-wal',     # Phone-specific session WAL files
         ]
         
-        # Explicitly protect our main session file
-        protected_files = [
+        # Explicitly protect persistent session files
+        protected_patterns = [
             'telegram_session.session',
-            'python/telegram_session.session'
+            'telegram_session_*.session',  # Phone-specific session files (main files)
+            'python/telegram_session.session',
+            'python/telegram_session_*.session'
         ]
         
         cleaned_count = 0
         for pattern in session_patterns:
             for p in Path('.').glob(pattern):
-                # Skip if this is a protected file
-                if str(p) in protected_files:
-                    logger.debug(f"[CLEANUP] Skipping protected file: {p}")
+                # Skip if this matches a protected pattern
+                skip_file = False
+                for protected in protected_patterns:
+                    if p.match(protected):
+                        logger.debug(f"[CLEANUP] Skipping protected file: {p}")
+                        skip_file = True
+                        break
+                
+                if skip_file:
                     continue
                     
                 try:
@@ -242,9 +250,15 @@ def cleanup_telegram_and_sessions():
         if python_dir.exists():
             for pattern in session_patterns:
                 for p in python_dir.glob(pattern):
-                    # Skip if this is a protected file
-                    if str(p) in protected_files:
-                        logger.debug(f"[CLEANUP] Skipping protected file: {p}")
+                    # Skip if this matches a protected pattern
+                    skip_file = False
+                    for protected in protected_patterns:
+                        if str(p).endswith(protected.replace('python/', '')):
+                            logger.debug(f"[CLEANUP] Skipping protected file: {p}")
+                            skip_file = True
+                            break
+                    
+                    if skip_file:
                         continue
                         
                     try:
@@ -254,7 +268,7 @@ def cleanup_telegram_and_sessions():
                     except Exception as e:
                         logger.warning(f"[CLEANUP] Could not delete {p}: {e}")
         
-        logger.info(f"[CLEANUP] Cleaned up {cleaned_count} session/lock files")
+        logger.info(f"[CLEANUP] Cleaned up {cleaned_count} session/lock files while preserving persistent sessions")
         
         # Wait a moment for file handles to be released
         import time
@@ -269,7 +283,7 @@ def cleanup_telegram_and_sessions():
             logger.warning(f"[CLEANUP] Could not kill our app processes: {e}")
         
     except Exception as e:
-        logger.warning(f"[CLEANUP] Smart session cleanup failed: {e}")
+        logger.warning(f"[CLEANUP] Enhanced session cleanup failed: {e}")
 
 # Register cleanup handlers
 atexit.register(cleanup_processes)
