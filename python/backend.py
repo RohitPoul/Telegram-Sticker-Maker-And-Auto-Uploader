@@ -115,24 +115,18 @@ else:
 # After creating the Flask app
 from telegram_connection_handler import get_telegram_handler
 
-# Initialize the Telegram handler early and FORCE clean startup
+# Initialize the Telegram handler early but PRESERVE existing sessions
 telegram_handler = get_telegram_handler()
-logger.info("Telegram connection handler initialized with CLEAN startup in backend")
+logger.info("Telegram connection handler initialized with SESSION PRESERVATION in backend")
 
-# CRITICAL: Force clean startup - remove ALL session files on backend startup
+# MODIFIED: Only clean up lock files and temporary sessions, preserve main sessions
 try:
-    logger.info("BACKEND STARTUP: Forcing complete session cleanup for clean workflow...")
-    telegram_handler.force_disconnect_and_cleanup()
-    logger.info("BACKEND STARTUP: Clean startup completed - all sessions removed")
-except Exception as e:
-    logger.warning(f"BACKEND STARTUP: Error during clean startup: {e}")
-
-# Clean up any leftover database locks from previous sessions
-try:
+    logger.info("BACKEND STARTUP: Cleaning only temporary files and locks, preserving sessions...")
+    # Only clean up SQLite lock files and temporary sessions - NOT main session files
     cleanup_telegram_and_sessions()
-    logger.info("BACKEND STARTUP: Additional cleanup completed - removed any leftover database locks")
+    logger.info("BACKEND STARTUP: Lock cleanup completed - sessions preserved")
 except Exception as e:
-    logger.warning(f"BACKEND STARTUP: Additional cleanup failed: {e}")
+    logger.warning(f"BACKEND STARTUP: Error during lock cleanup: {e}")
 
 # Configuration
 class Config:
@@ -339,6 +333,33 @@ def validate_file_access(file_paths):
             inaccessible_files.append(file_path)
     
     return missing_files, inaccessible_files
+
+@app.route('/api/clear-sticker-processes', methods=['POST', 'OPTIONS'], strict_slashes=False)
+def clear_sticker_processes():
+    """Clear all active sticker-related processes"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    try:
+        with process_lock:
+            # Find and remove sticker-related processes
+            sticker_processes = {}
+            for process_id, process_data in list(active_processes.items()):
+                if process_data.get('type') == 'sticker' or process_id.startswith('sticker_'):
+                    sticker_processes[process_id] = process_data
+                    del active_processes[process_id]
+            
+            logger.info(f"[API] Cleared {len(sticker_processes)} sticker processes: {list(sticker_processes.keys())}")
+        
+        return jsonify({
+            "success": True,
+            "message": f"Cleared {len(sticker_processes)} sticker processes",
+            "cleared_processes": list(sticker_processes.keys())
+        })
+        
+    except Exception as e:
+        logger.error(f"[API] Error clearing sticker processes: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 # Health check route
 @app.route('/api/health', methods=['GET', 'OPTIONS'], strict_slashes=False)
@@ -1022,8 +1043,22 @@ def get_process_status(process_id):
                 "paused": process_data.get('paused', False),
                 # OPTIMIZED: Add fields for sticker creation
                 "waiting_for_user": process_data.get('waiting_for_user', False),
-                "icon_request_message": process_data.get('icon_request_message', '')
+                "icon_request_message": process_data.get('icon_request_message', ''),
+                # ENHANCED: Include shareable link for completed sticker packs with detailed logging
+                "shareable_link": process_data.get('shareable_link', ''),
+                "url_name_taken": process_data.get('url_name_taken', False),
+                "original_url_name": process_data.get('original_url_name', ''),
+                "url_name_attempts": process_data.get('url_name_attempts', 0),
+                "max_url_attempts": process_data.get('max_url_attempts', 3)
             }
+            
+            # ENHANCED DEBUG: Log detailed information for completed processes
+            if process_data.get('status') == 'completed':
+                logger.info(f"[API] COMPLETED PROCESS DEBUG for {safe_process_id}:")
+                logger.info(f"[API]   - Status: {process_data.get('status')}")
+                logger.info(f"[API]   - Shareable link: {process_data.get('shareable_link', 'NOT_FOUND')}")
+                logger.info(f"[API]   - All process data keys: {list(process_data.keys())}")
+                logger.info(f"[API]   - Response data shareable_link: {response_data.get('shareable_link', 'NOT_FOUND')}")
             
             return jsonify({
                 "success": True,
