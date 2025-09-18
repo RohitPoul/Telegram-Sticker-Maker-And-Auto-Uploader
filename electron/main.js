@@ -4,9 +4,25 @@ const { spawn, exec } = require("child_process");
 const fs = require("fs");
 const axios = require("axios");
 
-app.disableHardwareAcceleration();
-app.commandLine.appendSwitch("disable-gpu");
-app.commandLine.appendSwitch("disable-gpu-compositing");
+// PERFORMANCE OPTIMIZATION: Conditional hardware acceleration
+// This dramatically improves UI smoothness while maintaining fallback safety
+if (!process.env.DISABLE_GPU) {
+  // Enable GPU acceleration for most users
+  app.commandLine.appendSwitch("enable-gpu-rasterization");
+  app.commandLine.appendSwitch("enable-zero-copy");
+} else {
+  // Original fallback for problematic systems
+  app.disableHardwareAcceleration();
+  app.commandLine.appendSwitch("disable-gpu");
+  app.commandLine.appendSwitch("disable-gpu-compositing");
+}
+
+// Safety fallback for GPU crashes - LOG ONLY, don't disable after ready
+app.on("gpu-process-crashed", () => {
+  console.log("GPU process crashed - note for next restart");
+  // Can't call disableHardwareAcceleration after app ready
+  // User should restart with DISABLE_GPU=1 if issues persist
+});
 
 let mainWindow;
 let pythonProcess;
@@ -59,6 +75,13 @@ function createWindow() {
             nodeIntegration: false,
             contextIsolation: true,
             preload: path.join(__dirname, "preload.js"),
+            // PERFORMANCE OPTIMIZATIONS:
+            experimentalFeatures: true,
+            enableRemoteModule: false,
+            // Prevent background throttling for smooth animations
+            backgroundThrottling: false,
+            // Enable hardware acceleration features
+            hardwareAcceleration: true,
         },
         titleBarStyle: "default",
         icon: path.join(__dirname, "assets", "icon.png"),
