@@ -878,6 +878,8 @@ class StickerBotCore:
                         active_processes[process_id]["waiting_for_user"] = True
                         active_processes[process_id]["icon_request_message"] = response.message
                         active_processes[process_id]["progress"] = 90
+                        active_processes[process_id]["status"] = "waiting_for_user"  # CRITICAL FIX: Set status to prevent frontend from marking as completed
+                        active_processes[process_id]["icon_request"] = True  # Additional flag for frontend detection
                 
                 # Return success - the process will continue when user clicks skip/upload
                 # No timeout here - user controls when to proceed
