@@ -316,6 +316,10 @@ class TelegramUtilities {
     document.getElementById("change-icon-file").addEventListener("click", () => this.selectIconFile());
     document.getElementById("cancel-icon-selection").addEventListener("click", () => this.hideIconModal());
     
+    // URL Name Retry Modal Events
+    document.getElementById("submit-new-url").addEventListener("click", () => this.submitNewUrlName());
+    document.getElementById("cancel-url-retry").addEventListener("click", () => this.hideUrlNameModal());
+    
     // Auto-skip icon setting
     document.getElementById("auto-skip-icon").addEventListener("change", () => {
       this.saveSettings();
@@ -4479,8 +4483,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           // Update UI progress indicators
           this.updateStickerProgressDisplay(progress);
           
-          // CRITICAL FIX: Check URL_NAME_TAKEN first to prevent race condition with completed status
-          // This ensures retry modal shows even if status becomes 'completed' simultaneously
+          // PRIORITY CHECK 1: Check URL_NAME_TAKEN first to prevent race condition with completed status
           if (progress.url_name_taken && progress.waiting_for_user) {
             // URL name is taken, show retry modal (PRIORITY OVER COMPLETED STATUS)
             console.log(`🔧 [FRONTEND] URL name taken detected, showing retry modal (priority check)`);
@@ -4504,62 +4507,9 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
             return;
           }
           
-          // Check for different process states (AFTER URL_NAME_TAKEN check)
-          if (progress.status === "completed") {
-            console.log(`🔧 [FRONTEND] Process completed with data:`, progress);
-            console.log(`🔧 [FRONTEND] Shareable link in progress data: ${progress.shareable_link}`);
-            this.addStatusItem("✅ Sticker pack creation completed successfully!", "completed");
-            this.stopStickerProgressMonitoring();
-            this.onStickerProcessCompleted(true, progress);
-            return;
-          } else if (progress.status === "error" || progress.status === "failed") {
-            this.addStatusItem(`❌ Sticker pack creation failed: ${progress.current_stage || 'Unknown error'}`, "error");
-            this.stopStickerProgressMonitoring();
-            this.onStickerProcessCompleted(false, progress);
-            return;
-          } else if (progress.status === "waiting_for_user") {
-            // Handle other user interaction requirements (icon selection, etc.)
-            if (progress.waiting_for_user && progress.icon_request) {
-              // Icon selection is required
-              console.log(`🔧 [FRONTEND] Icon selection required`);
-              this.stopStickerProgressMonitoring();
-              this.showIconModal(processId, progress.icon_request_message);
-              return;
-            }
-          }
-          consecutiveErrors = 0;
-          
-          this.updateStickerProgressDisplay(progress);
-          
-          // OPTIMIZED: Prevent duplicate stage notifications with better tracking
-          if (progress.current_stage && progress.current_stage !== this.lastStage) {
-            // Show ALL meaningful stage changes, not just queue messages
-            const isQueueMessage = progress.current_stage.includes('waiting in queue');
-            const shouldShow = !isQueueMessage || !this.lastStageWasQueue;
-            
-            if (shouldShow) {
-              this.addStatusItem(progress.current_stage, "info");
-              this.lastStage = progress.current_stage;
-              this.lastStageWasQueue = isQueueMessage;
-            }
-          }
-          
-          // Update individual media file statuses
-          if (progress.current_file) {
-            const fileIndex = this.mediaFiles.findIndex(
-              (f) =>
-                f.name === progress.current_file ||
-                f.file_path.includes(progress.current_file)
-            );
-            if (fileIndex >= 0) {
-              this.mediaFiles[fileIndex].status =
-                progress.status || "processing";
-            }
-          }
-          
-          // Check if process is waiting for icon selection
-          if (progress.waiting_for_user && progress.icon_request_message) {
-            console.log(`🔧 [FRONTEND] Process ${processId} waiting for icon selection`);
+          // PRIORITY CHECK 2: Check for icon selection (before completed status)
+          if (progress.waiting_for_user && (progress.icon_request_message || progress.icon_request)) {
+            console.log(`🔧 [FRONTEND] Icon selection required (priority check)`);
             console.log(`🔧 [FRONTEND] Progress data:`, progress);
             
             // Check auto-skip setting with enhanced debugging
@@ -4611,14 +4561,53 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
               
               console.log(`🔧 [FRONTEND] showIconModal called successfully, monitoring stopped`);
             }
-          } else if (progress.status === "completed") {
-            console.log(`🔧 [FRONTEND] Process ${processId} completed successfully`);
+            return; // CRITICAL: Exit early after handling icon selection
+          }
+          
+          // REMAINING STATUS CHECKS (after priority checks)
+          if (progress.status === "completed") {
+            console.log(`🔧 [FRONTEND] Process completed with data:`, progress);
+            console.log(`🔧 [FRONTEND] Shareable link in progress data: ${progress.shareable_link}`);
+            this.addStatusItem("✅ Sticker pack creation completed successfully!", "completed");
             this.stopStickerProgressMonitoring();
             this.onStickerProcessCompleted(true, progress);
-          } else if (progress.status === "error") {
-            console.log(`🔧 [FRONTEND] Process ${processId} failed with error`);
+            return;
+          } else if (progress.status === "error" || progress.status === "failed") {
+            this.addStatusItem(`❌ Sticker pack creation failed: ${progress.current_stage || 'Unknown error'}`, "error");
             this.stopStickerProgressMonitoring();
             this.onStickerProcessCompleted(false, progress);
+            return;
+          }
+          
+          // Normal progress updates and media status tracking
+          consecutiveErrors = 0;
+          
+          this.updateStickerProgressDisplay(progress);
+          
+          // OPTIMIZED: Prevent duplicate stage notifications with better tracking
+          if (progress.current_stage && progress.current_stage !== this.lastStage) {
+            // Show ALL meaningful stage changes, not just queue messages
+            const isQueueMessage = progress.current_stage.includes('waiting in queue');
+            const shouldShow = !isQueueMessage || !this.lastStageWasQueue;
+            
+            if (shouldShow) {
+              this.addStatusItem(progress.current_stage, "info");
+              this.lastStage = progress.current_stage;
+              this.lastStageWasQueue = isQueueMessage;
+            }
+          }
+          
+          // Update individual media file statuses
+          if (progress.current_file) {
+            const fileIndex = this.mediaFiles.findIndex(
+              (f) =>
+                f.name === progress.current_file ||
+                f.file_path.includes(progress.current_file)
+            );
+            if (fileIndex >= 0) {
+              this.mediaFiles[fileIndex].status =
+                progress.status || "processing";
+            }
           }
         } else {
           consecutiveErrors++;
@@ -5080,56 +5069,72 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     const overlay = document.getElementById("modal-overlay");
     const takenNameSpan = document.getElementById("taken-url-name");
     const newUrlNameInput = document.getElementById("new-url-name");
-    const attemptInfo = document.getElementById("url-name-attempt-info");
+    const attemptCounter = document.getElementById("attempt-counter");
+    const suggestionsContainer = document.getElementById("url-suggestions");
     
     if (!modal || !overlay) {
       console.error(`🔧 [FRONTEND] Modal elements not found!`);
       return;
     }
     
+    // Update taken name display
     if (takenNameSpan) {
       takenNameSpan.textContent = takenName;
     }
     
-    // Update attempt counter in modal with improved styling
-    if (attemptInfo) {
-      if (currentAttempt <= maxAttempts) {
-        attemptInfo.innerHTML = `<i class="fas fa-redo"></i> Attempt ${currentAttempt} of ${maxAttempts}`;
-        attemptInfo.style.display = "block";
-        // Add urgency styling for final attempts
-        if (currentAttempt === maxAttempts) {
-          attemptInfo.style.borderColor = "var(--error-color)";
-          attemptInfo.style.color = "var(--error-color)";
-        }
-      } else {
-        attemptInfo.style.display = "none";
-      }
+    // Update attempt counter (simplified)
+    if (attemptCounter) {
+      attemptCounter.textContent = `Attempt ${currentAttempt} of ${maxAttempts}`;
     }
     
+    // Generate smart suggestions
+    this.generateUrlSuggestions(takenName, suggestionsContainer);
+    
     if (newUrlNameInput) {
-      // Suggest a more intelligent new name with suffix
+      // Start with a smart suggestion
       const timestamp = Date.now().toString().slice(-6);
-      const suggestedName = takenName.length > 20 ? 
-        `${takenName.substring(0, 20)}_${timestamp}` : 
-        `${takenName}_${timestamp}`;
+      const baseNameClean = takenName.replace(/[^a-zA-Z0-9]/g, '').substring(0, 20);
+      const suggestedName = `${baseNameClean}_${timestamp}`;
       newUrlNameInput.value = suggestedName;
       
-      // Add real-time validation feedback
-      newUrlNameInput.addEventListener('input', () => {
-        const validation = this.validateUrlName(newUrlNameInput.value.trim());
-        if (validation.valid) {
-          newUrlNameInput.style.borderColor = 'var(--success-color)';
-          newUrlNameInput.style.boxShadow = '0 0 5px rgba(40, 167, 69, 0.3)';
-        } else {
-          newUrlNameInput.style.borderColor = 'var(--error-color)';
-          newUrlNameInput.style.boxShadow = '0 0 5px rgba(220, 53, 69, 0.3)';
+      // Simple validation without complex DOM manipulation
+      const validateInput = () => {
+        const value = newUrlNameInput.value.trim();
+        const validation = this.validateUrlName(value);
+        const container = newUrlNameInput.closest('.url-input-container');
+        
+        // Only apply styling if elements exist
+        if (container) {
+          if (value.length === 0) {
+            container.style.borderColor = 'var(--border-color)';
+          } else if (validation.valid) {
+            container.style.borderColor = 'var(--success-color)';
+          } else {
+            container.style.borderColor = 'var(--error-color)';
+          }
         }
-      });
+      };
       
+      // Remove any existing event listeners
+      newUrlNameInput.removeEventListener('input', validateInput);
+      newUrlNameInput.addEventListener('input', validateInput);
+      
+      // Add Enter key support
+      newUrlNameInput.removeEventListener('keypress', this.handleUrlRetryKeypress);
+      this.handleUrlRetryKeypress = (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          this.submitNewUrlName();
+        }
+      };
+      newUrlNameInput.addEventListener('keypress', this.handleUrlRetryKeypress);
+      
+      // Initial validation
       setTimeout(() => {
+        validateInput();
         newUrlNameInput.focus();
         newUrlNameInput.select();
-      }, 100);
+      }, 150);
     }
     
     // Store retry information
@@ -5141,10 +5146,40 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     overlay.classList.add("active");
     modal.style.display = "flex";
     
+    // Add status message
     if (currentAttempt <= maxAttempts) {
-      this.addStatusItem(`URL name '${takenName}' is already taken. Retry attempt ${currentAttempt}/${maxAttempts}`, "warning");
+      this.addStatusItem(`URL name '${takenName}' is taken. Showing retry options (${currentAttempt}/${maxAttempts})`, "warning");
     } else {
-      this.addStatusItem(`All retry attempts exhausted for URL name '${takenName}'. Please add manually in Telegram bot.`, "error");
+      this.addStatusItem(`All retry attempts exhausted for URL name '${takenName}'.`, "error");
+    }
+  }
+  
+  generateUrlSuggestions(baseName, container) {
+    if (!container) return;
+    
+    const cleanBase = baseName.replace(/[^a-zA-Z0-9]/g, '').substring(0, 15);
+    const timestamp = Date.now().toString().slice(-6);
+    const year = new Date().getFullYear();
+    
+    const suggestions = [
+      `${cleanBase}_${timestamp}`,
+      `${cleanBase}_${year}`,
+      `${cleanBase}_pack`,
+      `${cleanBase}_stickers`,
+      `my_${cleanBase}_pack`
+    ].filter(s => s.length >= 5 && s.length <= 32);
+    
+    container.innerHTML = suggestions.map(suggestion => 
+      `<button class="suggestion-btn" onclick="window.app?.applySuggestion('${suggestion}')">${suggestion}</button>`
+    ).join('');
+  }
+  
+  applySuggestion(suggestion) {
+    const input = document.getElementById("new-url-name");
+    if (input) {
+      input.value = suggestion;
+      input.dispatchEvent(new Event('input')); // Trigger validation
+      input.focus();
     }
   }
 
@@ -5185,9 +5220,10 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     }
     
     try {
-      const submitBtn = document.getElementById("submit-new-url-name");
+      const submitBtn = document.getElementById("submit-new-url");
       if (submitBtn) {
         submitBtn.disabled = true;
+        submitBtn.classList.add('loading');
         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
       }
       
@@ -5250,7 +5286,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         
         if (submitBtn) {
           submitBtn.disabled = false;
-          submitBtn.innerHTML = '<i class="fas fa-check"></i> Submit New Name';
+          submitBtn.classList.remove('loading');
+          submitBtn.innerHTML = '<i class="fas fa-check"></i> Try This Name';
         }
       }
     } catch (error) {
@@ -5258,10 +5295,11 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       this.addStatusItem(`❌ Error submitting URL name: ${error.message}`, "error");
       this.showToast("error", "Submission Error", error.message);
       
-      const submitBtn = document.getElementById("submit-new-url-name");
+      const submitBtn = document.getElementById("submit-new-url");
       if (submitBtn) {
         submitBtn.disabled = false;
-        submitBtn.innerHTML = '<i class="fas fa-check"></i> Submit New Name';
+        submitBtn.classList.remove('loading');
+        submitBtn.innerHTML = '<i class="fas fa-check"></i> Try This Name';
       }
     }
   }
