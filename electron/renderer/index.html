@@ -948,48 +948,52 @@
           </div>
         </div>
 
-        <!-- URL Name Taken Modal -->
-        <div class="modal" id="url-name-modal" style="display: none">
-          <div class="modal-header">
-            <h3><i class="fas fa-exclamation-triangle" style="color: var(--warning-color);"></i> URL Name Already Taken</h3>
-            <button class="modal-close" onclick="window.app?.hideUrlNameModal()">
-              <i class="fas fa-times"></i>
-            </button>
-          </div>
-          <div class="modal-body">
-            <div class="url-name-content">
-              <div class="url-name-info">
-                <div class="attempt-counter" id="url-name-attempt-info" style="display: none; margin-bottom: 1rem; padding: 0.5rem; background: rgba(255, 193, 7, 0.1); border-left: 3px solid var(--warning-color); color: var(--warning-color); font-weight: bold;">
-                  <i class="fas fa-redo"></i> Attempt 1 of 3
-                </div>
-                <p>The URL name "<span id="taken-url-name" style="font-weight: bold; color: var(--error-color);">unknown</span>" is already taken by another sticker pack.</p>
-                <p>Please choose a different URL name for your sticker pack:</p>
+                <!-- URL Name Retry Modal - SIMPLE & FAST -->
+        <div class="modal url-name-retry-modal" id="url-name-modal" style="display: none">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h3><i class="fas fa-exclamation-triangle"></i> URL Name Unavailable</h3>
+            </div>
+            
+            <div class="modal-body">
+              <div class="attempt-badge">
+                <span id="attempt-counter">Attempt 1 of 3</span>
               </div>
               
-              <div class="form-group">
-                <label>New URL Name</label>
-                <div class="input-group">
-                  <span class="input-prefix">t.me/addstickers/</span>
-                  <input
-                    type="text"
-                    id="new-url-name"
-                    class="form-control"
-                    placeholder="my_awesome_pack_2025"
-                    maxlength="32"
-                    pattern="[a-zA-Z][a-zA-Z0-9_]*"
-                  />
+              <div class="error-message">
+                <strong>t.me/addstickers/<span id="taken-url-name">name</span></strong> is already taken by another sticker pack
+              </div>
+              
+              <div class="input-section">
+                <h4>Choose a new URL name:</h4>
+                
+                <div class="url-input-container">
+                  <span class="url-prefix">t.me/addstickers/</span>
+                  <input type="text" id="new-url-name" placeholder="Enter new name" maxlength="64">
                 </div>
-                <small class="help-text">5-32 characters, start with letter, use letters/numbers/underscores only</small>
+                
+                <div class="input-validation">
+                  5-32 characters • Start with letter • Letters, numbers, underscores only
+                </div>
+              </div>
+              
+              <div class="suggestions-section">
+                <h5>Quick suggestions:</h5>
+                <div class="suggestions-grid" id="url-suggestions">
+                  <button class="suggestion-btn">name_01</button>
+                  <button class="suggestion-btn">name_pack</button>
+                  <button class="suggestion-btn">my_name</button>
+                  <button class="suggestion-btn">name_stickers</button>
+                </div>
               </div>
             </div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn btn-secondary" onclick="window.app?.hideUrlNameModal()">
-              <i class="fas fa-times"></i> Cancel
-            </button>
-            <button class="btn btn-success" id="submit-new-url-name" onclick="window.app?.submitNewUrlName()">
-              <i class="fas fa-check"></i> Submit New Name
-            </button>
+            
+            <div class="modal-footer">
+              <button class="btn btn-secondary" id="cancel-url-retry">Cancel</button>
+              <button class="btn btn-primary" id="submit-new-url">
+                <i class="fas fa-check"></i> Try This Name
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1405,6 +1409,8 @@
       </div>
     </div>
 
+    <script src="modules/performance-optimizations.js"></script>
+    <script src="modules/component-optimizer.js"></script>
     <script src="script.js"></script>
   </body>
 </html>
