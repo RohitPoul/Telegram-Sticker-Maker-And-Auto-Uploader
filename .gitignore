@@ -71,6 +71,16 @@ COMPREHENSIVE_ANALYSIS_SUMMARY.md
 ENDPOINT_FIXES_SUMMARY.md
 PROJECT_FILE_STRUCTURE.md
 
+# Performance testing and optimization files (temporary)
+test-*.js
+fix-*.js
+*-test.js
+*-fix.js
+performance-*.js
+emergency-*.js
+quick-*.js
+manual-*.js
+
 # Build
 dist/
 build/
