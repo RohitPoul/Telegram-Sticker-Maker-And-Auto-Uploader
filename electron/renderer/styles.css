@@ -1,33 +1,36 @@
-/* Performance optimizations for smooth UI */
+/* PERFORMANCE TURBO: Ultra-fast CSS optimizations */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  /* Enable hardware acceleration for smooth animations */
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
+  /* Remove universal GPU acceleration - apply only when needed */
 }
 
-/* Optimize interactive elements for better performance */
-.btn, .form-control, .modal, .nav-item {
-  /* Use GPU compositing for smoother interactions */
+/* TURBO: Smart GPU acceleration for interactive elements only */
+.btn:hover, .btn:focus, .btn:active,
+.modal-overlay.active,
+.nav-item:hover, .nav-item:active,
+.form-control:focus {
   will-change: transform, opacity;
+  transform: translateZ(0);
   backface-visibility: hidden;
 }
 
-/* Remove will-change when not needed to save memory */
+/* TURBO: Remove GPU acceleration when not interacting */
 .btn:not(:hover):not(:active):not(:focus),
 .form-control:not(:focus),
-.modal:not(.animating) {
+.modal:not(.animating),
+.nav-item:not(:hover):not(:active) {
   will-change: auto;
+  transform: none;
 }
 
-/* Optimize scrolling performance */
+/* TURBO: Optimize scrolling containers with containment */
 .media-files-list, .status-content, .emoji-categories, .tab-content {
-  /* Enable momentum scrolling on touch devices */
+  contain: layout style paint;
+  overflow-anchor: none;
   -webkit-overflow-scrolling: touch;
-  /* Create stacking context for better performance */
-  transform: translateZ(0);
+  overscroll-behavior: contain;
 }
 
 :root {
@@ -52,11 +55,12 @@
   --border-color: #464647;
   --border-radius: 8px;
   --box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  --transition: all 0.16667s cubic-bezier(0.4, 0, 0.2, 1); /* 60fps smooth */
-  --transition-fast: all 0.1s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition: all 0.08s linear; /* TURBO: Ultra-fast 120fps transitions */
+  --transition-fast: all 0.05s linear; /* TURBO: Instant response */
+  --transition-slow: all 0.12s linear; /* TURBO: Reduced from 0.25s */
 }
 
+/* TURBO: High-performance scrolling */
 body {
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   background: var(--bg-primary);
@@ -67,6 +71,9 @@ body {
   width: 100vw;
   margin: 0;
   padding: 0;
+  /* TURBO: Optimize rendering */
+  text-rendering: optimizeSpeed;
+  -webkit-font-smoothing: subpixel-antialiased;
 }
 
 .app-container {
@@ -160,17 +167,16 @@ body {
   color: var(--text-secondary);
   padding: 1rem 1.5rem;
   cursor: pointer;
-  transition: color 0.15s cubic-bezier(0.4, 0, 0.2, 1),
-              background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1),
-              border-color 0.15s cubic-bezier(0.4, 0, 0.2, 1),
-              transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: color 0.05s linear,
+              background-color 0.05s linear,
+              border-color 0.05s linear;
   border-bottom: 3px solid transparent;
   display: flex;
   align-items: center;
   gap: 0.5rem;
   font-size: 0.95rem;
   font-weight: 500;
-  transform: translateZ(0);
+  contain: layout style;
 }
 
 .nav-item:hover {
@@ -183,7 +189,6 @@ body {
   color: var(--primary-color);
   border-bottom-color: var(--primary-color);
   background: rgba(33, 150, 243, 0.1);
-  transform: translateY(0) translateZ(0);
 }
 
 .nav-item i {
@@ -805,15 +810,14 @@ html {
   color: var(--text-secondary);
   cursor: pointer;
   padding: 0.4rem 0.6rem;
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1); /* 60fps smooth animation */
+  transition: background-color 0.05s linear, color 0.05s linear; /* TURBO: Ultra-fast */
   border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
   min-width: 32px;
   height: 32px;
-  transform: translateZ(0); /* Enable hardware acceleration */
-  will-change: transform, background-color, color; /* Optimize for animations */
+  contain: layout style;
 }
 
 .btn-input-action:hover {
@@ -1235,6 +1239,7 @@ html {
   gap: 0.5rem;
 }
 
+/* TURBO: Ultra-lightweight toast animations */
 .toast {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
@@ -1245,9 +1250,9 @@ html {
   align-items: center;
   gap: 0.75rem;
   max-width: 400px;
-  animation: slideInRight 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  transform: translateZ(0);
-  will-change: transform, opacity;
+  animation: turboSlideInRight 0.1s linear;
+  contain: layout style paint;
+  pointer-events: auto;
 }
 
 .toast.success {
@@ -1310,6 +1315,19 @@ html {
   color: var(--text-primary);
 }
 
+/* TURBO: Replace heavy slide animation with lightweight version */
+@keyframes turboSlideInRight {
+  from {
+    transform: translateX(50px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* DEPRECATED: Remove old heavy animation */
 @keyframes slideInRight {
   from {
     transform: translateX(120%) translateZ(0);
@@ -1356,7 +1374,7 @@ html {
   font-weight: 500;
 }
 
-/* Modal Dialogs - Optimized for Performance */
+/* TURBO: Ultra-fast modal animations - optimized for 60fps */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -1368,15 +1386,13 @@ html {
   align-items: center;
   justify-content: center;
   z-index: 3000;
-  backdrop-filter: blur(4px);
-  /* GPU acceleration for smoother performance */
-  will-change: opacity;
-  transform: translateZ(0);
+  /* Remove expensive backdrop-filter */
+  contain: layout style paint;
 }
 
 .modal-overlay.active {
   display: flex;
-  animation: fadeIn 0.15s ease-out;
+  animation: turboFadeIn 0.08s linear;
 }
 
 .modal {
@@ -1388,20 +1404,31 @@ html {
   max-width: 500px;
   max-height: 90vh;
   overflow-y: auto;
-  /* GPU acceleration for smooth animations */
-  will-change: transform, opacity;
-  transform: translateZ(0);
-  animation: modalSlideIn 0.2s ease-out;
+  contain: layout style paint;
+  animation: turboSlideIn 0.1s cubic-bezier(0.2, 0, 0.2, 1);
 }
 
-/* Faster, hardware-accelerated animations */
-@keyframes fadeIn {
-  from {
+/* TURBO: Lightweight animations */
+@keyframes turboFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes turboSlideIn {
+  from { 
+    transform: translate3d(0, -8px, 0);
     opacity: 0;
   }
-  to {
+  to { 
+    transform: translate3d(0, 0, 0);
     opacity: 1;
   }
+}
+
+/* DEPRECATED: Remove old heavy animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes modalSlideIn {

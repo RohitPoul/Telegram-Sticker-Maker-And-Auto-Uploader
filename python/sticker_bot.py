@@ -2049,6 +2049,8 @@ def register_sticker_routes(app):
             if not validation['valid']:
                 return jsonify({"success": False, "error": validation['error']}), 400
             
+            logging.info(f"[URL_NAME] Processing URL name submission for process {process_id}: {new_url_name} (attempt {current_attempt}/{max_attempts})")
+            
             # Import active_processes from shared state
             from shared_state import active_processes, process_lock
             
@@ -2056,8 +2058,24 @@ def register_sticker_routes(app):
                 if process_id not in active_processes:
                     return jsonify({"success": False, "error": "Process not found"}), 404
                 
-                if active_processes[process_id].get('status') != 'waiting_for_url_name':
-                    return jsonify({"success": False, "error": "Process is not waiting for URL name"}), 400
+                # Check if process is in a valid state for URL name submission
+                process_status = active_processes[process_id].get('status')
+                url_name_taken = active_processes[process_id].get('url_name_taken', False)
+                waiting_for_user = active_processes[process_id].get('waiting_for_user', False)
+                
+                # Accept URL name submission if:
+                # 1. Status is explicitly 'waiting_for_url_name', OR
+                # 2. URL name was taken and we're waiting for user input, OR  
+                # 3. Process is in a retry state (url_name_taken flag is set)
+                valid_for_url_submission = (
+                    process_status == 'waiting_for_url_name' or
+                    (url_name_taken and waiting_for_user) or
+                    url_name_taken  # Allow submission during retry flow
+                )
+                
+                if not valid_for_url_submission:
+                    logging.warning(f"[URL_NAME] Process {process_id} not in valid state for URL submission. Status: {process_status}, url_name_taken: {url_name_taken}, waiting_for_user: {waiting_for_user}")
+                    return jsonify({"success": False, "error": f"Process is not waiting for URL name (status: {process_status}, url_name_taken: {url_name_taken})"}), 400
                 
                 # Update process with new URL name and attempt information
                 active_processes[process_id]['pack_url_name'] = new_url_name
