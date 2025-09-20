@@ -317,8 +317,8 @@ class TelegramUtilities {
     document.getElementById("cancel-icon-selection").addEventListener("click", () => this.hideIconModal());
     
     // URL Name Retry Modal Events
-    document.getElementById("submit-new-url").addEventListener("click", () => this.submitNewUrlName());
-    document.getElementById("cancel-url-retry").addEventListener("click", () => this.hideUrlNameModal());
+    document.getElementById("submit-new-url").addEventListener("click", () => this.stickerBot.submitNewUrlName());
+    document.getElementById("cancel-url-retry").addEventListener("click", () => this.stickerBot.hideUrlNameModal());
     
     // Auto-skip icon setting
     document.getElementById("auto-skip-icon").addEventListener("change", () => {
@@ -408,26 +408,7 @@ class TelegramUtilities {
       });
     }
     
-    // Toggle media view (horizontal/vertical)
-    const toggleBtn = document.getElementById("toggle-media-view");
-    if (toggleBtn) {
-      toggleBtn.addEventListener("click", () => {
-        const mediaList = document.getElementById("sticker-media-list");
-        const icon = toggleBtn.querySelector("i");
-        
-        if (mediaList) {
-          mediaList.classList.toggle("vertical-scroll");
-          
-          if (mediaList.classList.contains("vertical-scroll")) {
-            icon.className = "fas fa-grip-lines";
-            toggleBtn.classList.add("active");
-          } else {
-            icon.className = "fas fa-grip-horizontal";
-            toggleBtn.classList.remove("active");
-          }
-        }
-      });
-    }
+
     
     // Sort functionality
     const sortBtn = document.getElementById("sort-media");
@@ -1275,7 +1256,7 @@ class TelegramUtilities {
     
     // STEP 2: Clear media files and reset arrays
     this.mediaFiles = [];
-    this.updateMediaList();
+    this.updateMediaFileList();
     this.updatePackActions();
     
     // STEP 3: Reset validation display (clear any existing validation)
@@ -6530,7 +6511,60 @@ This action cannot be undone. Are you sure?
       });
     }
     
-    // Single delegated event for all emoji buttons - much better performance
+    // Setup smooth scroll navigation buttons
+    this.setupEmojiScrollNavigation();
+  }
+  
+  setupEmojiScrollNavigation() {
+    const tabsContainer = document.querySelector('.emoji-tabs');
+    
+    if (!tabsContainer) {
+      console.log('Emoji tabs container not found');
+      return;
+    }
+    
+    // Enable mouse wheel scrolling
+    tabsContainer.addEventListener('wheel', (e) => {
+      if (e.deltaY !== 0) {
+        e.preventDefault();
+        tabsContainer.scrollBy({
+          left: e.deltaY > 0 ? 100 : -100,
+          behavior: 'smooth'
+        });
+      }
+    });
+    
+    // Enable drag scrolling
+    let isDown = false;
+    let startX;
+    let scrollLeft;
+    
+    tabsContainer.addEventListener('mousedown', (e) => {
+      isDown = true;
+      startX = e.pageX - tabsContainer.offsetLeft;
+      scrollLeft = tabsContainer.scrollLeft;
+      tabsContainer.style.cursor = 'grabbing';
+    });
+    
+    tabsContainer.addEventListener('mouseleave', () => {
+      isDown = false;
+      tabsContainer.style.cursor = 'grab';
+    });
+    
+    tabsContainer.addEventListener('mouseup', () => {
+      isDown = false;
+      tabsContainer.style.cursor = 'grab';
+    });
+    
+    tabsContainer.addEventListener('mousemove', (e) => {
+      if (!isDown) return;
+      e.preventDefault();
+      const x = e.pageX - tabsContainer.offsetLeft;
+      const walk = (x - startX) * 2; // Scroll speed
+      tabsContainer.scrollLeft = scrollLeft - walk;
+    });
+    
+    // Single delegated event for all emoji buttons
     const emojiContainer = document.querySelector('.emoji-picker-enhanced');
     if (emojiContainer) {
       emojiContainer.addEventListener('click', (e) => {
@@ -6546,7 +6580,7 @@ This action cannot be undone. Are you sure?
       });
     }
     
-    // Live emoji preview with debouncing
+    // Live emoji preview
     const emojiInput = document.getElementById('emoji-input');
     if (emojiInput) {
       let debounceTimer;
