@@ -1,11 +1,13 @@
 {
   "name": "telegram-utilities",
-  "version": "1.0.0",
+  "version": "1.4.0",
   "description": "Advanced Telegram Utilities - Video Converter & Sticker Bot",
   "main": "electron/main.js",
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
+    "gpu-mode": "cross-env ENABLE_GPU=1 electron .",
+    "debug": "cross-env ELECTRON_DEBUG=1 ELECTRON_DEVTOOLS=1 electron .",
     "build": "electron-builder",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
@@ -42,6 +44,7 @@
     }
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "electron": "^27.0.0",
     "electron-builder": "^24.6.4"
   },
