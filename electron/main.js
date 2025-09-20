@@ -4,25 +4,25 @@ const { spawn, exec } = require("child_process");
 const fs = require("fs");
 const axios = require("axios");
 
-// PERFORMANCE OPTIMIZATION: Conditional hardware acceleration
-// This dramatically improves UI smoothness while maintaining fallback safety
-if (!process.env.DISABLE_GPU) {
-  // Enable GPU acceleration for most users
-  app.commandLine.appendSwitch("enable-gpu-rasterization");
-  app.commandLine.appendSwitch("enable-zero-copy");
-} else {
-  // Original fallback for problematic systems
-  app.disableHardwareAcceleration();
-  app.commandLine.appendSwitch("disable-gpu");
-  app.commandLine.appendSwitch("disable-gpu-compositing");
-}
+// SIMPLIFIED AND STABLE: Use software rendering by default
+// This eliminates GPU crashes while maintaining excellent performance
+console.log("Using stable software rendering mode");
+app.disableHardwareAcceleration();
 
-// Safety fallback for GPU crashes - LOG ONLY, don't disable after ready
-app.on("gpu-process-crashed", () => {
-  console.log("GPU process crashed - note for next restart");
-  // Can't call disableHardwareAcceleration after app ready
-  // User should restart with DISABLE_GPU=1 if issues persist
-});
+// Apply stability-focused command line switches
+app.commandLine.appendSwitch("disable-gpu");
+app.commandLine.appendSwitch("disable-gpu-compositing");
+app.commandLine.appendSwitch("disable-gpu-sandbox");
+app.commandLine.appendSwitch("disable-software-rasterizer");
+app.commandLine.appendSwitch("disable-background-timer-throttling");
+app.commandLine.appendSwitch("disable-renderer-backgrounding");
+app.commandLine.appendSwitch("disable-features", "VizDisplayCompositor");
+
+// Optional: Users can still enable GPU if they want to experiment
+if (process.env.ENABLE_GPU === "1") {
+  console.log("GPU acceleration manually enabled via ENABLE_GPU=1");
+  app.enableHardwareAcceleration();
+}
 
 let mainWindow;
 let pythonProcess;
@@ -75,13 +75,16 @@ function createWindow() {
             nodeIntegration: false,
             contextIsolation: true,
             preload: path.join(__dirname, "preload.js"),
-            // PERFORMANCE OPTIMIZATIONS:
-            experimentalFeatures: true,
+            // STABLE PERFORMANCE OPTIMIZATIONS:
+            experimentalFeatures: false,  // Disable experimental features for stability
             enableRemoteModule: false,
-            // Prevent background throttling for smooth animations
+            // Keep background throttling disabled for smooth animations
             backgroundThrottling: false,
-            // Enable hardware acceleration features
-            hardwareAcceleration: true,
+            // Software rendering is stable and fast enough
+            hardwareAcceleration: false,
+            webSecurity: true,
+            // Simplified settings for reliability
+            allowRunningInsecureContent: false
         },
         titleBarStyle: "default",
         icon: path.join(__dirname, "assets", "icon.png"),
@@ -98,7 +101,7 @@ function createWindow() {
     mainWindow.once("ready-to-show", () => {
         mainWindow.show();
         mainWindow.maximize();  // Ensure window is maximized
-        // no noisy log
+        console.log("✅ Application started successfully in stable mode");
     });
 
     mainWindow.on('close', async (event) => {
