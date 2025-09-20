@@ -163,69 +163,20 @@ class VideoConverterCore:
 
     def convert_video(self, input_file, output_file, process_id=None, file_index=None):
         
-        # Configure detailed logging
-        log_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'conversion.log')
-        
-        # Ensure log directory exists
-        os.makedirs(os.path.dirname(log_file), exist_ok=True)
-        
-        # Remove existing handlers to prevent duplicate logging
-        for handler in logging.root.handlers[:]:
-            logging.root.removeHandler(handler)
-        
-        # Configure logging with explicit file handling
-        logging.basicConfig(
-            filename=log_file, 
-            level=logging.DEBUG, 
-            format='%(asctime)s - %(levelname)s: %(message)s',
-            filemode='a',  # Append mode
-            force=True  # Force reconfiguration of root logger
-        )
-        
-        # Create a file handler to ensure file is created with UTF-8 encoding
-        file_handler = logging.FileHandler(log_file, mode='a', encoding='utf-8')
-        file_handler.setLevel(logging.DEBUG)
-        formatter = logging.Formatter('%(asctime)s - %(levelname)s: %(message)s')
-        file_handler.setFormatter(formatter)
-        
-        # Create a logger specifically for conversion
-        conversion_logger = logging.getLogger('ConversionLogger')
-        conversion_logger.propagate = False  # Prevent propagation to root logger
-        conversion_logger.setLevel(logging.DEBUG)
-        
-        # Remove any existing handlers
-        conversion_logger.handlers.clear()
-        conversion_logger.addHandler(file_handler)
-        
-        # Ensure the log file is writable with UTF-8 encoding
-        try:
-            with open(log_file, 'a', encoding='utf-8') as f:
-                f.write(f"\n{'='*50}\n[LOGGING INITIALIZED] {time.ctime()}\n{'='*50}\n")
-        except Exception as e:
-            print(f"Error creating log file: {e}")
-        
-        # Start timing the entire conversion process
-        start_time = time.time()
-        
         try:
             filename = os.path.basename(input_file)
-            conversion_logger.info(f"{'='*50}")
-            conversion_logger.info(f"[VIDEO] CONVERSION STARTED")
-            conversion_logger.info(f"{'='*50}")
-            conversion_logger.info(f"Input File: {input_file}")
-            conversion_logger.info(f"Output File: {output_file}")
+            self.logger.info(f"[VIDEO] Converting {filename}")
+            self.logger.info(f"Input: {input_file}")
+            self.logger.info(f"Output: {output_file}")
             
             # Get initial video metadata
             duration, width, height = self.get_video_info(input_file)
             initial_file_size = self.get_file_size(input_file)
             
-            conversion_logger.info(f"Initial Video Metadata:")
-            conversion_logger.info(f"- Duration: {duration:.2f} seconds")
-            conversion_logger.info(f"- Resolution: {width}x{height}")
-            conversion_logger.info(f"- Initial File Size: {initial_file_size:.2f} KB")
+            self.logger.info(f"Metadata: {duration:.2f}s, {width}x{height}, {initial_file_size:.2f} KB")
             
             # CPU-only mode - no GPU detection or monitoring
-            conversion_logger.info(f"[CPU] Using CPU-only processing mode")
+            self.logger.info(f"[CPU] Using CPU-only processing mode")
             
             # Update file status to "analyzing"
             if process_id and file_index is not None:
@@ -291,8 +242,7 @@ class VideoConverterCore:
 
             while attempt <= max_attempts:
                 conversion_attempts += 1
-                conversion_logger.info(f"\n--- Conversion Attempt {conversion_attempts} ---")
-                conversion_logger.info(f"CRF: {crf}, Initial Bitrate: {initial_bitrate} kbps")
+                self.logger.debug(f"Conversion Attempt {conversion_attempts} - CRF: {crf}, Bitrate: {initial_bitrate} kbps")
                 
                 # Calculate progress based on attempt
                 base_progress = 15 + (attempt / max_attempts) * 70  # 15-85% range for conversion attempts
@@ -311,14 +261,13 @@ class VideoConverterCore:
                     f"pad={self.SCALE_WIDTH}:{self.SCALE_HEIGHT}:(ow-iw)/2:(oh-ih)/2"
                 )
                 
-                conversion_logger.info(f"[CPU] Using CPU processing for {filename}")
+                self.logger.debug(f"[CPU] Processing {filename} - Pass 1")
 
                 # Pass log base for two-pass; suppress console noise
                 pass_log_base = os.path.join(self.TEMP_DIR, f"ffmpeg_pass_{os.getpid()}_{int(time.time())}_{attempt}")
                 null_device = "NUL" if os.name == 'nt' else "/dev/null"
 
                 # CPU-only VP9 encoding with two-pass
-                # FFmpeg command configuration - YOUR EXACT COMMAND
                 convert_cmd = [
                     "ffmpeg",
                     "-hide_banner",
@@ -341,13 +290,6 @@ class VideoConverterCore:
                     null_device,
                 ]
 
-                conversion_logger.info(f"[PASS1] {filename}: Starting FFmpeg Pass 1...")
-                
-                # DEBUG: Log the exact FFmpeg command for verification
-                conversion_logger.info(f"[CPU_DEBUG] FFmpeg Pass 1 Command:")
-                cmd_str = ' '.join(f'"{{arg}}"' if ' ' in arg else arg for arg in convert_cmd)
-                conversion_logger.info(f"[CPU_DEBUG] {cmd_str}")
-
                 # Update progress for pass 1
                 if process_id and file_index is not None:
                     self.update_file_status(process_id, file_index, {
@@ -358,10 +300,9 @@ class VideoConverterCore:
                     })
 
                 # First Pass
-                conversion_logger.info(f"[CPU_DEBUG] Executing FFmpeg Pass 1...")
                 result = subprocess.run(convert_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-                # Second Pass Command - rebuild it properly
+                # Second Pass Command
                 convert_cmd = [
                     "ffmpeg",
                     "-hide_banner",
@@ -384,13 +325,6 @@ class VideoConverterCore:
                     "-f", "webm",
                     output_file,
                 ]
-
-                conversion_logger.info(f"[PASS2] {filename}: Starting FFmpeg Pass 2...")
-                
-                # DEBUG: Log Pass 2 command as well
-                conversion_logger.info(f"[CPU_DEBUG] FFmpeg Pass 2 Command:")
-                cmd_str = ' '.join(f'"{{arg}}"' if ' ' in arg else arg for arg in convert_cmd)
-                conversion_logger.info(f"[CPU_DEBUG] {cmd_str}")
 
                 # Update progress for pass 2
                 if process_id and file_index is not None:
@@ -459,17 +393,8 @@ class VideoConverterCore:
                     # Calculate total conversion time
                     total_conversion_time = time.time() - start_time
                     
-                    # Detailed conversion report
-                    conversion_logger.info(f"\n{'='*50}")
-                    conversion_logger.info(f"[VIDEO] CONVERSION SUCCESSFUL")
-                    conversion_logger.info(f"{'='*50}")
-                    conversion_logger.info(f"Total Conversion Time: {total_conversion_time:.2f} seconds")
-                    conversion_logger.info(f"Total Attempts: {conversion_attempts}")
-                    conversion_logger.info(f"Final File Size: {final_file_size:.2f} KB")
-                    conversion_logger.info(f"Final CRF: {final_crf}")
-                    conversion_logger.info(f"Final Bitrate: {final_bitrate} kbps")
-                    conversion_logger.info(f"Size Reduction: {((initial_file_size - final_file_size) / initial_file_size * 100):.2f}%")
-                    conversion_logger.info(f"{'='*50}")
+                    # Simple conversion success log
+                    self.logger.info(f"[SUCCESS] {filename}: Converted in {total_conversion_time:.2f}s, {conversion_attempts} attempts, {final_file_size:.2f}KB")
                     
                     return True
 
@@ -527,17 +452,12 @@ class VideoConverterCore:
                     pass
 
             # If max attempts reached without success
-            conversion_logger.error(f"\n{'='*50}")
-            conversion_logger.error(f"[VIDEO] CONVERSION FAILED")
-            conversion_logger.error(f"Total Attempts: {conversion_attempts}")
-            conversion_logger.error(f"{'='*50}\n")
+            self.logger.error(f"[FAILED] {filename}: Max attempts ({conversion_attempts}) reached")
             
             return False
         
         except Exception as e:
-            conversion_logger.error(f"\n{'='*50}")
-            conversion_logger.error(f"[VIDEO] CONVERSION ERROR: {e}")
-            conversion_logger.error(f"{'='*50}\n")
+            self.logger.error(f"[ERROR] {filename}: Conversion error: {e}")
             
             return False
 

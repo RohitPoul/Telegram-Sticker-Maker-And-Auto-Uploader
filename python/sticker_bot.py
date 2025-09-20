@@ -2284,45 +2284,6 @@ def register_sticker_routes(app):
 # Enhanced logging configuration
 import sys
 
-# Get the absolute path to the project root
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-LOGS_DIR = os.path.join(PROJECT_ROOT, 'logs')
-
-# Create logs directory if it doesn't exist
-os.makedirs(LOGS_DIR, exist_ok=True)
-
-# Detailed logging configuration with multiple handlers
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        # Log to file with comprehensive details (UTF-8)
-        logging.FileHandler(os.path.join(LOGS_DIR, 'telegram_connection_debug.log'), mode='w', encoding='utf-8')
-    ]
-)
-
-# Create a dedicated logger for Telegram connection with file and console logging
+# Create a dedicated logger for Telegram connection
 telegram_logger = logging.getLogger('TelegramConnection')
 telegram_logger.setLevel(logging.DEBUG)
-
-# Create file handler
-file_handler = logging.FileHandler(os.path.join(LOGS_DIR, 'telegram_connection_debug.log'), mode='w', encoding='utf-8')
-file_handler.setLevel(logging.DEBUG)
-
-# Create console handler
-console_handler = logging.StreamHandler(sys.stdout)
-console_handler.setLevel(logging.INFO)  # Only show INFO and above in console, DEBUG goes to file only
-
-# Create formatter
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-file_handler.setFormatter(formatter)
-console_handler.setFormatter(formatter)
-
-# Add handlers to the logger (file only to avoid Windows console encoding issues)
-telegram_logger.addHandler(file_handler)
-
-# Log the log file location for easy reference
-print(f"Telegram Connection Logs will be written to: {os.path.join(LOGS_DIR, 'telegram_connection_debug.log')}")
-
-
-# Removed duplicate connect_telegram_with_debug method and monkey patch

@@ -14,6 +14,7 @@ import concurrent.futures
 # Configure logging
 logger = logging.getLogger(__name__)
 if not logger.handlers:
+    # Only setup connection debug logging to the main log file
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
     logs_dir = os.path.join(project_root, 'logs')
     try:
@@ -25,10 +26,6 @@ if not logger.handlers:
         logger.addHandler(fh)
     except Exception:
         pass
-    ch = logging.StreamHandler()
-    ch.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
-    ch.setLevel(logging.INFO)  # Only show INFO and above in console, DEBUG goes to file only
-    logger.addHandler(ch)
 logger.setLevel(logging.DEBUG)
 
 from shared_state import set_current_session_file

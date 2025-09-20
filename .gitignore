@@ -29,12 +29,10 @@ yarn-error.log*
 Thumbs.db
 desktop.ini
 
-# Project specific
+# Project specific logs (exclude useless ones)
 python/Downloads/
 python/__pycache__/
-python/*.log
-python/*.session*
-python/test_*.py
+python/conversion.log
 python/debug_*.py
 python/comprehensive_*.py
 python/gpu_config.json

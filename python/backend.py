@@ -1504,6 +1504,7 @@ def clear_logs():
     if request.method == 'OPTIONS':
         return '', 200
     try:
+        # Only clear important logs - backend.log and connection debug log
         log_files = [
             "backend.log",
             "python/backend.log",
