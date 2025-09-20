@@ -1,26 +1,91 @@
-# Dependencies
-node_modules/
-
-# Logs
-logs/
-*.log
-
-# Python cache
+# Python
 __pycache__/
-*.pyc
-*.pyo
-
-# Session files
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.log
 *.session
+*.session-journal
 
-# Credentials
-*credentials*.json
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# OS generated files
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
+desktop.ini
+
+# Project specific
+python/Downloads/
+python/__pycache__/
+python/*.log
+python/*.session*
+python/test_*.py
+python/debug_*.py
+python/comprehensive_*.py
+python/gpu_config.json
+
+# CREDENTIALS AND SENSITIVE DATA - NEVER COMMIT THESE!
+*.json
+!package.json
+!package-lock.json
+config.json
+telegram_credentials.json
+telegram_credentials.json.key
+*.session
+*.session-journal
+.env
+.env.local
+.env.production
+.env.development
+secrets/
+credentials/
+keys/
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+test_*.html
+ffmpeg2pass*.log
+*.2pass
+video_converter.log
+
+# Analysis and documentation files (temporary)
+COMPREHENSIVE_ANALYSIS_SUMMARY.md
+ENDPOINT_FIXES_SUMMARY.md
+PROJECT_FILE_STRUCTURE.md
+
+# Performance testing and optimization files (temporary)
+test-*.js
+fix-*.js
+*-test.js
+*-fix.js
+performance-*.js
+emergency-*.js
+quick-*.js
+manual-*.js
+
+# Build
+dist/
+build/
+*.exe
+*.dmg
+*.app
+*.deb
+*.rpm
