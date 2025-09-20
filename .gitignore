@@ -43,6 +43,7 @@ python/gpu_config.json
 *.json
 !package.json
 !package-lock.json
+!logs/stats.json
 config.json
 telegram_credentials.json
 telegram_credentials.json.key
