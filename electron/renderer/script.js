@@ -69,13 +69,13 @@ class TelegramUtilities {
   }
 
   startSystemStatsMonitoring() {
-    // Initial stats fetch
+    // Initial stats fetch only
     this.updateSystemStats();
     
-    // Update stats every 5 seconds (reduced frequency)
+    // Reduced frequency monitoring - only update every 30 seconds
     setInterval(() => {
       this.updateSystemStats();
-    }, 5000);
+    }, 30000);
   }
   
 
@@ -85,12 +85,11 @@ class TelegramUtilities {
   async updateSystemStats() {
     try {
       const response = await this.apiRequest("GET", "/api/system-stats");
-      // Normalize payload shape from main process { success, data: {...} }
       const payload = response?.data || response || {};
       const stats = payload.stats;
       if (response?.success && stats) {
         
-        // Update CPU stats with color coding
+        // Update CPU stats with live percentage and color coding
         const cpuUsage = document.getElementById("cpu-usage");
         if (cpuUsage && stats.cpu) {
           const percent = stats.cpu.percent;
@@ -106,7 +105,7 @@ class TelegramUtilities {
           }
         }
         
-        // Update RAM stats with better formatting
+        // Update RAM stats with live usage and color coding
         const ramUsage = document.getElementById("ram-usage");
         if (ramUsage && stats.memory) {
           const used = (stats.memory.used / 1024).toFixed(1);
@@ -125,7 +124,7 @@ class TelegramUtilities {
         }
       }
     } catch (error) {
-      // Failed to fetch system stats
+      // Failed to fetch system stats - ignore silently
     }
   }
 
@@ -896,56 +895,11 @@ class TelegramUtilities {
   }
 
   setupProgressMonitoring() {
-    // Set up periodic status checks
-            setInterval(() => {
-              this.updateSystemInfo();
-    }, 5000); // Update every 5 seconds
-            
-    // Update database stats every 1 second for more responsive updates
-            setInterval(() => {
-              this.updateDatabaseStats();
-    }, 1000); // Update every 1 second for immediate feedback
-    
-    // More frequent updates during active operations
-    this.activeOperationInterval = setInterval(() => {
-      if (this.currentProcessId || this.currentOperation) {
-        this.forceUpdateDatabaseStats();
-      }
-    }, 500); // Update every 500ms during active operations
-    
-    // Monitor memory usage
-    this.monitorPerformance();
+    // Set up minimal monitoring only when needed
+    // Removed excessive periodic checks to save resources
   }
 
-  monitorPerformance() {
-    const performanceMetrics = this.getPerformanceMetrics();
-    this.updatePerformanceDisplay(performanceMetrics);
-  }
-
-  getPerformanceMetrics() {
-    const metrics = {
-      memory: null,
-      timestamp: new Date().toISOString()
-    };
-    
-    if ("performance" in window && "memory" in performance) {
-      const memoryInfo = performance.memory;
-      metrics.memory = {
-        used: Math.round(memoryInfo.usedJSHeapSize / 1048576),
-        total: Math.round(memoryInfo.totalJSHeapSize / 1048576),
-        percentage: Math.round((memoryInfo.usedJSHeapSize / memoryInfo.totalJSHeapSize) * 100)
-      };
-    }
-    
-    return metrics;
-  }
-
-  updatePerformanceDisplay(metrics) {
-    const memoryElement = document.getElementById("memory-usage");
-    if (memoryElement && metrics.memory) {
-      memoryElement.textContent = `${metrics.memory.used}MB / ${metrics.memory.total}MB (${metrics.memory.percentage}%)`;
-    }
-  }
+  // Memory monitoring removed to save resources
 
   async checkBackendStatus() {
     try {
@@ -2108,8 +2062,10 @@ class TelegramUtilities {
     
     this.progressInterval = setInterval(async () => {
       try {
-        // Update database stats during active monitoring for immediate feedback
-        await this.forceUpdateDatabaseStats();
+        // Update database stats during active monitoring (reduced frequency)
+        if (consecutiveErrors === 0) { // Only update on successful operations
+          await this.updateDatabaseStats();
+        }
         
         // Check timeout
         const processInfo = this.activeProcesses.get(processId);
@@ -2567,8 +2523,7 @@ class TelegramUtilities {
     this.checkHexProgressImmediately(processId);
     
     this.progressInterval = setInterval(async () => {
-      // Update database stats during hex edit monitoring for immediate feedback
-      await this.forceUpdateDatabaseStats();
+      // Removed excessive database stats monitoring during hex edit
       
       // Timeout guard
       if (Date.now() - startTs > LONG_OPERATION_TIMEOUT) {
@@ -5516,50 +5471,43 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   }
 
   showToast(type, title, message, duration = 5000) {
-    const toastContainer = document.getElementById("toast-container");
-    if (!toastContainer) return;
+    console.log('🔔 showToast called:', { type, title, message });
     
-    const toastId = "toast-" + Date.now();
-    const iconMap = {
-      success: "fas fa-check-circle",
-      error: "fas fa-times-circle",
-      warning: "fas fa-exclamation-triangle",
-      info: "fas fa-info-circle",
-    };
+    const toastContainer = document.getElementById("toast-container");
+    if (!toastContainer) {
+      console.error('❌ Toast container not found!');
+      alert(`${type.toUpperCase()}: ${title} - ${message}`);
+      return;
+    }
+    
+    console.log('✅ Toast container found');
     
     const toast = document.createElement("div");
     toast.className = `toast ${type}`;
-    toast.id = toastId;
     
     toast.innerHTML = `
-      <div class="toast-icon">
-        <i class="${iconMap[type]}"></i>
-      </div>
-      <div class="toast-content">
-        <div class="toast-title">${title}</div>
-        <div class="toast-message">${message}</div>
-      </div>
-      <button class="toast-close" onclick="document.getElementById('${toastId}').remove()">
-        <i class="fas fa-times"></i>
-      </button>
+      <h4>${title}</h4>
+      <p>${message}</p>
     `;
     
-    toastContainer.appendChild(toast);
+    console.log('✅ Toast element created');
     
-    // Auto-remove after specified duration
+    toastContainer.appendChild(toast);
+    console.log('✅ Toast added to container');
+    
+    // Auto-remove
     setTimeout(() => {
-      const toastElement = document.getElementById(toastId);
-      if (toastElement) {
-        toastElement.style.animation = "slideOutRight 0.3s ease forwards";
-        setTimeout(() => toastElement.remove(), 300);
+      if (toast && toast.parentNode) {
+        toast.remove();
+        console.log('✅ Toast removed');
       }
     }, duration);
     
-    // Add click to dismiss
-    toast.addEventListener("click", () => {
-      toast.style.animation = "slideOutRight 0.3s ease forwards";
-      setTimeout(() => toast.remove(), 300);
-    });
+    // Click to dismiss
+    toast.onclick = () => {
+      toast.remove();
+      console.log('✅ Toast clicked and removed');
+    };
   }
 
   playNotificationSound() {
@@ -5616,7 +5564,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       display: flex;
       align-items: center;
       justify-content: center;
-      z-index: 10000;
+      z-index: 9999; /* Lower than toast notifications */
       animation: fadeIn 0.2s ease;
     `;
     
@@ -6812,7 +6760,7 @@ This action cannot be undone. Are you sure?
         display: flex;
         align-items: center;
         justify-content: center;
-        z-index: 10000;
+        z-index: 9999; /* Lower than toast notifications */
         animation: fadeIn 0.3s ease;
       }
       
