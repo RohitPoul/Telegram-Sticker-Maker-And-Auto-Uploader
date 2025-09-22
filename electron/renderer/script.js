@@ -47,6 +47,20 @@ class TelegramUtilities {
     this.initializeTelegramForm(); // Add this to load saved Telegram credentials
   }
   
+  // Utility function to safely add event listeners
+  safeAddEventListener(elementId, event, handler, logError = true) {
+    const element = document.getElementById(elementId);
+    if (element) {
+      element.addEventListener(event, handler);
+      return true;
+    } else {
+      if (logError && RENDERER_DEBUG) {
+        console.warn(`⚠️ Element with ID '${elementId}' not found for event '${event}'`);
+      }
+      return false;
+    }
+  }
+
   async init() {
     this.setupEventListeners();
     this.setupTabSwitching();
@@ -302,49 +316,108 @@ class TelegramUtilities {
       });
     }
     
-    // Sticker Bot Events
-    document.getElementById("connect-telegram").addEventListener("click", () => this.connectTelegram());
-    document.getElementById("clear-media").addEventListener("click", () => this.clearMedia());
-    document.getElementById("create-sticker-pack").addEventListener("click", () => this.createStickerPack());
-    document.getElementById("reset-sticker-form").addEventListener("click", () => this.resetStickerForm());
+    // Sticker Bot Events - with null checks
+    const connectTelegramBtn = document.getElementById("connect-telegram");
+    const clearMediaBtn = document.getElementById("clear-media");
+    const createStickerPackBtn = document.getElementById("create-sticker-pack");
+    const resetStickerFormBtn = document.getElementById("reset-sticker-form");
     
-    // Icon Selection Modal Events
-    document.getElementById("upload-icon-btn").addEventListener("click", () => this.selectIconFile());
-    document.getElementById("skip-icon-btn").addEventListener("click", () => this.skipIconSelection());
-    document.getElementById("confirm-icon-upload").addEventListener("click", () => this.confirmIconUpload());
-    document.getElementById("change-icon-file").addEventListener("click", () => this.selectIconFile());
-    document.getElementById("cancel-icon-selection").addEventListener("click", () => this.hideIconModal());
+    if (connectTelegramBtn) {
+      connectTelegramBtn.addEventListener("click", () => this.connectTelegram());
+    }
+    if (clearMediaBtn) {
+      clearMediaBtn.addEventListener("click", () => this.clearMedia());
+    }
+    if (createStickerPackBtn) {
+      createStickerPackBtn.addEventListener("click", () => this.createStickerPack());
+    }
+    if (resetStickerFormBtn) {
+      resetStickerFormBtn.addEventListener("click", () => this.resetStickerForm());
+    }
     
-    // URL Name Retry Modal Events
-    document.getElementById("submit-new-url").addEventListener("click", () => this.stickerBot.submitNewUrlName());
-    document.getElementById("cancel-url-retry").addEventListener("click", () => this.stickerBot.hideUrlNameModal());
+    // Icon Selection Modal Events - with null checks
+    const uploadIconBtn = document.getElementById("upload-icon-btn");
+    const skipIconBtn = document.getElementById("skip-icon-btn");
+    const confirmIconUploadBtn = document.getElementById("confirm-icon-upload");
+    const changeIconFileBtn = document.getElementById("change-icon-file");
+    const cancelIconSelectionBtn = document.getElementById("cancel-icon-selection");
     
-    // Auto-skip icon setting
-    document.getElementById("auto-skip-icon").addEventListener("change", () => {
-      this.saveSettings();
-      this.updateToggleText();
-    });
+    if (uploadIconBtn) {
+      uploadIconBtn.addEventListener("click", () => this.selectIconFile());
+    }
+    if (skipIconBtn) {
+      skipIconBtn.addEventListener("click", () => this.skipIconSelection());
+    }
+    if (confirmIconUploadBtn) {
+      confirmIconUploadBtn.addEventListener("click", () => this.confirmIconUpload());
+    }
+    if (changeIconFileBtn) {
+      changeIconFileBtn.addEventListener("click", () => this.selectIconFile());
+    }
+    if (cancelIconSelectionBtn) {
+      cancelIconSelectionBtn.addEventListener("click", () => this.hideIconModal());
+    }
     
-    // Help button for auto-skip
-    document.getElementById("auto-skip-help").addEventListener("click", () => {
-      this.showAutoSkipHelp();
-    });
+    // URL Name Retry Modal Events - with null checks
+    const submitNewUrlBtn = document.getElementById("submit-new-url");
+    const cancelUrlRetryBtn = document.getElementById("cancel-url-retry");
     
-    // Success modal buttons
-    document.getElementById("copy-link-btn").addEventListener("click", () => this.copyShareableLink());
-    document.getElementById("open-telegram-btn").addEventListener("click", () => this.openTelegramLink());
-    document.getElementById("create-another-btn").addEventListener("click", () => this.createAnotherPack());
+    if (submitNewUrlBtn) {
+      submitNewUrlBtn.addEventListener("click", () => this.submitNewUrlName());
+    }
+    if (cancelUrlRetryBtn) {
+      cancelUrlRetryBtn.addEventListener("click", () => this.hideUrlNameModal());
+    }
     
-    // Real-time validation for pack name and URL name
-    document.getElementById("pack-name").addEventListener("input", (e) => {
-      const validation = this.validatePackName(e.target.value);
-      this.updateValidationDisplay("pack-name", validation);
-    });
+    // Auto-skip icon setting - with null checks
+    const autoSkipIconInput = document.getElementById("auto-skip-icon");
+    const autoSkipHelpBtn = document.getElementById("auto-skip-help");
     
-    document.getElementById("pack-url-name").addEventListener("input", (e) => {
-      const validation = this.validateUrlName(e.target.value);
-      this.updateValidationDisplay("pack-url-name", validation);
-    });
+    if (autoSkipIconInput) {
+      autoSkipIconInput.addEventListener("change", () => {
+        this.saveSettings();
+        this.updateToggleText();
+      });
+    }
+    
+    if (autoSkipHelpBtn) {
+      autoSkipHelpBtn.addEventListener("click", () => {
+        this.showAutoSkipHelp();
+      });
+    }
+    
+    // Success modal buttons - with null checks
+    const copyLinkBtn = document.getElementById("copy-link-btn");
+    const openTelegramBtn = document.getElementById("open-telegram-btn");
+    const createAnotherBtn = document.getElementById("create-another-btn");
+    
+    if (copyLinkBtn) {
+      copyLinkBtn.addEventListener("click", () => this.copyShareableLink());
+    }
+    if (openTelegramBtn) {
+      openTelegramBtn.addEventListener("click", () => this.openTelegramLink());
+    }
+    if (createAnotherBtn) {
+      createAnotherBtn.addEventListener("click", () => this.createAnotherPack());
+    }
+    
+    // Real-time validation for pack name and URL name - with null checks
+    const packNameInput = document.getElementById("pack-name");
+    const packUrlNameInput = document.getElementById("pack-url-name");
+    
+    if (packNameInput) {
+      packNameInput.addEventListener("input", (e) => {
+        const validation = this.validatePackName(e.target.value);
+        this.updateValidationDisplay("pack-name", validation);
+      });
+    }
+    
+    if (packUrlNameInput) {
+      packUrlNameInput.addEventListener("input", (e) => {
+        const validation = this.validateUrlName(e.target.value);
+        this.updateValidationDisplay("pack-url-name", validation);
+      });
+    }
     
     // Update toggle text on page load
     this.updateToggleText();
@@ -502,23 +575,59 @@ class TelegramUtilities {
       });
     });
     
-    // Modal Events
-    document.getElementById("submit-code").addEventListener("click", () => this.submitVerificationCode());
-    document.getElementById("cancel-code").addEventListener("click", () => this.hideModal());
-    document.getElementById("submit-password").addEventListener("click", () => this.submitPassword());
-    document.getElementById("cancel-password").addEventListener("click", () => this.hideModal());
-    document.getElementById("save-emoji").addEventListener("click", () => this.saveEmoji());
-    document.getElementById("cancel-emoji").addEventListener("click", () => this.hideModal());
+    // Modal Events - with null checks
+    const submitCodeBtn = document.getElementById("submit-code");
+    const cancelCodeBtn = document.getElementById("cancel-code");
+    const submitPasswordBtn = document.getElementById("submit-password");
+    const cancelPasswordBtn = document.getElementById("cancel-password");
+    const saveEmojiBtn = document.getElementById("save-emoji");
+    const cancelEmojiBtn = document.getElementById("cancel-emoji");
     
-    // Settings Events
-    document.getElementById("clear-data").addEventListener("click", () => this.clearApplicationData());
-    document.getElementById("export-settings").addEventListener("click", () => this.exportSettings());
-    document.getElementById("import-settings").addEventListener("click", () => this.importSettings());
+    if (submitCodeBtn) {
+      submitCodeBtn.addEventListener("click", () => this.submitVerificationCode());
+    }
+    if (cancelCodeBtn) {
+      cancelCodeBtn.addEventListener("click", () => this.hideModal());
+    }
+    if (submitPasswordBtn) {
+      submitPasswordBtn.addEventListener("click", () => this.submitPassword());
+    }
+    if (cancelPasswordBtn) {
+      cancelPasswordBtn.addEventListener("click", () => this.hideModal());
+    }
+    if (saveEmojiBtn) {
+      saveEmojiBtn.addEventListener("click", () => this.saveEmoji());
+    }
+    if (cancelEmojiBtn) {
+      cancelEmojiBtn.addEventListener("click", () => this.hideModal());
+    }
     
-    // New system management events
-    document.getElementById("clear-logs").addEventListener("click", () => this.clearLogs());
-    document.getElementById("clear-credentials").addEventListener("click", () => this.clearCredentials());
-    document.getElementById("kill-python-processes").addEventListener("click", () => this.killPythonProcesses());
+    // Settings Events - with null checks
+    const clearDataBtn = document.getElementById("clear-data");
+    const exportSettingsBtn = document.getElementById("export-settings");
+    const importSettingsBtn = document.getElementById("import-settings");
+    const clearLogsBtn = document.getElementById("clear-logs");
+    const clearCredentialsBtn = document.getElementById("clear-credentials");
+    const killPythonBtn = document.getElementById("kill-python-processes");
+    
+    if (clearDataBtn) {
+      clearDataBtn.addEventListener("click", () => this.clearApplicationData());
+    }
+    if (exportSettingsBtn) {
+      exportSettingsBtn.addEventListener("click", () => this.exportSettings());
+    }
+    if (importSettingsBtn) {
+      importSettingsBtn.addEventListener("click", () => this.importSettings());
+    }
+    if (clearLogsBtn) {
+      clearLogsBtn.addEventListener("click", () => this.clearLogs());
+    }
+    if (clearCredentialsBtn) {
+      clearCredentialsBtn.addEventListener("click", () => this.clearCredentials());
+    }
+    if (killPythonBtn) {
+      killPythonBtn.addEventListener("click", () => this.killPythonProcesses());
+    }
     
     // Theme selector
     const themeSelector = document.getElementById("theme-selector");
@@ -534,32 +643,70 @@ class TelegramUtilities {
       this.applyTheme(savedTheme);
     }
     
-    // Modal overlay click to close
-    document.getElementById("modal-overlay").addEventListener("click", (e) => {
-      if (e.target === e.currentTarget) {
-        this.hideModal();
-      }
-    });
+    // Modal overlay click handling - prevent accidental closure
+    const modalOverlay = document.getElementById("modal-overlay");
+    if (modalOverlay) {
+      modalOverlay.addEventListener("click", (e) => {
+        // Only allow closing certain modals by clicking overlay
+        const activeModal = document.querySelector('.modal[style*="display: block"], .modal[style*="display: flex"]');
+        if (!activeModal) return;
+        
+        const modalId = activeModal.id;
+        const isCritical = activeModal.hasAttribute('data-critical');
+        
+        // Critical modals that should NOT close on overlay click
+        const criticalModals = ['success-modal', 'url-name-modal', 'icon-modal'];
+        
+        if (criticalModals.includes(modalId) || isCritical) {
+          // Add shake animation to indicate modal cannot be dismissed
+          activeModal.classList.add('modal-shake');
+          setTimeout(() => {
+            activeModal.classList.remove('modal-shake');
+          }, 500);
+          
+          // Show helpful toast for success modal
+          if (modalId === 'success-modal') {
+            this.showToast("info", "Modal Protected", "Use the buttons to interact with your sticker pack!");
+          }
+          return;
+        }
+        
+        // Allow other modals to close on overlay click
+        if (e.target === e.currentTarget) {
+          this.hideModal();
+        }
+      });
+    }
     
-    // Enter key handlers for modals
-    document.getElementById("verification-code").addEventListener("keypress", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        this.submitVerificationCode();
-      }
-    });
-    document.getElementById("two-factor-password").addEventListener("keypress", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        this.submitPassword();
-      }
-    });
-    document.getElementById("emoji-input").addEventListener("keypress", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        this.saveEmoji();
-      }
-    });
+    // Enter key handlers for modals - with null checks
+    const verificationCodeInput = document.getElementById("verification-code");
+    const twoFactorPasswordInput = document.getElementById("two-factor-password");
+    const emojiInput = document.getElementById("emoji-input");
+    
+    if (verificationCodeInput) {
+      verificationCodeInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          this.submitVerificationCode();
+        }
+      });
+    }
+    if (twoFactorPasswordInput) {
+      twoFactorPasswordInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          this.submitPassword();
+        }
+      });
+    }
+    if (emojiInput) {
+      emojiInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          this.saveEmoji();
+        }
+      });
+    }
     
     // Theme switching
     const themeToggle = document.getElementById("theme-toggle");
@@ -1117,32 +1264,69 @@ class TelegramUtilities {
   showSuccessModal(shareableLink) {
     console.log(`🎉 [SUCCESS_MODAL] Showing success modal with link: ${shareableLink}`);
     
-    const modal = document.getElementById("success-modal");
+    // More thorough element discovery
+    let modal = document.getElementById("success-modal");
+    if (!modal) {
+      modal = document.querySelector('.success-modal-enhanced');
+      console.log(`🎉 [SUCCESS_MODAL] Fallback: Found modal by class: ${!!modal}`);
+    }
+    
     const overlay = document.getElementById("modal-overlay");
     const linkInput = document.getElementById("shareable-link");
     
+    console.log(`🎉 [SUCCESS_MODAL] Elements found - Modal: ${!!modal}, Overlay: ${!!overlay}, LinkInput: ${!!linkInput}`);
+    
     if (!modal || !overlay) {
       console.error(`🎉 [SUCCESS_MODAL] Modal or overlay element not found!`);
-      // Fallback: show toast notification
-      this.showToast("success", "Pack Created", `Sticker pack created! Link: ${shareableLink}`);
+      console.error(`🎉 [SUCCESS_MODAL] Modal exists: ${!!modal}, Overlay exists: ${!!overlay}`);
+      
+      // Enhanced fallback: show enhanced toast notification
+      this.showToast("success", "🎉 Pack Created!", `Sticker pack created successfully! Link: ${shareableLink}`, 10000);
+      
+      // Try to add the link to status
+      if (shareableLink) {
+        this.addStatusItem(`🎉 Success! Shareable link: ${shareableLink}`, "completed");
+      }
       return;
     }
     
+    // Set the shareable link
     if (linkInput && shareableLink) {
       linkInput.value = shareableLink;
       console.log(`🎉 [SUCCESS_MODAL] Set link input value: ${shareableLink}`);
+    } else {
+      console.warn(`🎉 [SUCCESS_MODAL] Link input not found or no link provided`);
     }
     
-    // Show modal with proper overlay
+    // Reset any previous states and ensure modal is ready
+    modal.style.display = "none";
+    modal.style.opacity = "0";
+    
+    // Show modal with proper overlay (following project specifications)
     overlay.classList.add("active");
     modal.style.display = "flex";
+    
+    // Use requestAnimationFrame for smooth display
+    requestAnimationFrame(() => {
+      modal.style.opacity = "1";
+    });
+    
+    // Add critical modal protection (prevent outside click dismissal)
+    modal.setAttribute('data-critical', 'true');
+    
     console.log(`🎉 [SUCCESS_MODAL] Modal should now be visible`);
     
-    // Add a status message about the modal
-    this.addStatusItem(`🎉 Sticker pack created! Shareable link: ${shareableLink}`, "completed");
+    // Add comprehensive status message
+    this.addStatusItem(`🎉 Sticker pack created successfully! Shareable link: ${shareableLink}`, "completed");
     
     // Setup event listeners for modal buttons
     this.setupSuccessModalEventListeners(shareableLink);
+    
+    // Focus management for accessibility
+    setTimeout(() => {
+      const copyBtn = document.getElementById("copy-link-btn");
+      if (copyBtn) copyBtn.focus();
+    }, 100);
   }
 
   hideSuccessModal() {
@@ -1151,30 +1335,65 @@ class TelegramUtilities {
     
     if (modal) {
       modal.style.display = "none";
+      modal.removeAttribute('data-critical');
     }
     if (overlay) {
       overlay.classList.remove("active");
     }
+    
+    // Clean up keyboard event listeners
+    if (this.successModalKeyHandler) {
+      document.removeEventListener('keydown', this.successModalKeyHandler);
+      this.successModalKeyHandler = null;
+    }
+    
+    console.log(`🎉 [SUCCESS_MODAL] Modal hidden and cleaned up`);
   }
   
   setupSuccessModalEventListeners(shareableLink) {
+    console.log(`🎉 [SUCCESS_MODAL] Setting up event listeners for link: ${shareableLink}`);
+    
     // Copy link button
     const copyBtn = document.getElementById("copy-link-btn");
     if (copyBtn) {
       copyBtn.onclick = () => this.copyShareableLink();
+      console.log(`🎉 [SUCCESS_MODAL] Copy button listener attached`);
+    } else {
+      console.warn(`🎉 [SUCCESS_MODAL] Copy button not found`);
     }
     
     // Open in Telegram button
     const openBtn = document.getElementById("open-telegram-btn");
     if (openBtn) {
       openBtn.onclick = () => this.openTelegramLink();
+      console.log(`🎉 [SUCCESS_MODAL] Telegram button listener attached`);
+    } else {
+      console.warn(`🎉 [SUCCESS_MODAL] Telegram button not found`);
     }
     
     // Create another pack button
     const anotherBtn = document.getElementById("create-another-btn");
     if (anotherBtn) {
       anotherBtn.onclick = () => this.createAnotherPack();
+      console.log(`🎉 [SUCCESS_MODAL] Create another button listener attached`);
+    } else {
+      console.warn(`🎉 [SUCCESS_MODAL] Create another button not found`);
     }
+    
+    // Add keyboard support
+    const keyHandler = (e) => {
+      if (e.key === 'c' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        this.copyShareableLink();
+      } else if (e.key === 'Enter') {
+        this.openTelegramLink();
+      }
+    };
+    
+    document.addEventListener('keydown', keyHandler);
+    
+    // Store handler for cleanup
+    this.successModalKeyHandler = keyHandler;
   }
 
   async copyShareableLink() {
@@ -1196,7 +1415,39 @@ class TelegramUtilities {
     const linkInput = document.getElementById("shareable-link");
     if (linkInput && linkInput.value) {
       window.open(linkInput.value, '_blank');
+      this.showToast("success", "Opening Telegram", "Opening your sticker pack in Telegram!");
+    } else {
+      this.showToast("error", "No Link", "Shareable link not available");
     }
+  }
+  
+  // TEST METHOD - Remove in production
+  testSuccessModal() {
+    const testLink = "https://t.me/addstickers/test_sticker_pack_123";
+    console.log(`🗋 [TEST] Triggering success modal with test link: ${testLink}`);
+    this.showSuccessModal(testLink);
+  }
+  
+  createAnotherPack() {
+    // Hide the success modal
+    this.hideSuccessModal();
+    
+    // Switch to the sticker bot tab to create another pack
+    const stickerTab = document.querySelector('.nav-item[data-tab="sticker-bot"]');
+    if (stickerTab) {
+      stickerTab.click();
+    }
+    
+    // Show helpful toast
+    this.showToast("info", "Ready for New Pack", "You can now create another sticker pack!");
+    
+    // Focus on the media files area
+    setTimeout(() => {
+      const mediaSection = document.querySelector('#sticker-bot .media-files-card');
+      if (mediaSection) {
+        mediaSection.scrollIntoView({ behavior: 'smooth' });
+      }
+    }, 500);
   }
 
   createAnotherPack() {
@@ -5093,19 +5344,53 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   generateUrlSuggestions(baseName, container) {
     if (!container) return;
     
-    const cleanBase = baseName.replace(/[^a-zA-Z0-9]/g, '').substring(0, 15);
-    const timestamp = Date.now().toString().slice(-6);
-    const year = new Date().getFullYear();
+    const cleanBase = baseName.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().substring(0, 15);
+    const random = () => Math.floor(Math.random() * 999) + 100;
+    const currentYear = new Date().getFullYear();
+    const month = String(new Date().getMonth() + 1).padStart(2, '0');
+    const day = String(new Date().getDate()).padStart(2, '0');
     
-    const suggestions = [
-      `${cleanBase}_${timestamp}`,
-      `${cleanBase}_${year}`,
-      `${cleanBase}_pack`,
-      `${cleanBase}_stickers`,
-      `my_${cleanBase}_pack`
-    ].filter(s => s.length >= 5 && s.length <= 32);
+    // Advanced smart suggestion categories
+    const creativeCategories = {
+      professional: [`${cleanBase}_official`, `${cleanBase}_studio`, `${cleanBase}_premium`, `${cleanBase}_pro`],
+      versioned: [`${cleanBase}_v${random()}`, `${cleanBase}_${currentYear}`, `${cleanBase}_v2`, `${cleanBase}_latest`],
+      themed: [`${cleanBase}_collection`, `${cleanBase}_pack`, `${cleanBase}_set`, `${cleanBase}_bundle`],
+      temporal: [`${cleanBase}_${month}${day}`, `${cleanBase}_${currentYear.toString().slice(-2)}`, `${cleanBase}_new`],
+      exclusive: [`${cleanBase}_exclusive`, `${cleanBase}_limited`, `${cleanBase}_special`, `${cleanBase}_ultimate`]
+    };
     
-    container.innerHTML = suggestions.map(suggestion => 
+    // Smart selection algorithm - pick diverse suggestions from different categories
+    const smartSuggestions = [];
+    const categories = Object.keys(creativeCategories);
+    const usedPrefixes = new Set();
+    
+    // Select one from each category, avoiding repetitive patterns
+    categories.forEach(category => {
+      const options = creativeCategories[category].filter(suggestion => {
+        const prefix = suggestion.split('_')[1];
+        return !usedPrefixes.has(prefix) && suggestion.length >= 5 && suggestion.length <= 32;
+      });
+      
+      if (options.length > 0) {
+        const selected = options[Math.floor(Math.random() * options.length)];
+        smartSuggestions.push(selected);
+        usedPrefixes.add(selected.split('_')[1]);
+      }
+    });
+    
+    // Add fallback unique suggestions if needed
+    while (smartSuggestions.length < 5) {
+      const uniqueId = Date.now().toString().slice(-4) + Math.floor(Math.random() * 99);
+      const fallback = `${cleanBase}_${uniqueId}`;
+      if (!smartSuggestions.includes(fallback)) {
+        smartSuggestions.push(fallback);
+      }
+    }
+    
+    // Take exactly 5 diverse suggestions
+    const finalSuggestions = smartSuggestions.slice(0, 5);
+    
+    container.innerHTML = finalSuggestions.map(suggestion => 
       `<button class="suggestion-btn" onclick="window.app?.applySuggestion('${suggestion}')">${suggestion}</button>`
     ).join('');
   }
@@ -7617,6 +7902,9 @@ window.applyEmojiToAll = () => window.app?.applyEmojiToAll();
 window.applyRandomEmojis = () => window.app?.applyRandomEmojis();
 window.applySequentialEmojis = () => window.app?.applySequentialEmojis();
 window.applyThemeEmojis = () => window.app?.applyThemeEmojis();
+
+// TEST METHOD - Console access for success modal testing
+window.testSuccessModal = () => window.app?.testSuccessModal();
 
 // Handle page visibility changes
 document.addEventListener("visibilitychange", () => {
