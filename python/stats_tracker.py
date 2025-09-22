@@ -18,7 +18,7 @@ class StatisticsTracker:
         self.lock = threading.Lock()
         self.stats_cache = None
         self.last_read_time = 0
-        self.CACHE_TIMEOUT = 1  # Cache stats for 1 second to prevent multiple reads
+        self.CACHE_TIMEOUT = 10  # Cache stats for 10 seconds to reduce I/O
         
         # Ensure initial stats file exists
         self.initialize_stats_file()
@@ -78,10 +78,9 @@ class StatisticsTracker:
             with self.lock:
                 with open(self.stats_file, 'w') as f:
                     json.dump(stats, f, indent=2)
-                # Update cache
+                # Update cache without debug logging
                 self.stats_cache = stats
                 self.last_read_time = time.time()
-                logger.debug(f"[STATS] Saved stats to {self.stats_file}")
         except Exception as e:
             logger.error(f"Could not save stats to {self.stats_file}: {e}")
 
