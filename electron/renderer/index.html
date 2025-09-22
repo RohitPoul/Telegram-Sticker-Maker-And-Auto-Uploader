@@ -465,7 +465,7 @@
               <div class="card-body">
                 <div class="info-item">
                   <label>Application Version</label>
-                  <span>1.4.0</span>
+                  <span>1.4.5</span>
                 </div>
                 <div class="info-item">
                   <label>Backend Status</label>
@@ -983,7 +983,7 @@
               </div>
               
               <div class="suggestions-section">
-                <h5>Quick suggestions:</h5>
+                <h5>Smart suggestions:</h5>
                 <div class="suggestions-grid" id="url-suggestions">
                   <button class="suggestion-btn">name_01</button>
                   <button class="suggestion-btn">name_pack</button>
@@ -1002,40 +1002,49 @@
           </div>
         </div>
 
-        <!-- Success Modal -->
-        <div class="modal" id="success-modal" style="display: none">
-          <div class="modal-header">
-            <h3><i class="fas fa-check-circle" style="color: var(--success-color);"></i> Sticker Pack Created!</h3>
+        <!-- Success Modal - Enhanced Design */
+        <div class="modal success-modal-enhanced" id="success-modal" style="display: none">
+          <div class="modal-header success-header">
+            <div class="success-icon-wrapper">
+              <i class="fas fa-check-circle success-icon"></i>
+            </div>
+            <h3>Sticker Pack Created!</h3>
             <button class="modal-close" onclick="window.app?.hideSuccessModal()">
               <i class="fas fa-times"></i>
             </button>
           </div>
-          <div class="modal-body">
+          <div class="modal-body success-body">
             <div class="success-content">
-              <div class="success-info">
-                <p><strong>Your sticker pack has been successfully created!</strong></p>
-                <p>You can now share it with other Telegram users using the link below:</p>
+              <div class="success-message">
+                <h4>🎉 Congratulations!</h4>
+                <p>Your sticker pack has been successfully created and uploaded to Telegram.</p>
               </div>
-              <div class="link-container">
-                <div class="link-display">
-                  <input type="text" id="shareable-link" class="form-control" readonly>
-                  <button class="btn btn-primary" id="copy-link-btn">
+              
+              <div class="link-section">
+                <label class="link-label">Share this link with others:</label>
+                <div class="link-display-enhanced">
+                  <div class="link-input-wrapper">
+                    <i class="fas fa-link link-icon"></i>
+                    <input type="text" id="shareable-link" class="form-control link-input" readonly>
+                  </div>
+                  <button class="btn btn-copy" id="copy-link-btn">
                     <i class="fas fa-copy"></i>
-                    Copy Link
+                    <span>Copy</span>
                   </button>
                 </div>
               </div>
+              
+              <div class="success-actions">
+                <button class="btn btn-primary btn-large" id="open-telegram-btn">
+                  <i class="fab fa-telegram"></i>
+                  <span>Open in Telegram</span>
+                </button>
+                <button class="btn btn-secondary btn-large" id="create-another-btn">
+                  <i class="fas fa-plus"></i>
+                  <span>Create Another Pack</span>
+                </button>
+              </div>
             </div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn btn-success" id="open-telegram-btn">
-              <i class="fas fa-external-link-alt"></i>
-              Open in Telegram
-            </button>
-            <button class="btn btn-secondary" id="create-another-btn">
-              <i class="fas fa-plus"></i>
-              Create Another Pack
-            </button>
           </div>
         </div>
 
