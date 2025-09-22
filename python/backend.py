@@ -565,7 +565,7 @@ def system_stats():
     if request.method == 'OPTIONS':
         return '', 200
     try:
-        # CPU-only system stats
+        # CPU and memory stats with live monitoring
         import psutil
         memory = psutil.virtual_memory()
         cpu_freq = psutil.cpu_freq()
@@ -1407,17 +1407,16 @@ except ImportError as e:
 except Exception as e:
     logger.error(f"Error registering sticker bot routes: {e}")
 
-# New endpoints for Application Settings
 @app.route('/api/backend-status', methods=['GET', 'OPTIONS'], strict_slashes=False)
 def backend_status():
-    """Get real backend status"""
+    """Get real backend status with live monitoring"""
     if request.method == 'OPTIONS':
         return '', 200
     try:
-        # Check if backend is responsive
+        # Check if backend is responsive with live stats
         status = "Connected"
         try:
-            # Simple health check
+            # Live health check with CPU/memory monitoring
             import psutil
             cpu_usage = psutil.cpu_percent()
             memory_usage = psutil.virtual_memory().percent
@@ -1428,7 +1427,7 @@ def backend_status():
         return jsonify({
             "success": True, 
             "status": status,
-            "uptime": stats_tracker.get_stats()["uptime_seconds"]
+            "uptime": stats_tracker.get_stats().get("uptime_seconds", 0)
         })
     except Exception as e:
         logger.error(f"Error getting backend status: {e}")
