@@ -59,13 +59,7 @@ class PerformanceTurbo {
     const styleElement = document.createElement('style');
     styleElement.id = 'performance-turbo-styles';
     styleElement.textContent = `
-      /* TURBO: Remove unnecessary GPU layers */
-      * {
-        -webkit-transform: none !important;
-        transform: none !important;
-      }
-
-      /* TURBO: Optimize only interactive elements */
+      /* TURBO: Optimize only interactive elements for GPU acceleration */
       .btn, .modal, .form-control:focus, .nav-item:hover {
         will-change: transform, opacity;
         transform: translateZ(0);
@@ -133,7 +127,7 @@ class PerformanceTurbo {
 
       /* TURBO: Optimize animations for 60fps */
       @media (prefers-reduced-motion: no-preference) {
-        * {
+        .btn, .modal {
           animation-duration: 0.1s !important;
           transition-duration: 0.1s !important;
         }
@@ -154,8 +148,8 @@ class PerformanceTurbo {
     const optimizedScrollHandler = this.debounce((e) => {
       if (!this.scrollTicking) {
         requestAnimationFrame(() => {
-          // Minimal scroll processing
-          this.handleScroll(e);
+          // Minimal scroll processing - just update scroll position
+          // No heavy operations during scroll
           this.scrollTicking = false;
         });
         this.scrollTicking = true;
@@ -173,10 +167,7 @@ class PerformanceTurbo {
   optimizeModals() {
     console.log('🪟 [TURBO] Optimizing modal performance...');
     
-    // Override modal show/hide with high-performance versions
-    const originalShowMethods = new Map();
-    
-    // Enhanced modal visibility handling
+    // Enhanced modal visibility handling with MutationObserver
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
@@ -185,16 +176,48 @@ class PerformanceTurbo {
             this.optimizeModalVisibility(target);
           }
         }
+        
+        // Handle newly added modal elements
+        if (mutation.type === 'childList') {
+          mutation.addedNodes.forEach((node) => {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+              if (node.classList && node.classList.contains('modal-overlay')) {
+                this.optimizeModalElement(node);
+                // Observe this new modal for style changes
+                observer.observe(node, { attributes: true, attributeFilter: ['style', 'class'] });
+              }
+              
+              // Check for modal overlays in child elements
+              const modalOverlays = node.querySelectorAll && node.querySelectorAll('.modal-overlay');
+              if (modalOverlays) {
+                modalOverlays.forEach(modal => {
+                  this.optimizeModalElement(modal);
+                  observer.observe(modal, { attributes: true, attributeFilter: ['style', 'class'] });
+                });
+              }
+            }
+          });
+        }
       });
     });
 
-    // Watch for modal changes
-    document.addEventListener('DOMNodeInserted', (e) => {
-      if (e.target.classList && e.target.classList.contains('modal-overlay')) {
-        observer.observe(e.target, { attributes: true, attributeFilter: ['style', 'class'] });
-        this.optimizeModalElement(e.target);
-      }
-    }, true);
+    // Start observing the document for modal changes
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['style', 'class']
+    });
+    
+    // Store observer for cleanup
+    this.modalObserver = observer;
+    
+    // Optimize existing modals
+    const existingModals = document.querySelectorAll('.modal-overlay');
+    existingModals.forEach(modal => {
+      this.optimizeModalElement(modal);
+      observer.observe(modal, { attributes: true, attributeFilter: ['style', 'class'] });
+    });
   }
 
   optimizeModalElement(modalElement) {
@@ -419,6 +442,28 @@ class PerformanceTurbo {
     });
   }
 
+  updateVirtualScrolling(container) {
+    // Update virtual scrolling after resize
+    if (container._virtualScrollEnabled) {
+      const items = Array.from(container.children);
+      const itemHeight = items[0]?.offsetHeight || 60;
+      const visibleCount = Math.ceil(container.offsetHeight / itemHeight) + 2;
+      
+      // Refresh visible items calculation
+      const scrollTop = container.scrollTop;
+      const startIndex = Math.floor(scrollTop / itemHeight);
+      const endIndex = Math.min(startIndex + visibleCount, items.length);
+      
+      items.forEach((item, index) => {
+        if (index < startIndex || index >= endIndex) {
+          item.style.display = 'none';
+        } else {
+          item.style.display = '';
+        }
+      });
+    }
+  }
+
   // Utility functions
   debounce(func, wait) {
     let timeout;
@@ -485,6 +530,12 @@ class PerformanceTurbo {
   destroy() {
     this.stopPerformanceMonitoring();
     
+    // Disconnect MutationObserver
+    if (this.modalObserver) {
+      this.modalObserver.disconnect();
+      this.modalObserver = null;
+    }
+    
     // Remove event listeners
     this.eventHandlers.forEach((handler, element) => {
       element.removeEventListener('scroll', handler);
@@ -510,4 +561,7 @@ if (document.readyState === 'loading') {
   window.performanceTurbo = new PerformanceTurbo();
 }
 
-export default PerformanceTurbo;
+// Export for module systems
+if (typeof module !== 'undefined') {
+  module.exports = PerformanceTurbo;
+}
