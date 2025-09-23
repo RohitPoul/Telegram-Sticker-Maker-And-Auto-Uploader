@@ -12,8 +12,8 @@
 [![Telethon](https://img.shields.io/badge/Telethon-Async%20API-blue?style=flat-square&logo=telegram&logoColor=white)](https://telethon.readthedocs.io)
 
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey?style=flat-square)](https://github.com/JoonJelly/Telegram-Sticker-Maker-And-Auto-Uploader)
-[![Downloads](https://img.shields.io/badge/Downloads-1K+-brightgreen?style=flat-square)](https://github.com/JoonJelly/Telegram-Sticker-Maker-And-Auto-Uploader/releases)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey?style=flat-square)](https://github.com/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader)
+[![Downloads](https://img.shields.io/badge/Downloads-1K+-brightgreen?style=flat-square)](https://github.com/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader/releases)
 
 </div>
 
@@ -163,7 +163,7 @@ graph TB
 
 ```bash
 # Clone the repository
-git clone https://github.com/JoonJelly/Telegram-Sticker-Maker-And-Auto-Uploader.git
+git clone https://github.com/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader.git
 cd Telegram-Sticker-Maker-And-Auto-Uploader
 
 # Install Python dependencies
@@ -460,7 +460,7 @@ We welcome contributions from the community! Please see our [Contributing Guidel
 
 ```bash
 # Fork and clone the repository
-git clone https://github.com/JoonJelly/Telegram-Sticker-Maker-And-Auto-Uploader.git
+git clone https://github.com/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader.git
 cd Telegram-Sticker-Maker-And-Auto-Uploader
 
 # Create development environment
@@ -501,12 +501,19 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
+## 🔗 **Related Projects**
+
+- 🎨 **[Background Remover AI](https://github.com/RohitPoul/Background-Remover-Ai)** - AI-powered background removal tool for perfect sticker creation
+- 📱 **[Complete Sticker](https://github.com/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader)** - This repository
+
+---
+
 ## 📞 **Support**
 
-- **Documentation**: [Wiki](https://github.com/JoonJelly/Telegram-Sticker-Maker-And-Auto-Uploader/wiki)
-- **Issues**: [GitHub Issues](https://github.com/JoonJelly/Telegram-Sticker-Maker-And-Auto-Uploader/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/JoonJelly/Telegram-Sticker-Maker-And-Auto-Uploader/discussions)
-- **Contact**: [Joon Jelly](https://github.com/JoonJelly)
+- **Documentation**: [Wiki](https://github.com/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader/wiki)
+- **Issues**: [GitHub Issues](https://github.com/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader/discussions)
+- **Contact**: [Rohit Poul](https://github.com/RohitPoul)
 
 ---
 
@@ -514,10 +521,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **⭐ Star this repository if you find it helpful!**
 
-[![GitHub stars](https://img.shields.io/github/stars/JoonJelly/Telegram-Sticker-Maker-And-Auto-Uploader?style=social)](https://github.com/JoonJelly/Telegram-Sticker-Maker-And-Auto-Uploader/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/JoonJelly/Telegram-Sticker-Maker-And-Auto-Uploader?style=social)](https://github.com/JoonJelly/Telegram-Sticker-Maker-And-Auto-Uploader/network)
-[![GitHub watchers](https://img.shields.io/github/watchers/JoonJelly/Telegram-Sticker-Maker-And-Auto-Uploader?style=social)](https://github.com/JoonJelly/Telegram-Sticker-Maker-And-Auto-Uploader/watchers)
+[![GitHub stars](https://img.shields.io/github/stars/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader?style=social)](https://github.com/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader?style=social)](https://github.com/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader/network)
+[![GitHub watchers](https://img.shields.io/github/watchers/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader?style=social)](https://github.com/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader/watchers)
 
-**Made with ❤️ by Joon Jelly**
+**Made with ❤️ by Rohit Poul**
 
 </div>
