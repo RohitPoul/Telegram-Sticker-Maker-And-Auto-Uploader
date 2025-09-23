@@ -5172,170 +5172,17 @@ html {
   font-size: 0.95rem;
 }
 
-/* Icon Selection Modal Styles */
+/* Icon Selection Modal Styles - Clean & Responsive */
 .icon-selection-content {
   text-align: center;
-  padding: 1rem 0;
-}
-
-.icon-info {
-  margin-bottom: 1.5rem;
-  padding: 1rem;
-  background: var(--bg-secondary);
-  border-radius: var(--border-radius);
-  border: 1px solid var(--border-color);
-}
-
-.icon-info p {
-  margin: 0.5rem 0;
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-}
-
-.icon-info ul {
-  margin: 0.75rem 0;
-  padding-left: 1.5rem;
-  text-align: left;
-}
-
-.icon-info ul li {
-  margin: 0.4rem 0;
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-}
-
-.icon-options {
-  display: flex;
-  gap: 1rem;
-  justify-content: center;
-  margin: 1.5rem 0;
-  flex-direction: column;
-  align-items: center;
-}
-
-.icon-option {
-  text-align: center;
-  flex: 1;
-}
-
-.icon-option .btn-large {
-  padding: 0.8rem 1.5rem;
-  font-size: 0.9rem;
-  min-width: 200px;
-  margin-bottom: 0.5rem;
-  display: block;
-}
-
-.icon-option .help-text {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  margin: 0;
-}
-
-.icon-file-info {
-  margin-top: 1rem;
-  padding: 1rem;
-  background: var(--bg-tertiary);
-  border-radius: var(--border-radius);
-  border: 1px solid var(--border-color);
-}
-
-.file-preview {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.file-preview i {
-  font-size: 1.5rem;
-  color: var(--accent-color);
-}
-
-.file-preview span {
-  font-family: 'Courier New', monospace;
-  font-size: 0.85rem;
-  color: var(--text-primary);
-}
-
-.file-actions {
-  display: flex;
-  gap: 0.75rem;
-  justify-content: center;
-}
-
-.file-actions .btn {
-  padding: 0.5rem 1rem;
-  font-size: 0.85rem;
-}
-
-/* Enhanced Icon Modal Styling */
-#icon-modal {
-  max-width: 500px;
-  width: 90%;
-  background: linear-gradient(135deg, #1e3a8a 0%, #3730a3 100%);
-  border-radius: 16px;
-  box-shadow: 0 25px 50px -12px rgba(59, 130, 246, 0.6);
-  border: 1px solid rgba(147, 197, 253, 0.3);
-  overflow: hidden;
-}
-
-#icon-modal .modal-header {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  color: white;
-  padding: 20px 24px;
-  border-bottom: none;
-}
-
-#icon-modal .modal-header h3 {
-  font-size: 1.3rem;
-  margin: 0;
-  font-weight: 600;
-}
-
-#icon-modal .modal-body {
-  padding: 24px;
-  background: rgba(30, 58, 138, 0.9);
-  color: #e0e7ff;
-}
-
-#icon-modal .modal-footer {
-  padding: 20px 24px;
-  background: rgba(30, 58, 138, 0.8);
-  border-top: 1px solid rgba(147, 197, 253, 0.2);
-}
-
-.icon-info {
-  margin-bottom: 1.5rem;
-  padding: 1rem;
-  background: var(--bg-secondary);
-  border-radius: var(--border-radius);
-  border: 1px solid var(--border-color);
-}
-
-.icon-info p {
-  margin-bottom: 1rem;
-  color: var(--text-primary);
-  font-size: 1rem;
-}
-
-.icon-info ul {
-  text-align: left;
-  margin: 0;
-  padding-left: 1.5rem;
-  color: var(--text-secondary);
-}
-
-.icon-info li {
-  margin-bottom: 0.5rem;
-  line-height: 1.5;
+  padding: 0;
 }
 
 .icon-options {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
 }
 
 .icon-option {
@@ -5346,11 +5193,21 @@ html {
 }
 
 .icon-option .btn {
-  min-width: 200px;
+  min-width: 240px;
+  padding: 1rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.icon-option .help-text {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0;
+  text-align: center;
 }
 
 .icon-file-info {
-  background: var(--bg-secondary);
+  background: var(--bg-tertiary);
   border-radius: var(--border-radius);
   padding: 1.5rem;
   border: 1px solid var(--border-color);
@@ -5385,14 +5242,21 @@ html {
   justify-content: center;
 }
 
+.file-actions .btn {
+  min-width: 140px;
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+}
+
 /* Responsive adjustments for icon modal */
 @media (max-width: 768px) {
-  .icon-options {
-    gap: 1rem;
+  #icon-modal {
+    min-width: 320px;
+    max-width: 95%;
   }
   
   .icon-option .btn {
-    min-width: 150px;
+    min-width: 200px;
   }
   
   .file-actions {
@@ -5405,3 +5269,45 @@ html {
     max-width: 200px;
   }
 }
+
+
+
+/* Enhanced Icon Modal Styling - Dark Theme */
+#icon-modal {
+  max-width: 520px;
+  min-width: 480px;
+  width: 90%;
+  background: var(--bg-secondary);
+  border-radius: 16px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+}
+
+#icon-modal .modal-header {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+#icon-modal .modal-header h3 {
+  font-size: 1.3rem;
+  margin: 0;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+#icon-modal .modal-body {
+  padding: 24px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+#icon-modal .modal-footer {
+  padding: 20px 24px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+}
+
+
