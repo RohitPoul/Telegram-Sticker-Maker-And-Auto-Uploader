@@ -1998,7 +1998,7 @@ def register_sticker_routes(app):
                             active_processes[process_id]['current_stage'] = f'Icon skipped with timeout. Please provide URL name.'
                             active_processes[process_id]['waiting_for_user'] = True
                             active_processes[process_id]['url_name_taken'] = True  # Trigger URL name modal
-                            active_processes[process_id]['original_url_name'] = pack_url_name or 'unknown'
+                            active_processes[process_id]['original_url_name'] = pack_url_name or active_processes[process_id].get('pack_url_name', 'unknown')
                     
                     return {"success": False, "error": "Icon skip timeout", "waiting_for_user": True, "url_name_taken": True}
                     
@@ -2012,7 +2012,7 @@ def register_sticker_routes(app):
                             active_processes[process_id]['current_stage'] = f'Icon skip error. Please provide URL name.'
                             active_processes[process_id]['waiting_for_user'] = True
                             active_processes[process_id]['url_name_taken'] = True  # Trigger URL name modal
-                            active_processes[process_id]['original_url_name'] = pack_url_name or 'unknown'
+                            active_processes[process_id]['original_url_name'] = pack_url_name or active_processes[process_id].get('pack_url_name', 'unknown')
                     
                     return {"success": False, "error": "Icon skip error", "waiting_for_user": True, "url_name_taken": True}
             
