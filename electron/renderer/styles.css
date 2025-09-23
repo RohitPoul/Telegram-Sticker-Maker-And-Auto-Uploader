@@ -1451,9 +1451,9 @@ html {
   }
 }
 
-/* Clean header with light pink colors */
+/* Clean header with gray colors */
 .url-name-retry-modal .modal-header {
-  background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
+  background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
   color: white;
   padding: 20px 24px;
   border-bottom: none;
@@ -1472,12 +1472,12 @@ html {
 /* Clean body without weird borders */
 .url-name-retry-modal .modal-body {
   padding: 24px;
-  background: #fef7ff;
-  color: #831843;
+  background: #f9fafb;
+  color: #374151;
 }
 
 .attempt-badge {
-  background: linear-gradient(135deg, #f472b6 0%, #ec4899 100%);
+  background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
   color: white;
   padding: 8px 16px;
   border-radius: 20px;
@@ -1485,13 +1485,13 @@ html {
   font-weight: 600;
   margin-bottom: 16px;
   display: inline-block;
-  box-shadow: 0 2px 8px rgba(244, 114, 182, 0.3);
+  box-shadow: 0 2px 8px rgba(156, 163, 175, 0.3);
 }
 
 .error-message {
-  background: rgba(244, 114, 182, 0.1);
-  border: 1px solid rgba(244, 114, 182, 0.3);
-  color: #831843;
+  background: rgba(156, 163, 175, 0.1);
+  border: 1px solid rgba(156, 163, 175, 0.3);
+  color: #374151;
   padding: 16px;
   border-radius: 8px;
   margin-bottom: 20px;
@@ -1500,7 +1500,7 @@ html {
 }
 
 .input-section h4 {
-  color: #831843;
+  color: #374151;
   font-size: 16px;
   margin-bottom: 12px;
   font-weight: 600;
@@ -1509,12 +1509,12 @@ html {
 .url-input-container {
   display: flex;
   background: white;
-  border: 2px solid rgba(236, 72, 153, 0.3);
+  border: 2px solid rgba(107, 114, 128, 0.3);
   border-radius: 10px;
   overflow: hidden;
   margin-bottom: 12px;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
-  box-shadow: 0 2px 8px rgba(236, 72, 153, 0.1);
+  box-shadow: 0 2px 8px rgba(107, 114, 128, 0.1);
 }
 
 .url-input-container:focus-within {
@@ -1628,26 +1628,26 @@ html {
 
 .url-name-retry-modal .modal-footer .btn-secondary {
   background: rgba(107, 114, 128, 0.1);
-  color: #831843;
-  border: 1px solid rgba(236, 72, 153, 0.3);
+  color: #374151;
+  border: 1px solid rgba(107, 114, 128, 0.3);
 }
 
 .url-name-retry-modal .modal-footer .btn-secondary:hover {
   background: rgba(107, 114, 128, 0.2);
-  border-color: rgba(236, 72, 153, 0.5);
+  border-color: rgba(107, 114, 128, 0.5);
 }
 
 .url-name-retry-modal .modal-footer .btn-primary {
-  background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
+  background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
   color: white;
   border: none;
   font-weight: 600;
 }
 
 .url-name-retry-modal .modal-footer .btn-primary:hover {
-  background: linear-gradient(135deg, #db2777 0%, #be185d 100%);
+  background: linear-gradient(135deg, #4b5563 0%, #374151 100%);
   transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(236, 72, 153, 0.4);
+  box-shadow: 0 4px 16px rgba(107, 114, 128, 0.4);
 }
 
 .url-name-retry-modal .modal-footer .btn-primary:disabled {

@@ -1264,31 +1264,128 @@ class TelegramUtilities {
   showSuccessModal(shareableLink) {
     console.log(`🎉 [SUCCESS_MODAL] Showing success modal with link: ${shareableLink}`);
     
-    // More thorough element discovery
-    let modal = document.getElementById("success-modal");
-    if (!modal) {
-      modal = document.querySelector('.success-modal-enhanced');
-      console.log(`🎉 [SUCCESS_MODAL] Fallback: Found modal by class: ${!!modal}`);
-    }
-    
-    const overlay = document.getElementById("modal-overlay");
-    const linkInput = document.getElementById("shareable-link");
-    
-    console.log(`🎉 [SUCCESS_MODAL] Elements found - Modal: ${!!modal}, Overlay: ${!!overlay}, LinkInput: ${!!linkInput}`);
-    
-    if (!modal || !overlay) {
-      console.error(`🎉 [SUCCESS_MODAL] Modal or overlay element not found!`);
-      console.error(`🎉 [SUCCESS_MODAL] Modal exists: ${!!modal}, Overlay exists: ${!!overlay}`);
+    // Wait for DOM to be ready and use more comprehensive element discovery
+    const findModal = () => {
+      // Try multiple methods to find the modal
+      let modal = document.getElementById("success-modal");
       
-      // Enhanced fallback: show enhanced toast notification
-      this.showToast("success", "🎉 Pack Created!", `Sticker pack created successfully! Link: ${shareableLink}`, 10000);
-      
-      // Try to add the link to status
-      if (shareableLink) {
-        this.addStatusItem(`🎉 Success! Shareable link: ${shareableLink}`, "completed");
+      if (!modal) {
+        modal = document.querySelector('.success-modal-enhanced');
+        console.log(`🎉 [SUCCESS_MODAL] Fallback 1 - Found by class: ${!!modal}`);
       }
-      return;
+      
+      if (!modal) {
+        modal = document.querySelector('[id="success-modal"]');
+        console.log(`🎉 [SUCCESS_MODAL] Fallback 2 - Found by attribute: ${!!modal}`);
+      }
+      
+      if (!modal) {
+        modal = document.querySelector('.modal.success-modal-enhanced');
+        console.log(`🎉 [SUCCESS_MODAL] Fallback 3 - Found by combined classes: ${!!modal}`);
+      }
+      
+      return modal;
+    };
+    
+    // Wait a moment for DOM to be ready, then try to find elements
+    setTimeout(() => {
+      const modal = findModal();
+      const overlay = document.getElementById("modal-overlay") || document.querySelector('.modal-overlay');
+      const linkInput = document.getElementById("shareable-link");
+      
+      console.log(`🎉 [SUCCESS_MODAL] Elements found - Modal: ${!!modal}, Overlay: ${!!overlay}, LinkInput: ${!!linkInput}`);
+      
+      if (modal) {
+        console.log(`🎉 [SUCCESS_MODAL] Modal element details:`, {
+          tagName: modal.tagName,
+          id: modal.id,
+          className: modal.className,
+          style: modal.style.cssText,
+          display: getComputedStyle(modal).display
+        });
+      }
+      
+      if (!modal || !overlay) {
+        console.error(`🎉 [SUCCESS_MODAL] Modal or overlay element not found!`);
+        console.error(`🎉 [SUCCESS_MODAL] Modal exists: ${!!modal}, Overlay exists: ${!!overlay}`);
+        
+        // Debug: List all modal elements in the document
+        const allModals = document.querySelectorAll('.modal, [id*="modal"], [class*="modal"]');
+        console.log(`🎉 [SUCCESS_MODAL] Debug - Found ${allModals.length} modal-related elements:`);
+        allModals.forEach((el, i) => {
+          console.log(`  ${i}: tagName=${el.tagName}, id=${el.id}, className=${el.className}`);
+        });
+        
+        // Enhanced fallback: show enhanced toast notification
+        this.showToast("success", "🎉 Pack Created!", `Sticker pack created successfully! Link: ${shareableLink}`, 10000);
+        
+        // Try to add the link to status
+        if (shareableLink) {
+          this.addStatusItem(`🎉 Success! Shareable link: ${shareableLink}`, "completed");
+        }
+        return;
+      }
+      
+      this.displaySuccessModal(modal, overlay, linkInput, shareableLink);
+    }, 100);
+  }
+  
+  displaySuccessModal(modal, overlay, linkInput, shareableLink) {
+    
+    console.log(`🎉 [SUCCESS_MODAL] Starting modal display process...`);
+    
+    // Set the shareable link
+    if (linkInput && shareableLink) {
+      linkInput.value = shareableLink;
+      console.log(`🎉 [SUCCESS_MODAL] Set link input value: ${shareableLink}`);
+    } else {
+      console.warn(`🎉 [SUCCESS_MODAL] Link input not found or no link provided`);
     }
+}
+
+  // TEST METHOD - Enhanced debugging
+  testSuccessModal() {
+    const testLink = "https://t.me/addstickers/test_sticker_pack_123";
+    console.log(`🗃 [TEST] Triggering success modal with test link: ${testLink}`);
+    console.log(`🗃 [TEST] Current DOM ready state: ${document.readyState}`);
+    
+    // Check if elements exist before calling
+    const modal = document.getElementById("success-modal") || document.querySelector('.success-modal-enhanced');
+    const overlay = document.getElementById("modal-overlay") || document.querySelector('.modal-overlay');
+    
+    console.log(`🗃 [TEST] Pre-check - Modal: ${!!modal}, Overlay: ${!!overlay}`);
+    
+    if (modal) {
+      console.log(`🗃 [TEST] Modal found:`, {
+        id: modal.id,
+        className: modal.className,
+        style: modal.style.cssText,
+        computed: {
+          display: getComputedStyle(modal).display,
+          visibility: getComputedStyle(modal).visibility
+        }
+      });
+    }
+    
+    this.showSuccessModal(testLink);
+    
+    // Schedule a check to see if modal appeared
+    setTimeout(() => {
+      const modalAfter = document.getElementById("success-modal");
+      if (modalAfter) {
+        const computed = getComputedStyle(modalAfter);
+        console.log(`🗃 [TEST] Modal state after call:`, {
+          display: computed.display,
+          opacity: computed.opacity,
+          visibility: computed.visibility,
+          zIndex: computed.zIndex
+        });
+      }
+    }, 500);
+  }
+
+  displaySuccessModal(modal, overlay, linkInput, shareableLink) {
+    console.log(`🎉 [SUCCESS_MODAL] Starting modal display process...`);
     
     // Set the shareable link
     if (linkInput && shareableLink) {
@@ -1301,18 +1398,39 @@ class TelegramUtilities {
     // Reset any previous states and ensure modal is ready
     modal.style.display = "none";
     modal.style.opacity = "0";
+    modal.style.visibility = "visible";
+    modal.style.zIndex = "9999";
+    
+    // Ensure overlay is ready
+    overlay.style.display = "block";
+    overlay.style.visibility = "visible";
+    overlay.style.zIndex = "9998";
     
     // Show modal with proper overlay (following project specifications)
     overlay.classList.add("active");
     modal.style.display = "flex";
     
+    console.log(`🎉 [SUCCESS_MODAL] Modal display set to flex, opacity transition starting...`);
+    
     // Use requestAnimationFrame for smooth display
     requestAnimationFrame(() => {
       modal.style.opacity = "1";
+      console.log(`🎉 [SUCCESS_MODAL] Opacity set to 1, modal should be visible now`);
     });
     
     // Add critical modal protection (prevent outside click dismissal)
     modal.setAttribute('data-critical', 'true');
+    
+    // Verify visibility after a short delay
+    setTimeout(() => {
+      const computedStyle = getComputedStyle(modal);
+      console.log(`🎉 [SUCCESS_MODAL] Visibility check:`, {
+        display: computedStyle.display,
+        opacity: computedStyle.opacity,
+        visibility: computedStyle.visibility,
+        zIndex: computedStyle.zIndex
+      });
+    }, 200);
     
     console.log(`🎉 [SUCCESS_MODAL] Modal should now be visible`);
     
@@ -1325,8 +1443,11 @@ class TelegramUtilities {
     // Focus management for accessibility
     setTimeout(() => {
       const copyBtn = document.getElementById("copy-link-btn");
-      if (copyBtn) copyBtn.focus();
-    }, 100);
+      if (copyBtn) {
+        copyBtn.focus();
+        console.log(`🎉 [SUCCESS_MODAL] Focus set to copy button`);
+      }
+    }, 300);
   }
 
   hideSuccessModal() {
