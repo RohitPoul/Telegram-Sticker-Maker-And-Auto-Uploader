@@ -1938,15 +1938,15 @@ def register_sticker_routes(app):
                                     active_processes[process_id]['current_stage'] = f'URL name "{pack_url_name}" is already taken. Please provide a new name.'
                                     active_processes[process_id]['waiting_for_user'] = True
                                     active_processes[process_id]['url_name_taken'] = True
+                                    # PRESERVE ORIGINAL URL NAME FROM FORM INPUT
                                     active_processes[process_id]['original_url_name'] = pack_url_name
                                     active_processes[process_id]['url_name_attempts'] = 1
                                     active_processes[process_id]['max_url_attempts'] = 3
                                     active_processes[process_id]['progress'] = 85
                                     # CRITICAL FIX: Prevent race condition - clear any completion flags
                                     active_processes[process_id].pop('shareable_link', None)
-                                    active_processes[process_id]['progress'] = 85
                             
-                            return {"success": False, "error": f"URL name '{pack_url_name}' is already taken", "waiting_for_user": True, "url_name_taken": True}
+                            return {"success": False, "error": f"URL name '{pack_url_name}' is already taken", "waiting_for_user": True, "url_name_taken": True, "original_url_name": pack_url_name}
                         
                         logging.info(f"[SKIP_ICON] URL name submission successful")
                         
@@ -1998,7 +1998,7 @@ def register_sticker_routes(app):
                             active_processes[process_id]['current_stage'] = f'Icon skipped with timeout. Please provide URL name.'
                             active_processes[process_id]['waiting_for_user'] = True
                             active_processes[process_id]['url_name_taken'] = True  # Trigger URL name modal
-                            active_processes[process_id]['original_url_name'] = pack_url_name or active_processes[process_id].get('pack_url_name', 'unknown')
+                            active_processes[process_id]['original_url_name'] = pack_url_name if pack_url_name else active_processes[process_id].get('pack_url_name', 'retry')
                     
                     return {"success": False, "error": "Icon skip timeout", "waiting_for_user": True, "url_name_taken": True}
                     
@@ -2012,7 +2012,7 @@ def register_sticker_routes(app):
                             active_processes[process_id]['current_stage'] = f'Icon skip error. Please provide URL name.'
                             active_processes[process_id]['waiting_for_user'] = True
                             active_processes[process_id]['url_name_taken'] = True  # Trigger URL name modal
-                            active_processes[process_id]['original_url_name'] = pack_url_name or active_processes[process_id].get('pack_url_name', 'unknown')
+                            active_processes[process_id]['original_url_name'] = pack_url_name if pack_url_name else active_processes[process_id].get('pack_url_name', 'retry')
                     
                     return {"success": False, "error": "Icon skip error", "waiting_for_user": True, "url_name_taken": True}
             

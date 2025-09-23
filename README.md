@@ -350,6 +350,15 @@ export STICKER_THEME=dark           # UI theme preference
 
 ## 🚀 **Recent Updates**
 
+### **v1.4.6 - Stable Release & Bug Fixes (September 23, 2024)**
+- 🐛 **URL Modal Fix**: Fixed "Try This Name" button not working due to process ID clearing
+- 🔧 **Missing Method Fix**: Added missing `updatePackActions()` method to prevent form reset errors
+- 🎨 **Modal Redesign**: Changed warning/error themes to positive blue themes for retry functionality
+- 🧹 **Code Cleanup**: Removed 200+ lines of duplicate CSS and optimized modal styling
+- ✨ **Enhanced UX**: Made URL name conflicts appear as positive choices rather than errors
+- 🛡️ **Button Preservation**: Improved button interaction stability after UI updates
+- 💙 **Positive Theming**: Converted retry modals from error-red to choice-blue for better UX
+
 ### **v1.4.5 - UI Enhancement & Modal Stability (September 22, 2024)**
 - 🎨 **Success Modal Fix**: Resolved modal display issues with enhanced element discovery
 - 🌸 **Light Pink Theme**: Updated UI from lavender to beautiful light pink/baby pink colors

@@ -465,7 +465,7 @@
               <div class="card-body">
                 <div class="info-item">
                   <label>Application Version</label>
-                  <span>1.4.5</span>
+                  <span>1.4.6</span>
                 </div>
                 <div class="info-item">
                   <label>Backend Status</label>
@@ -945,50 +945,86 @@
           </div>
         </div>
 
-                <!-- URL Name Retry Modal - SIMPLE & FAST -->
+                <!-- URL Name Retry Modal - Clean Modern Design -->
         <div class="modal url-name-retry-modal" id="url-name-modal" style="display: none">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h3><i class="fas fa-exclamation-triangle"></i> URL Name Unavailable</h3>
+          <div class="modal-header">
+            <h3>
+              <i class="fas fa-exclamation-triangle"></i>
+              URL Name Unavailable
+              <span class="status-badge">RETRY</span>
+            </h3>
+            <div class="attempt-info">
+              <span id="attempt-counter">Attempt 1 of 3</span>
             </div>
-            
-            <div class="modal-body">
-              <div class="attempt-badge">
-                <span id="attempt-counter">Attempt 1 of 3</span>
+          </div>
+          
+          <div class="modal-body">
+            <div class="retry-content">
+              <!-- Error Information -->
+              <div class="error-info">
+                <div class="error-icon">
+                  <i class="fas fa-times-circle"></i>
+                </div>
+                <div class="error-message">
+                  URL Name Already Taken
+                </div>
+                <div class="error-details">
+                  <strong>t.me/addstickers/<span id="taken-url-name">name</span></strong> is already in use by another sticker pack
+                </div>
               </div>
               
-              <div class="error-message">
-                <strong>t.me/addstickers/<span id="taken-url-name">name</span></strong> is already taken by another sticker pack
-              </div>
-              
-              <div class="input-section">
-                <h4>Choose a new URL name:</h4>
+              <!-- URL Input Section -->
+              <div class="url-input-section">
+                <div class="section-label">
+                  <i class="fas fa-link"></i>
+                  Choose a New URL Name:
+                </div>
                 
                 <div class="url-input-container">
-                  <span class="url-prefix">t.me/addstickers/</span>
-                  <input type="text" id="new-url-name" placeholder="Enter new name" maxlength="64">
+                  <div class="url-prefix-display">t.me/addstickers/</div>
+                  <input type="text" 
+                         id="new-url-name" 
+                         class="url-input" 
+                         placeholder="enter_new_name" 
+                         maxlength="32"
+                         autocomplete="off">
+                  <div class="input-status">
+                    <i class="fas fa-check"></i>
+                  </div>
                 </div>
                 
-                <div class="input-validation">
+                <div class="input-help">
+                  <i class="fas fa-info-circle"></i>
                   5-32 characters • Start with letter • Letters, numbers, underscores only
                 </div>
-              </div>
-              
-              <div class="suggestions-section">
-                <h5>Smart suggestions:</h5>
-                <div class="suggestions-grid" id="url-suggestions">
-                  <button class="suggestion-btn">name_01</button>
-                  <button class="suggestion-btn">name_pack</button>
-                  <button class="suggestion-btn">my_name</button>
-                  <button class="suggestion-btn">name_stickers</button>
+                
+                <!-- Smart Suggestions -->
+                <div class="suggestions-section">
+                  <div class="suggestion-label">
+                    <i class="fas fa-lightbulb"></i>
+                    Smart Suggestions:
+                  </div>
+                  <div class="suggestion-buttons" id="url-suggestions">
+                    <button class="suggestion-btn">name_official</button>
+                    <button class="suggestion-btn">name_pack</button>
+                    <button class="suggestion-btn">name_stickers</button>
+                    <button class="suggestion-btn">name_v2</button>
+                  </div>
                 </div>
               </div>
             </div>
-            
-            <div class="modal-footer">
-              <button class="btn btn-secondary" id="cancel-url-retry">Cancel</button>
-              <button class="btn btn-primary" id="submit-new-url">
-                <i class="fas fa-check"></i> Try This Name
+          </div>
+          
+          <!-- Footer -->
+          <div class="modern-footer">
+            <div class="footer-actions">
+              <button class="btn btn-outline" id="cancel-url-retry">
+                <i class="fas fa-times"></i>
+                Cancel
+              </button>
+              <button class="btn btn-submit" id="submit-new-url">
+                <i class="fas fa-paper-plane"></i>
+                Try This Name
               </button>
             </div>
           </div>

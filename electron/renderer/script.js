@@ -1,6 +1,38 @@
 // Production mode - debug disabled
 const RENDERER_DEBUG = false;
 
+// Global error handling to prevent white screen crashes
+window.addEventListener('error', (event) => {
+  console.error('🚫 [GLOBAL_ERROR] Unhandled error:', event.error);
+  console.error('🚫 [GLOBAL_ERROR] Error details:', {
+    message: event.message,
+    filename: event.filename,
+    lineno: event.lineno,
+    colno: event.colno,
+    stack: event.error?.stack
+  });
+  
+  // Prevent app from crashing completely
+  event.preventDefault();
+  
+  // Show error toast if possible
+  if (window.app && window.app.showToast) {
+    window.app.showToast('error', 'Application Error', `Error: ${event.message}`);
+  }
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('🚫 [GLOBAL_ERROR] Unhandled promise rejection:', event.reason);
+  
+  // Prevent app from crashing
+  event.preventDefault();
+  
+  // Show error toast if possible
+  if (window.app && window.app.showToast) {
+    window.app.showToast('error', 'Promise Error', `Promise rejection: ${event.reason}`);
+  }
+});
+
 class TelegramUtilities {
   constructor() {
     this.activeProcesses = new Map();
@@ -62,24 +94,51 @@ class TelegramUtilities {
   }
 
   async init() {
-    this.setupEventListeners();
-    this.setupTabSwitching();
-    this.loadSettings();
-    this.startSystemStatsMonitoring();
-    await this.initializeTelegramConnection();
-    
-    // Update stats immediately on startup
-    this.updateSystemInfo();
-    this.updateDatabaseStats();
-    
-    // Add manual refresh function for testing
-    window.forceRefreshStats = () => {
+    try {
+      console.log('🚀 [APP] Starting app initialization...');
+      
+      this.setupEventListeners();
+      console.log('🚀 [APP] Event listeners set up');
+      
+      this.setupTabSwitching();
+      console.log('🚀 [APP] Tab switching set up');
+      
+      this.loadSettings();
+      console.log('🚀 [APP] Settings loaded');
+      
+      this.startSystemStatsMonitoring();
+      console.log('🚀 [APP] System stats monitoring started');
+      
+      await this.initializeTelegramConnection();
+      console.log('🚀 [APP] Telegram connection initialized');
+      
+      // Update stats immediately on startup
       this.updateSystemInfo();
       this.updateDatabaseStats();
-    };
-    
-    // Initialize button states
-    this.updateButtonStates();
+      console.log('🚀 [APP] Initial stats updated');
+      
+      // Add manual refresh function for testing
+      window.forceRefreshStats = () => {
+        this.updateSystemInfo();
+        this.updateDatabaseStats();
+      };
+      
+      // Initialize button states
+      this.updateButtonStates();
+      console.log('🚀 [APP] Button states updated');
+      
+      console.log('🚀 [APP] App initialization completed successfully');
+    } catch (error) {
+      console.error('🚫 [APP] Critical error during initialization:', error);
+      // Show error to user
+      document.body.innerHTML = `
+        <div style="padding: 20px; background: #f44336; color: white; text-align: center;">
+          <h2>Application Error</h2>
+          <p>Failed to initialize the application: ${error.message}</p>
+          <button onclick="location.reload()">Reload Application</button>
+        </div>
+      `;
+    }
   }
 
   startSystemStatsMonitoring() {
@@ -363,7 +422,15 @@ class TelegramUtilities {
     const cancelUrlRetryBtn = document.getElementById("cancel-url-retry");
     
     if (submitNewUrlBtn) {
-      submitNewUrlBtn.addEventListener("click", () => this.submitNewUrlName());
+      console.log('🔧 [DEBUG] Adding click listener to submit-new-url button');
+      submitNewUrlBtn.addEventListener("click", (e) => {
+        console.log('🔧 [DEBUG] Submit new URL button clicked');
+        e.preventDefault();
+        e.stopPropagation();
+        this.submitNewUrlName();
+      });
+    } else {
+      console.warn('🔧 [DEBUG] submit-new-url button not found!');
     }
     if (cancelUrlRetryBtn) {
       cancelUrlRetryBtn.addEventListener("click", () => this.hideUrlNameModal());
@@ -1687,6 +1754,22 @@ class TelegramUtilities {
       // Don't block reset if this fails
       console.log('🔄 [RESET] Backend process clearing skipped:', error.message);
     }
+  }
+
+  updatePackActions() {
+    const createBtn = document.getElementById("create-sticker-pack");
+    if (!createBtn) return;
+    
+    const packName = document.getElementById("pack-name")?.value.trim() || "";
+    const urlName = document.getElementById("pack-url-name")?.value.trim() || "";
+    
+    const isPackNameValid = packName.length > 0 && packName.length <= 64;
+    const isUrlNameValid = /^[a-zA-Z][a-zA-Z0-9_]{4,31}$/.test(urlName);
+    const hasMedia = this.mediaFiles.length > 0;
+    const isConnected = this.telegramConnected;
+    
+    const canCreate = isPackNameValid && isUrlNameValid && hasMedia && isConnected;
+    createBtn.disabled = !canCreate;
   }
 
   validatePackName(packName) {
@@ -4811,7 +4894,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
               return;
             }
             
-            this.showUrlNameModal(processId, progress.original_url_name || progress.pack_url_name || "unknown", currentAttempt, maxAttempts);
+            this.showUrlNameModal(processId, progress.original_url_name || progress.pack_url_name || progress.url_name || "retry", currentAttempt, maxAttempts);
             return;
           }
           
@@ -5373,17 +5456,27 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   showUrlNameModal(processId, takenName, currentAttempt = 1, maxAttempts = 3) {
     console.log(`🔧 [FRONTEND] showUrlNameModal called with:`, { processId, takenName, currentAttempt, maxAttempts });
     
-    const modal = document.getElementById("url-name-modal");
-    const overlay = document.getElementById("modal-overlay");
-    const takenNameSpan = document.getElementById("taken-url-name");
-    const newUrlNameInput = document.getElementById("new-url-name");
-    const attemptCounter = document.getElementById("attempt-counter");
-    const suggestionsContainer = document.getElementById("url-suggestions");
-    
-    if (!modal || !overlay) {
-      console.error(`🔧 [FRONTEND] Modal elements not found!`);
-      return;
-    }
+    try {
+      const modal = document.getElementById("url-name-modal");
+      const overlay = document.getElementById("modal-overlay");
+      const takenNameSpan = document.getElementById("taken-url-name");
+      const newUrlNameInput = document.getElementById("new-url-name");
+      const attemptCounter = document.getElementById("attempt-counter");
+      const suggestionsContainer = document.getElementById("url-suggestions");
+      
+      console.log(`🔧 [FRONTEND] Modal elements found:`, {
+        modal: !!modal,
+        overlay: !!overlay,
+        takenNameSpan: !!takenNameSpan,
+        newUrlNameInput: !!newUrlNameInput,
+        attemptCounter: !!attemptCounter,
+        suggestionsContainer: !!suggestionsContainer
+      });
+      
+      if (!modal || !overlay) {
+        console.error(`🔧 [FRONTEND] Critical: Modal elements not found!`);
+        return;
+      }
     
     // Update taken name display
     if (takenNameSpan) {
@@ -5460,6 +5553,11 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     } else {
       this.addStatusItem(`All retry attempts exhausted for URL name '${takenName}'.`, "error");
     }
+    
+    } catch (error) {
+      console.error('🔧 [FRONTEND] Error showing URL name modal:', error);
+      this.showToast('error', 'Modal Error', 'Failed to show URL retry modal');
+    }
   }
   
   generateUrlSuggestions(baseName, container) {
@@ -5526,6 +5624,9 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   }
 
   hideUrlNameModal() {
+    console.log('🔧 [DEBUG] hideUrlNameModal called');
+    console.trace('🔧 [DEBUG] hideUrlNameModal call stack');
+    
     const modal = document.getElementById("url-name-modal");
     const overlay = document.getElementById("modal-overlay");
     
@@ -5543,10 +5644,30 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   }
 
   async submitNewUrlName() {
+    console.log('🔧 [DEBUG] submitNewUrlName called');
+    
+    // Store process ID immediately to prevent loss if modal gets hidden
+    const processId = this.currentUrlNameProcessId;
+    const currentAttempt = this.currentUrlAttempt;
+    const maxAttempts = this.maxUrlAttempts;
+    
+    console.log('🔧 [DEBUG] Stored process info:', { processId, currentAttempt, maxAttempts });
+    
     const newUrlNameInput = document.getElementById("new-url-name");
-    if (!newUrlNameInput || !this.currentUrlNameProcessId) return;
+    if (!newUrlNameInput) {
+      console.error('🔧 [DEBUG] new-url-name input not found');
+      return;
+    }
+    
+    if (!processId) {
+      console.error('🔧 [DEBUG] processId is null or undefined');
+      console.error('🔧 [DEBUG] this.currentUrlNameProcessId:', this.currentUrlNameProcessId);
+      return;
+    }
     
     const newUrlName = newUrlNameInput.value.trim();
+    console.log('🔧 [DEBUG] New URL name:', newUrlName);
+    
     if (!newUrlName) {
       this.showToast("error", "Missing URL Name", "Please enter a new URL name");
       newUrlNameInput.focus();
@@ -5570,10 +5691,10 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       }
       
       const response = await this.apiRequest("POST", "/api/sticker/submit-url-name", {
-        process_id: this.currentUrlNameProcessId,
+        process_id: processId,
         new_url_name: newUrlName,
-        current_attempt: this.currentUrlAttempt || 1,
-        max_attempts: this.maxUrlAttempts || 3
+        current_attempt: currentAttempt || 1,
+        max_attempts: maxAttempts || 3
       });
       
       if (response.success) {
@@ -5596,21 +5717,21 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           this.showToast("success", "URL Name Updated", `Using new URL name: ${newUrlName}`);
           
           // Restart progress monitoring
-          this.startStickerProgressMonitoring(this.currentUrlNameProcessId);
+          this.startStickerProgressMonitoring(processId);
         }
       } else {
         // Check if this was a URL name taken error and we have retries left
         if (response.error && response.error.includes("already taken") && response.url_name_taken) {
-          const nextAttempt = (this.currentUrlAttempt || 1) + 1;
+          const nextAttempt = (currentAttempt || 1) + 1;
           
-          if (nextAttempt <= (this.maxUrlAttempts || 3)) {
+          if (nextAttempt <= (maxAttempts || 3)) {
             // Show retry modal with updated attempt count
-            this.addStatusItem(`❌ URL name '${newUrlName}' is taken. Retry ${nextAttempt}/${this.maxUrlAttempts}`, "warning");
-            this.showUrlNameModal(this.currentUrlNameProcessId, newUrlName, nextAttempt, this.maxUrlAttempts);
+            this.addStatusItem(`❌ URL name '${newUrlName}' is taken. Retry ${nextAttempt}/${maxAttempts}`, "warning");
+            this.showUrlNameModal(processId, newUrlName, nextAttempt, maxAttempts);
             return; // Don't re-enable the button, show new modal
           } else {
             // Exhausted all retries - mark as completed with manual instruction
-            this.addStatusItem(`❌ All ${this.maxUrlAttempts} retry attempts exhausted. Please add sticker pack manually in Telegram bot.`, "error");
+            this.addStatusItem(`❌ All ${maxAttempts} retry attempts exhausted. Please add sticker pack manually in Telegram bot.`, "error");
             this.showToast("warning", "Manual Setup Required", `Please complete the sticker pack creation manually in the Telegram bot (@Stickers)`); 
             
             // Mark process as completed (user needs to complete manually)
@@ -5744,7 +5865,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           this.addStatusItem("Icon skip completed - please provide URL name", "warning");
           this.hideIconModal();
           // Show URL name modal for user input
-          this.showUrlNameModal(this.currentIconProcessId, response.original_url_name || response.pack_url_name || "unknown");
+          this.showUrlNameModal(this.currentIconProcessId, response.original_url_name || response.pack_url_name || response.url_name || "retry");
         } else if (response.error && response.error.includes("monitoring error")) {
           // Handle the "Process not found" error by showing success instead
           this.addStatusItem("✅ Sticker pack created successfully", "completed");
