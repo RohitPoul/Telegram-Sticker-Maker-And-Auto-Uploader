@@ -4811,7 +4811,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
               return;
             }
             
-            this.showUrlNameModal(processId, progress.original_url_name || "unknown", currentAttempt, maxAttempts);
+            this.showUrlNameModal(processId, progress.original_url_name || progress.pack_url_name || "unknown", currentAttempt, maxAttempts);
             return;
           }
           
@@ -5587,7 +5587,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           // Stop monitoring and show success
           this.stopStickerProgressMonitoring();
           this.onStickerProcessCompleted(true, { 
-            shareable_link: `https://t.me/addstickers/${newUrlName}`,
+            shareable_link: response.shareable_link || `https://t.me/addstickers/${newUrlName}`,
             pack_url_name: newUrlName 
           });
         } else {
@@ -5744,7 +5744,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           this.addStatusItem("Icon skip completed - please provide URL name", "warning");
           this.hideIconModal();
           // Show URL name modal for user input
-          this.showUrlNameModal(this.currentIconProcessId, response.original_url_name || "unknown");
+          this.showUrlNameModal(this.currentIconProcessId, response.original_url_name || response.pack_url_name || "unknown");
         } else if (response.error && response.error.includes("monitoring error")) {
           // Handle the "Process not found" error by showing success instead
           this.addStatusItem("✅ Sticker pack created successfully", "completed");
