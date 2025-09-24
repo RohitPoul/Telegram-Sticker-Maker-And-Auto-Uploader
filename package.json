@@ -1,6 +1,6 @@
 {
   "name": "telegram-utilities",
-  "version": "1.4.6",
+  "version": "1.4.7",
   "description": "Advanced Telegram Utilities - Video Converter & Sticker Bot",
   "main": "electron/main.js",
   "scripts": {
