@@ -444,6 +444,8 @@ class StickerBotManager {
       clearInterval(this.stickerProgressInterval);
     }
     
+    let lastKnownProgress = null;
+    
     this.stickerProgressInterval = setInterval(async () => {
       if (!this.currentStickerProcessId) {
         clearInterval(this.stickerProgressInterval);
@@ -455,6 +457,9 @@ class StickerBotManager {
         
         if (response.success && response.data) {
           const { status, progress, completed_files, total_files, error, shareable_link } = response.data;
+          
+          // Store progress data for smart error handling
+          lastKnownProgress = response.data;
           
           // Update progress display
           const progressBar = document.getElementById("sticker-progress-bar");
@@ -474,6 +479,58 @@ class StickerBotManager {
           } else if (status === 'error') {
             this.handleStickerPackError(error);
           }
+        } else if (response.error) {
+          // SMART ERROR HANDLING: Check if this is a "Process not found" after progress
+          if (response.error.includes("Process not found") && lastKnownProgress) {
+            console.log('🔧 [STICKER-BOT] Process lost after progress, likely completed successfully');
+            
+            // If we had significant progress and now process is not found,
+            // it might have completed successfully
+            if (lastKnownProgress.step && 
+                (lastKnownProgress.step.includes('skip') || 
+                 lastKnownProgress.step.includes('Sticker pack creation queued') ||
+                 lastKnownProgress.step.includes('Icon step skipped'))) {
+                
+                console.log('🎉 [STICKER-BOT] Detected likely completion after skip, checking for completion...');
+                
+                // Try to get final status first
+                try {
+                  const statusResponse = await window.coreSystem.apiRequest("GET", `/api/sticker/status/${this.currentStickerProcessId}`);
+                  if (statusResponse.success && statusResponse.data?.shareable_link) {
+                    console.log('✅ [STICKER-BOT] Found shareable link in status, showing success modal');
+                    this.handleStickerPackComplete(statusResponse.data.shareable_link);
+                    return;
+                  }
+                } catch (e) {
+                  console.log('Could not get final status, will attempt completion fallback');
+                }
+                
+                // Enhanced fallback: Construct link from pack name if available
+                const packName = lastKnownProgress.pack_name || lastKnownProgress.url_name || 
+                                document.getElementById("pack-url-name")?.value.trim();
+                                
+                if (packName) {
+                  const constructedLink = `https://t.me/addstickers/${packName}`;
+                  console.log('🎉 [STICKER-BOT] Showing success modal with constructed link:', constructedLink);
+                  this.handleStickerPackComplete(constructedLink);
+                  return;
+                }
+                
+                // Additional fallback: Extract pack name from the form/UI
+                const formPackName = document.getElementById("pack-name")?.value.trim();
+                const formUrlName = document.getElementById("pack-url-name")?.value.trim();
+                
+                if (formUrlName) {
+                  const constructedLink = `https://t.me/addstickers/${formUrlName}`;
+                  console.log('🎉 [STICKER-BOT] Extracted URL name from form, showing success modal:', constructedLink);
+                  this.handleStickerPackComplete(constructedLink);
+                  return;
+                }
+            }
+          }
+          
+          // If not a smart error case, handle as regular error
+          console.error('❌ Monitoring error:', response.error);
         }
       } catch (error) {
         console.error("Error updating sticker progress:", error);
@@ -491,8 +548,86 @@ class StickerBotManager {
       createBtn.innerHTML = '<i class="fas fa-magic"></i> Create Sticker Pack';
     }
     
-    window.uiManager?.showSuccessModal(shareableLink);
-    window.uiManager?.showToast("success", "Pack Created", "Sticker pack created successfully!");
+    console.log(`🎉 [STICKER-BOT] Attempting to show success modal with link: ${shareableLink}`);
+    
+    // ENHANCED: Multiple fallback methods to show success modal
+    let modalShown = false;
+    
+    // Method 1: Try uiManager first
+    if (window.uiManager?.showSuccessModal) {
+      console.log(`🎉 [STICKER-BOT] Using uiManager.showSuccessModal`);
+      window.uiManager.showSuccessModal(shareableLink);
+      modalShown = true;
+    }
+    // Method 2: Try main app instance
+    else if (window.app?.showSuccessModal) {
+      console.log(`🎉 [STICKER-BOT] Using app.showSuccessModal`);
+      window.app.showSuccessModal(shareableLink);
+      modalShown = true;
+    }
+    // Method 3: Try window.telegramUtilities (from script.js)
+    else if (window.telegramUtilities?.showSuccessModal) {
+      console.log(`🎉 [STICKER-BOT] Using telegramUtilities.showSuccessModal`);
+      window.telegramUtilities.showSuccessModal(shareableLink);
+      modalShown = true;
+    }
+    // Method 4: Direct modal manipulation as fallback
+    else {
+      console.log(`🎉 [STICKER-BOT] Using direct modal manipulation fallback`);
+      const modal = document.getElementById("success-modal");
+      const overlay = document.getElementById("modal-overlay");
+      const linkInput = document.getElementById("shareable-link");
+      
+      if (modal && overlay) {
+        // Set the shareable link
+        if (linkInput && shareableLink) {
+          linkInput.value = shareableLink;
+        }
+        
+        // Show modal with overlay
+        overlay.classList.add("active");
+        modal.style.display = "flex";
+        modal.style.visibility = "visible";
+        modal.style.zIndex = "9999";
+        
+        console.log(`🎉 [STICKER-BOT] Direct modal display completed`);
+        modalShown = true;
+      } else {
+        console.error(`🎉 [STICKER-BOT] Could not find modal elements for direct manipulation`);
+      }
+    }
+    
+    // Always show toast as backup notification
+    if (window.uiManager?.showToast) {
+      window.uiManager.showToast("success", "Pack Created", "Sticker pack created successfully!");
+    }
+    
+    // Show enhanced toast with link if modal failed
+    if (!modalShown) {
+      console.log(`🎉 [STICKER-BOT] Modal failed, showing enhanced toast notification`);
+      if (window.uiManager?.showToast) {
+        window.uiManager.showToast("success", "🎉 Pack Created!", `Success! Link: ${shareableLink}`, 15000);
+      }
+      
+      // Try to open the link directly in browser/Telegram
+      if (shareableLink) {
+        try {
+          if (window.electronAPI && window.electronAPI.openUrl) {
+            window.electronAPI.openUrl(shareableLink);
+          } else if (window.electronAPI && window.electronAPI.shell && window.electronAPI.shell.openExternal) {
+            window.electronAPI.shell.openExternal(shareableLink);
+          } else if (window.open) {
+            window.open(shareableLink, '_blank');
+          } else {
+            console.log('🎉 [STICKER-BOT] No method available to open URL automatically');
+          }
+        } catch (error) {
+          console.error('🎉 [STICKER-BOT] Error opening URL:', error);
+        }
+      }
+    }
+    
+    console.log(`🎉 [STICKER-BOT] Pack completion handling finished. Modal shown: ${modalShown}`);
   }
 
   handleStickerPackError(error) {
