@@ -43,6 +43,7 @@ class TelegramUtilities {
     this.pendingCode = false;
     this.pendingPassword = false;
     this.currentProcessId = null;
+    this.currentStickerProcessId = null; // Add specific tracking for sticker processes
     this.currentEmojiIndex = null;
     this.progressInterval = null;
     this.stickerProgressInterval = null;
@@ -425,6 +426,12 @@ class TelegramUtilities {
       console.log('🔧 [DEBUG] Adding click listener to submit-new-url button');
       submitNewUrlBtn.addEventListener("click", (e) => {
         console.log('🔧 [DEBUG] Submit new URL button clicked');
+        console.log('🔧 [DEBUG] Current process tracking state:', {
+          currentUrlNameProcessId: this.currentUrlNameProcessId,
+          currentStickerProcessId: this.currentStickerProcessId,
+          currentIconProcessId: this.currentIconProcessId,
+          stickerBotProcessId: window.app?.stickerBot?.currentUrlNameProcessId
+        });
         e.preventDefault();
         e.stopPropagation();
         this.submitNewUrlName();
@@ -1331,99 +1338,330 @@ class TelegramUtilities {
   showSuccessModal(shareableLink) {
     console.log(`🎉 [SUCCESS_MODAL] Showing success modal with link: ${shareableLink}`);
     
-    // Wait for DOM to be ready and use more comprehensive element discovery
-    const findModal = () => {
-      // Try multiple methods to find the modal
-      let modal = document.getElementById("success-modal");
+    // CRITICAL DEBUG: Check if the success modal is missing from the DOM
+    const successModalInDOM = document.getElementById("success-modal");
+    const allModalElements = document.querySelectorAll('[id*="modal"], .modal');
+    
+    console.log(`🚨 [CRITICAL_DEBUG] Success modal DOM check:`, {
+      successModalExists: !!successModalInDOM,
+      totalModalElements: allModalElements.length,
+      domReadyState: document.readyState,
+      bodyChildren: document.body.children.length
+    });
+    
+    // If success modal is missing, try to inject it from the original HTML
+    if (!successModalInDOM) {
+      console.error(`🚨 [CRITICAL] Success modal is missing from DOM! Attempting to inject it...`);
       
-      if (!modal) {
-        modal = document.querySelector('.success-modal-enhanced');
-        console.log(`🎉 [SUCCESS_MODAL] Fallback 1 - Found by class: ${!!modal}`);
+      // Try to find the modal overlay to inject the success modal into it
+      const overlay = document.getElementById("modal-overlay");
+      if (overlay) {
+        const successModalHTML = `
+          <div class="modal success-modal-enhanced" id="success-modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10000; max-width: 700px; width: 90%; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15); border-radius: 12px; overflow: hidden; background: white;">
+            <div style="display: flex; min-height: 320px;">
+              <!-- Left side - Icon and Title -->
+              <div class="modal-header success-header" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 32px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 280px; position: relative;">
+                <button class="modal-close" onclick="window.app?.hideSuccessModal()" style="position: absolute; top: 16px; right: 16px; background: none; border: none; color: white; font-size: 1.2rem; cursor: pointer; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: background-color 0.2s;" onmouseover="this.style.backgroundColor='rgba(255,255,255,0.2)'" onmouseout="this.style.backgroundColor='transparent'">
+                  <i class="fas fa-times"></i>
+                </button>
+                
+                <div class="success-icon-wrapper" style="margin-bottom: 16px;">
+                  <i class="fas fa-check-circle success-icon" style="font-size: 3.5rem; color: white;"></i>
+                </div>
+                
+                <h3 style="font-size: 1.4rem; font-weight: 700; margin: 0 0 16px 0; text-align: center; line-height: 1.3;">Sticker Pack Created Successfully!</h3>
+                
+                <div style="background: rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 20px; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 8px;">
+                  <i class="fas fa-sync-alt"></i>Retry Attempt - Success!
+                </div>
+              </div>
+              
+              <!-- Right side - Content and Actions -->
+              <div class="modal-body success-body" style="padding: 32px; background: #f8fffe; color: #065f46; flex: 1; display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                  <div class="success-message" style="margin-bottom: 24px;">
+                    <h4 style="color: #10b981; font-size: 1.1rem; margin-bottom: 8px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                      <span>🎉</span> Congratulations!
+                    </h4>
+                    <p style="color: #065f46; font-size: 0.95rem; line-height: 1.5; margin: 0;">Your sticker pack has been successfully created and uploaded to Telegram after retry attempts.</p>
+                  </div>
+                  
+                  <div class="link-section" style="background: rgba(16, 185, 129, 0.08); padding: 20px; border-radius: 8px; border: 1px solid rgba(16, 185, 129, 0.2); margin-bottom: 24px;">
+                    <label class="link-label" style="display: block; color: #065f46; font-weight: 600; margin-bottom: 12px; font-size: 0.9rem;">Share this link with others:</label>
+                    <div class="link-display-enhanced" style="display: flex; gap: 10px; align-items: stretch;">
+                      <div class="link-input-wrapper" style="flex: 1; position: relative; display: flex; align-items: center; background: white; border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 6px; padding: 0 12px;">
+                        <i class="fas fa-link link-icon" style="color: #10b981; margin-right: 8px; font-size: 0.85rem;"></i>
+                        <input type="text" id="shareable-link" class="form-control link-input" readonly style="background: transparent; border: none; color: #065f46; font-size: 0.85rem; font-family: 'Courier New', monospace; font-weight: 500; flex: 1; padding: 10px 0; outline: none;">
+                      </div>
+                      <button class="btn btn-copy" id="copy-link-btn" style="background: #10b981; color: white; border: none; padding: 10px 16px; border-radius: 6px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: background-color 0.2s; display: flex; align-items: center; gap: 6px;" onmouseover="this.style.backgroundColor='#059669'" onmouseout="this.style.backgroundColor='#10b981'">
+                        <i class="fas fa-copy"></i>
+                        <span>Copy</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="success-actions" style="display: flex; flex-direction: column; gap: 10px;">
+                  <button class="btn btn-primary btn-large" id="open-telegram-btn" style="background: #0ea5e9; color: white; border: none; padding: 12px 20px; border-radius: 6px; font-weight: 600; font-size: 0.95rem; cursor: pointer; transition: background-color 0.2s; display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;" onmouseover="this.style.backgroundColor='#0284c7'" onmouseout="this.style.backgroundColor='#0ea5e9'">
+                    <i class="fab fa-telegram" style="font-size: 1.1rem;"></i>
+                    <span>Open in Telegram</span>
+                  </button>
+                  <button class="btn btn-secondary btn-large" id="create-another-btn" style="background: #6b7280; color: white; border: none; padding: 12px 20px; border-radius: 6px; font-weight: 600; font-size: 0.95rem; cursor: pointer; transition: background-color 0.2s; display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;" onmouseover="this.style.backgroundColor='#4b5563'" onmouseout="this.style.backgroundColor='#6b7280'">
+                    <i class="fas fa-plus" style="font-size: 1rem;"></i>
+                    <span>Create Another Pack</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+        
+        // Inject the modal into the overlay
+        overlay.insertAdjacentHTML('beforeend', successModalHTML);
+        
+        // Add CSS animations if not already present
+        if (!document.getElementById('success-modal-animations')) {
+          const style = document.createElement('style');
+          style.id = 'success-modal-animations';
+          style.textContent = `
+            .success-modal-enhanced {
+              animation: successModalSlideIn 0.3s ease-out;
+            }
+            
+            @keyframes successModalSlideIn {
+              from {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.95);
+              }
+              to {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+              }
+            }
+            
+            @media (max-width: 768px) {
+              .success-modal-enhanced {
+                max-width: 95% !important;
+                margin: 20px;
+              }
+              .success-modal-enhanced > div {
+                flex-direction: column !important;
+                min-height: auto !important;
+              }
+              .success-modal-enhanced .modal-header {
+                min-width: auto !important;
+                padding: 24px !important;
+                text-align: center;
+              }
+              .success-modal-enhanced .success-actions {
+                flex-direction: column !important;
+              }
+            }
+          `;
+          document.head.appendChild(style);
+        }
+        
+        console.log(`✅ [SUCCESS_MODAL] Success modal injected into DOM`);
+        
+        // Now proceed with normal flow
+        const injectedModal = document.getElementById("success-modal");
+        const linkInput = document.getElementById("shareable-link");
+        
+        if (injectedModal) {
+          // Apply centering styles immediately after injection
+          injectedModal.style.position = 'fixed';
+          injectedModal.style.top = '50%';
+          injectedModal.style.left = '50%';
+          injectedModal.style.transform = 'translate(-50%, -50%)';
+          injectedModal.style.zIndex = '10000';
+          
+          this.displaySuccessModal(injectedModal, overlay, linkInput, shareableLink);
+          return;
+        }
       }
-      
-      if (!modal) {
-        modal = document.querySelector('[id="success-modal"]');
-        console.log(`🎉 [SUCCESS_MODAL] Fallback 2 - Found by attribute: ${!!modal}`);
-      }
-      
-      if (!modal) {
-        modal = document.querySelector('.modal.success-modal-enhanced');
-        console.log(`🎉 [SUCCESS_MODAL] Fallback 3 - Found by combined classes: ${!!modal}`);
-      }
-      
-      return modal;
+    }
+    
+    // Wait for DOM to be ready if necessary
+    const ensureDOMReady = () => {
+      return new Promise((resolve) => {
+        if (document.readyState === 'complete') {
+          resolve();
+        } else {
+          const handler = () => {
+            if (document.readyState === 'complete') {
+              document.removeEventListener('readystatechange', handler);
+              resolve();
+            }
+          };
+          document.addEventListener('readystatechange', handler);
+          // Fallback timeout
+          setTimeout(resolve, 100);
+        }
+      });
     };
     
-    // Wait a moment for DOM to be ready, then try to find elements
-    setTimeout(() => {
-      const modal = findModal();
-      const overlay = document.getElementById("modal-overlay") || document.querySelector('.modal-overlay');
+    // ENHANCED: DOM check with detailed debugging
+    const findModalElements = () => {
+      const modal = document.getElementById("success-modal");
+      const overlay = document.getElementById("modal-overlay");
       const linkInput = document.getElementById("shareable-link");
       
-      console.log(`🎉 [SUCCESS_MODAL] Elements found - Modal: ${!!modal}, Overlay: ${!!overlay}, LinkInput: ${!!linkInput}`);
+      console.log(`🎉 [SUCCESS_MODAL] Direct DOM query results:`, {
+        modal: !!modal,
+        overlay: !!overlay, 
+        linkInput: !!linkInput,
+        domReadyState: document.readyState,
+        totalModals: document.querySelectorAll('[id*="modal"]').length,
+        successModalExists: document.querySelector('#success-modal') !== null
+      });
       
-      if (modal) {
-        console.log(`🎉 [SUCCESS_MODAL] Modal element details:`, {
-          tagName: modal.tagName,
-          id: modal.id,
-          className: modal.className,
-          style: modal.style.cssText,
-          display: getComputedStyle(modal).display
+      // Debug: Log all modal-like elements if modal not found
+      if (!modal) {
+        const allModalElements = document.querySelectorAll('[id*="modal"], .modal');
+        console.log(`🎉 [SUCCESS_MODAL] Found ${allModalElements.length} modal elements:`);
+        allModalElements.forEach((el, i) => {
+          console.log(`  ${i}: ${el.tagName}#${el.id}.${el.className}`);
         });
       }
       
-      if (!modal || !overlay) {
-        console.error(`🎉 [SUCCESS_MODAL] Modal or overlay element not found!`);
-        console.error(`🎉 [SUCCESS_MODAL] Modal exists: ${!!modal}, Overlay exists: ${!!overlay}`);
+      return { modal, overlay, linkInput };
+    };
+    
+    // Ensure DOM is ready and then try to find elements
+    ensureDOMReady().then(() => {
+      let elements = findModalElements();
+    
+      // If modal still not found after DOM ready, try additional retries
+      if (!elements.modal) {
+        console.log(`🎉 [SUCCESS_MODAL] Modal not found after DOM ready, retrying...`);
         
-        // Debug: List all modal elements in the document
-        const allModals = document.querySelectorAll('.modal, [id*="modal"], [class*="modal"]');
-        console.log(`🎉 [SUCCESS_MODAL] Debug - Found ${allModals.length} modal-related elements:`);
-        allModals.forEach((el, i) => {
-          console.log(`  ${i}: tagName=${el.tagName}, id=${el.id}, className=${el.className}`);
-        });
+        // Try multiple retries with increasing delays
+        let retryCount = 0;
+        const maxRetries = 3;
         
-        // Enhanced fallback: show enhanced toast notification
-        this.showToast("success", "🎉 Pack Created!", `Sticker pack created successfully! Link: ${shareableLink}`, 10000);
+        const retryFind = () => {
+          retryCount++;
+          setTimeout(() => {
+            elements = findModalElements();
+            
+            if (elements.modal) {
+              console.log(`🎉 [SUCCESS_MODAL] Modal found on retry ${retryCount}`);
+              this.displaySuccessModal(elements.modal, elements.overlay, elements.linkInput, shareableLink);
+              return;
+            }
+            
+            if (retryCount < maxRetries) {
+              console.log(`🎉 [SUCCESS_MODAL] Retry ${retryCount}/${maxRetries} failed, trying again...`);
+              retryFind();
+              return;
+            }
+            
+            console.error(`🎉 [SUCCESS_MODAL] CRITICAL: Modal still not found after ${maxRetries} retries!`);
+            
+            // EMERGENCY: Try to create and inject the success modal if it doesn't exist
+            const modalHTML = `
+              <div class="modal success-modal-enhanced" id="success-modal-fallback" style="display: none">
+                <div class="modal-header success-header">
+                  <div class="success-icon-wrapper">
+                    <i class="fas fa-check-circle success-icon"></i>
+                  </div>
+                  <h3>Sticker Pack Created!</h3>
+                </div>
+                <div class="modal-body success-body">
+                  <div class="success-content">
+                    <div class="success-message">
+                      <h4>🎉 Congratulations!</h4>
+                      <p>Your sticker pack has been successfully created and uploaded to Telegram.</p>
+                    </div>
+                    <div class="link-section">
+                      <label class="link-label">Share this link with others:</label>
+                      <div class="link-display-enhanced">
+                        <div class="link-input-wrapper">
+                          <i class="fas fa-link link-icon"></i>
+                          <input type="text" id="shareable-link-fallback" class="form-control link-input" readonly value="${shareableLink}">
+                        </div>
+                        <button class="btn btn-copy" onclick="navigator.clipboard.writeText('${shareableLink}'); window.app?.showToast('success', 'Copied', 'Link copied to clipboard!')">
+                          <i class="fas fa-copy"></i> Copy
+                        </button>
+                      </div>
+                    </div>
+                    <div class="success-actions">
+                      <button class="btn btn-primary btn-large" onclick="window.open('${shareableLink}', '_blank')">
+                        <i class="fab fa-telegram"></i> Open in Telegram
+                      </button>
+                      <button class="btn btn-secondary btn-large" onclick="window.app?.createAnotherPack(); document.getElementById('success-modal-fallback').style.display='none'; document.getElementById('modal-overlay').classList.remove('active')">
+                        <i class="fas fa-plus"></i> Create Another Pack
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            `;
+            
+            // Inject the modal into the document
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = modalHTML.trim();
+            const fallbackModal = tempDiv.firstChild;
+            document.body.appendChild(fallbackModal);
+            
+            // Get the overlay (should exist)
+            const overlay = document.getElementById("modal-overlay");
+            
+            if (overlay) {
+              // Show the fallback modal
+              overlay.classList.add("active");
+              fallbackModal.style.display = "flex";
+              fallbackModal.style.zIndex = "9999";
+              
+              console.log('🎉 [SUCCESS_MODAL] Emergency fallback modal created and displayed');
+              return;
+            }
+            
+            // Ultimate fallback: Show success via toast and status
+            this.showToast("success", "🎉 Pack Created!", `Sticker pack created successfully! Link: ${shareableLink}`, 15000);
+            this.addStatusItem(`🎉 Success! Shareable link: ${shareableLink}`, "completed");
+            
+            // Try to trigger Telegram opening directly
+            if (shareableLink) {
+              try {
+                if (window.electronAPI && window.electronAPI.openUrl) {
+                  window.electronAPI.openUrl(shareableLink);
+                } else if (window.electronAPI && window.electronAPI.shell && window.electronAPI.shell.openExternal) {
+                  window.electronAPI.shell.openExternal(shareableLink);
+                } else {
+                  console.log('🎉 [SUCCESS_MODAL] ElectronAPI methods not available, will show link in status');
+                }
+              } catch (error) {
+                console.error('🎉 [SUCCESS_MODAL] Error opening URL:', error);
+              }
+            }
+          }, 50 * retryCount); // Increasing delay: 50ms, 100ms, 150ms
+        };
         
-        // Try to add the link to status
-        if (shareableLink) {
-          this.addStatusItem(`🎉 Success! Shareable link: ${shareableLink}`, "completed");
-        }
-        return;
+        retryFind();
+      } else {
+        // Modal found immediately, display it
+        console.log(`🎉 [SUCCESS_MODAL] Modal found immediately after DOM ready`);
+        this.displaySuccessModal(elements.modal, elements.overlay, elements.linkInput, shareableLink);
       }
-      
-      this.displaySuccessModal(modal, overlay, linkInput, shareableLink);
-    }, 100);
+    });
   }
-  
-  displaySuccessModal(modal, overlay, linkInput, shareableLink) {
-    
-    console.log(`🎉 [SUCCESS_MODAL] Starting modal display process...`);
-    
-    // Set the shareable link
-    if (linkInput && shareableLink) {
-      linkInput.value = shareableLink;
-      console.log(`🎉 [SUCCESS_MODAL] Set link input value: ${shareableLink}`);
-    } else {
-      console.warn(`🎉 [SUCCESS_MODAL] Link input not found or no link provided`);
-    }
-}
 
-  // TEST METHOD - Enhanced debugging
+
+  // TEST METHOD - Enhanced debugging  
   testSuccessModal() {
     const testLink = "https://t.me/addstickers/test_sticker_pack_123";
-    console.log(`🗃 [TEST] Triggering success modal with test link: ${testLink}`);
-    console.log(`🗃 [TEST] Current DOM ready state: ${document.readyState}`);
+    console.log(`🗓 [TEST] Triggering enhanced success modal with test link: ${testLink}`);
+    console.log(`🗓 [TEST] Current DOM ready state: ${document.readyState}`);
     
     // Check if elements exist before calling
     const modal = document.getElementById("success-modal") || document.querySelector('.success-modal-enhanced');
     const overlay = document.getElementById("modal-overlay") || document.querySelector('.modal-overlay');
     
-    console.log(`🗃 [TEST] Pre-check - Modal: ${!!modal}, Overlay: ${!!overlay}`);
+    console.log(`🗓 [TEST] Pre-check - Modal: ${!!modal}, Overlay: ${!!overlay}`);
     
     if (modal) {
-      console.log(`🗃 [TEST] Modal found:`, {
+      console.log(`🗓 [TEST] Modal found:`, {
         id: modal.id,
         className: modal.className,
         style: modal.style.cssText,
@@ -1434,44 +1672,85 @@ class TelegramUtilities {
       });
     }
     
+    console.log(`🗓 [TEST] Testing enhanced showSuccessModal with improved DOM detection...`);
     this.showSuccessModal(testLink);
     
     // Schedule a check to see if modal appeared
     setTimeout(() => {
-      const modalAfter = document.getElementById("success-modal");
+      const modalAfter = document.getElementById("success-modal") || document.getElementById("success-modal-fallback");
       if (modalAfter) {
         const computed = getComputedStyle(modalAfter);
-        console.log(`🗃 [TEST] Modal state after call:`, {
+        console.log(`🗓 [TEST] Modal state after call:`, {
+          id: modalAfter.id,
           display: computed.display,
           opacity: computed.opacity,
           visibility: computed.visibility,
           zIndex: computed.zIndex
         });
+        
+        // Check if modal is actually visible
+        const rect = modalAfter.getBoundingClientRect();
+        const isVisible = rect.width > 0 && rect.height > 0 && computed.display !== 'none' && computed.visibility !== 'hidden';
+        console.log(`🗓 [TEST] Modal visibility analysis:`, {
+          isVisible,
+          rect: { width: rect.width, height: rect.height, top: rect.top, left: rect.left }
+        });
+        
+        if (isVisible) {
+          console.log(`✅ [TEST] SUCCESS: Modal is properly visible!`);
+        } else {
+          console.error(`❌ [TEST] FAILURE: Modal exists but is not visible`);
+        }
+      } else {
+        console.error(`🗓 [TEST] No modal found after test!`);
       }
-    }, 500);
+    }, 1000);
   }
 
   displaySuccessModal(modal, overlay, linkInput, shareableLink) {
     console.log(`🎉 [SUCCESS_MODAL] Starting modal display process...`);
+    
+    // Validate required elements
+    if (!modal) {
+      console.error(`🎉 [SUCCESS_MODAL] Cannot display modal - modal element is null`);
+      return;
+    }
+    
+    if (!overlay) {
+      console.error(`🎉 [SUCCESS_MODAL] Cannot display modal - overlay element is null`);
+      return;
+    }
     
     // Set the shareable link
     if (linkInput && shareableLink) {
       linkInput.value = shareableLink;
       console.log(`🎉 [SUCCESS_MODAL] Set link input value: ${shareableLink}`);
     } else {
-      console.warn(`🎉 [SUCCESS_MODAL] Link input not found or no link provided`);
+      console.warn(`🎉 [SUCCESS_MODAL] Link input not found or no link provided - linkInput: ${!!linkInput}, shareableLink: ${!!shareableLink}`);
     }
     
-    // Reset any previous states and ensure modal is ready
+    // Reset any previous states and ensure modal is ready with proper centering
     modal.style.display = "none";
     modal.style.opacity = "0";
     modal.style.visibility = "visible";
-    modal.style.zIndex = "9999";
+    modal.style.zIndex = "10000";
+    modal.style.position = "fixed";
+    modal.style.top = "50%";
+    modal.style.left = "50%";
+    modal.style.transform = "translate(-50%, -50%)";
+    modal.style.maxWidth = "700px";
+    modal.style.width = "90%";
     
     // Ensure overlay is ready
     overlay.style.display = "block";
     overlay.style.visibility = "visible";
-    overlay.style.zIndex = "9998";
+    overlay.style.zIndex = "9999";
+    overlay.style.position = "fixed";
+    overlay.style.top = "0";
+    overlay.style.left = "0";
+    overlay.style.width = "100%";
+    overlay.style.height = "100%";
+    overlay.style.backgroundColor = "rgba(0, 0, 0, 0.8)";
     
     // Show modal with proper overlay (following project specifications)
     overlay.classList.add("active");
@@ -1495,8 +1774,22 @@ class TelegramUtilities {
         display: computedStyle.display,
         opacity: computedStyle.opacity,
         visibility: computedStyle.visibility,
-        zIndex: computedStyle.zIndex
+        zIndex: computedStyle.zIndex,
+        position: computedStyle.position,
+        transform: computedStyle.transform
       });
+      
+      // If modal is still not visible, log additional debug info
+      if (computedStyle.display === 'none' || computedStyle.opacity === '0') {
+        console.error(`🎉 [SUCCESS_MODAL] Modal visibility issue detected:`, {
+          modalElement: modal,
+          overlayElement: overlay,
+          modalClasses: modal.className,
+          overlayClasses: overlay.className,
+          modalRect: modal.getBoundingClientRect(),
+          overlayRect: overlay.getBoundingClientRect()
+        });
+      }
     }, 200);
     
     console.log(`🎉 [SUCCESS_MODAL] Modal should now be visible`);
@@ -1521,18 +1814,27 @@ class TelegramUtilities {
     const modal = document.getElementById("success-modal");
     const overlay = document.getElementById("modal-overlay");
     
+    console.log(`🎉 [SUCCESS_MODAL] Hiding modal - modal found: ${!!modal}, overlay found: ${!!overlay}`);
+    
     if (modal) {
       modal.style.display = "none";
+      modal.style.opacity = "0";
       modal.removeAttribute('data-critical');
+      console.log(`🎉 [SUCCESS_MODAL] Modal hidden`);
     }
+    
     if (overlay) {
       overlay.classList.remove("active");
+      overlay.style.display = "none";
+      overlay.style.visibility = "hidden";
+      console.log(`🎉 [SUCCESS_MODAL] Overlay hidden`);
     }
     
     // Clean up keyboard event listeners
     if (this.successModalKeyHandler) {
       document.removeEventListener('keydown', this.successModalKeyHandler);
       this.successModalKeyHandler = null;
+      console.log(`🎉 [SUCCESS_MODAL] Keyboard handlers removed`);
     }
     
     console.log(`🎉 [SUCCESS_MODAL] Modal hidden and cleaned up`);
@@ -1698,6 +2000,7 @@ class TelegramUtilities {
     this.lastStage = null;
     this.lastStageWasQueue = false;
     this.currentIconProcessId = null;
+    this.currentStickerProcessId = null; // Clear sticker process ID
     this.currentUrlNameProcessId = null;
     this.currentUrlAttempt = null;
     this.maxUrlAttempts = null;
@@ -4792,6 +5095,11 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         // Start monitoring progress
         const finalProcessId = response.process_id || processId;
         console.log(`🔧 [FRONTEND] Starting progress monitoring for: ${finalProcessId}`);
+        
+        // CRITICAL: Track the sticker process ID for URL name retry functionality
+        this.currentStickerProcessId = finalProcessId;
+        this.currentUrlNameProcessId = finalProcessId; // Also set this as backup
+        
         this.startStickerProgressMonitoring(finalProcessId);
       } else {
         console.log(`🔧 [FRONTEND] Creation failed:`, response.error);
@@ -4837,10 +5145,23 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     this.autoSkipAttempted = false;
     this.lastStage = null;
     
+    // CRITICAL: Track the process ID for URL name retry functionality
+    this.currentStickerProcessId = processId;
+    if (!this.currentUrlNameProcessId) {
+      this.currentUrlNameProcessId = processId; // Backup in case it wasn't set
+    }
+    
+    // Store last known progress for completion detection
+    this.lastKnownProgress = null;
+    
     console.log(`🔧 [FRONTEND] Starting progress monitoring for process: ${processId}`);
     console.log(`🔧 [FRONTEND] Process ID type: ${typeof processId}`);
     console.log(`🔧 [FRONTEND] Process ID value: "${processId}"`);
-    
+    console.log(`🔧 [FRONTEND] Process IDs tracked:`, {
+      currentStickerProcessId: this.currentStickerProcessId,
+      currentUrlNameProcessId: this.currentUrlNameProcessId,
+      currentIconProcessId: this.currentIconProcessId
+    });
     let consecutiveErrors = 0;
     const MAX_CONSECUTIVE_ERRORS = 5;
     const MONITORING_TIMEOUT = 20 * 60 * 1000; // 20 minutes (increased for URL name retry scenarios)
@@ -4864,6 +5185,9 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         
         if (response.success && response.data) {
           const progress = response.data;
+          
+          // Store progress for potential completion detection
+          this.lastKnownProgress = progress;
           
           // Reset error counter on success
           consecutiveErrors = 0;
@@ -4926,7 +5250,28 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
                 });
                 if (response.success) {
                   this.addStatusItem("Icon step auto-skipped", "completed");
-                  // Continue monitoring without clearing interval - let it process the next step
+                                
+                  // SMART COMPLETION DETECTION: Check if the pack was completed during skip
+                  if (response.message && response.message.includes("Sticker pack created successfully")) {
+                    console.log(`🔧 [FRONTEND] Pack completed during auto-skip!`);
+                    this.addStatusItem("✅ Sticker pack created successfully!", "completed");
+                    this.stopStickerProgressMonitoring();
+                                  
+                    // Extract shareable link from backend or generate from the known URL
+                    const packUrlName = response.pack_url_name || response.url_name || 
+                                        progress.pack_url_name || progress.url_name;
+                    const shareableLink = response.shareable_link || 
+                                         (packUrlName ? `https://t.me/addstickers/${packUrlName}` : null);
+                                  
+                    this.onStickerProcessCompleted(true, {
+                      shareable_link: shareableLink,
+                      pack_url_name: packUrlName,
+                      message: "✅ Sticker pack created successfully"
+                    });
+                    return; // Exit monitoring
+                  }
+                                
+                  // Continue monitoring for URL name step or completion
                   console.log(`🔧 [FRONTEND] Icon skipped, continuing to monitor for next step...`);
                 } else {
                   this.addStatusItem(`Error auto-skipping icon: ${response.error}`, "error");
@@ -5002,6 +5347,26 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           }
         } else {
           consecutiveErrors++;
+          
+          // SMART ERROR HANDLING: Check if this is a "Process not found" after a recent skip
+          if (response.error && response.error.includes("Process not found") && this.autoSkipAttempted) {
+            console.log(`🔧 [FRONTEND] Process not found after auto-skip - likely completed successfully`);
+            this.addStatusItem("✅ Sticker pack created successfully (process completed)", "completed");
+            this.stopStickerProgressMonitoring();
+            
+            // Try to construct a reasonable shareable link from stored data
+            const packUrlName = this.lastKnownProgress?.pack_url_name || 
+                               this.lastKnownProgress?.url_name || 
+                               "unknown";
+            const shareableLink = `https://t.me/addstickers/${packUrlName}`;
+            
+            this.onStickerProcessCompleted(true, {
+              shareable_link: shareableLink,
+              pack_url_name: packUrlName,
+              message: "✅ Sticker pack created successfully"
+            });
+            return;
+          }
           
           // OPTIMIZED: Reduced from 5 to 3 for faster failure detection
           if (consecutiveErrors >= 3) {
@@ -5393,16 +5758,22 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       const overlay = document.getElementById("modal-overlay");
       if (overlay) {
         overlay.classList.remove("active");
+        overlay.style.display = "none";
+        overlay.style.visibility = "hidden";
+        console.log('🎉 [MODAL] Overlay completely hidden');
       }
       
       // Batch all modal hiding operations
       const modals = document.querySelectorAll(".modal");
       modals.forEach((modal) => {
         modal.style.display = "none";
+        modal.style.opacity = "0";
       });
       
       // Clear modal inputs
       this.clearModalInputs();
+      
+      console.log('🎉 [MODAL] All modals hidden and cleaned up');
     });
   }
 
@@ -5538,10 +5909,25 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       }, 150);
     }
     
-    // Store retry information
+    // Store retry information - CRITICAL: Do this BEFORE any modal manipulation
     this.currentUrlNameProcessId = processId;
     this.currentUrlAttempt = currentAttempt;
     this.maxUrlAttempts = maxAttempts;
+    
+    // ENHANCED: Also sync with StickerBotManager if available
+    if (window.app?.stickerBot) {
+      window.app.stickerBot.currentUrlNameProcessId = processId;
+      window.app.stickerBot.currentUrlAttempt = currentAttempt;
+      window.app.stickerBot.maxUrlAttempts = maxAttempts;
+      console.log('🔧 [DEBUG] Synced process info with StickerBotManager');
+    }
+    
+    console.log('🔧 [DEBUG] Process info stored in showUrlNameModal:', {
+      currentUrlNameProcessId: this.currentUrlNameProcessId,
+      currentUrlAttempt: this.currentUrlAttempt,
+      maxUrlAttempts: this.maxUrlAttempts,
+      stickerBotSynced: !!window.app?.stickerBot
+    });
     
     // Show modal with proper overlay
     overlay.classList.add("active");
@@ -5623,8 +6009,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     }
   }
 
-  hideUrlNameModal() {
-    console.log('🔧 [DEBUG] hideUrlNameModal called');
+  hideUrlNameModal(clearProcessInfo = true) {
+    console.log('🔧 [DEBUG] hideUrlNameModal called with clearProcessInfo:', clearProcessInfo);
     console.trace('🔧 [DEBUG] hideUrlNameModal call stack');
     
     const modal = document.getElementById("url-name-modal");
@@ -5637,17 +6023,27 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       overlay.classList.remove("active");
     }
     
-    // Clear retry information
-    this.currentUrlNameProcessId = null;
-    this.currentUrlAttempt = null;
-    this.maxUrlAttempts = null;
+    // Only clear retry information if explicitly requested (default: true for backward compatibility)
+    // This allows temporary modal hiding without losing process tracking
+    if (clearProcessInfo) {
+      console.log('🔧 [DEBUG] Clearing process info in hideUrlNameModal');
+      this.currentUrlNameProcessId = null;
+      this.currentUrlAttempt = null;
+      this.maxUrlAttempts = null;
+    } else {
+      console.log('🔧 [DEBUG] Preserving process info in hideUrlNameModal:', {
+        currentUrlNameProcessId: this.currentUrlNameProcessId,
+        currentUrlAttempt: this.currentUrlAttempt,
+        maxUrlAttempts: this.maxUrlAttempts
+      });
+    }
   }
 
   async submitNewUrlName() {
     console.log('🔧 [DEBUG] submitNewUrlName called');
     
     // Store process ID immediately to prevent loss if modal gets hidden
-    const processId = this.currentUrlNameProcessId;
+    let processId = this.currentUrlNameProcessId;
     const currentAttempt = this.currentUrlAttempt;
     const maxAttempts = this.maxUrlAttempts;
     
@@ -5662,7 +6058,32 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     if (!processId) {
       console.error('🔧 [DEBUG] processId is null or undefined');
       console.error('🔧 [DEBUG] this.currentUrlNameProcessId:', this.currentUrlNameProcessId);
-      return;
+      console.error('🔧 [DEBUG] Checking if sticker bot manager has the process ID...');
+      
+      // ENHANCED FIX: Check multiple sources for the process ID
+      if (window.app?.stickerBot?.currentUrlNameProcessId) {
+        console.log('🔧 [DEBUG] Found process ID in StickerBotManager, using it...');
+        processId = window.app.stickerBot.currentUrlNameProcessId;
+        this.currentUrlNameProcessId = processId; // Sync back to main script
+      }
+      // Fallback: Try to find the current sticker process ID
+      else if (this.currentIconProcessId || this.currentStickerProcessId) {
+        const fallbackProcessId = this.currentIconProcessId || this.currentStickerProcessId;
+        console.log('🔧 [DEBUG] Using fallback sticker process ID:', fallbackProcessId);
+        processId = fallbackProcessId;
+        this.currentUrlNameProcessId = processId; // Update the stored ID
+      }
+      // Last resort: Check if stickerBot has any process ID we can use
+      else if (window.app?.stickerBot?.currentStickerProcessId) {
+        console.log('🔧 [DEBUG] Using StickerBotManager sticker process ID as last resort');
+        processId = window.app.stickerBot.currentStickerProcessId;
+        this.currentUrlNameProcessId = processId;
+      }
+      
+      if (!processId) {
+        this.showToast("error", "Process Error", "No active sticker creation process found");
+        return;
+      }
     }
     
     const newUrlName = newUrlNameInput.value.trim();
@@ -5698,10 +6119,11 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       });
       
       if (response.success) {
-        this.hideUrlNameModal();
+        // DON'T clear process info when hiding modal on success - we may need it for monitoring
+        this.hideUrlNameModal(false); // Preserve process info
         
         if (response.completed) {
-          // Sticker pack creation completed successfully
+          // Sticker pack creation completed successfully - now we can clear process info
           this.addStatusItem(`✅ Sticker pack created successfully with URL name: ${newUrlName}`, "completed");
           this.showToast("success", "Pack Created", `Sticker pack created: ${newUrlName}`);
           
@@ -5711,12 +6133,16 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
             shareable_link: response.shareable_link || `https://t.me/addstickers/${newUrlName}`,
             pack_url_name: newUrlName 
           });
+          // NOW clear process info since we're done
+          this.currentUrlNameProcessId = null;
+          this.currentUrlAttempt = null;
+          this.maxUrlAttempts = null;
         } else {
           // URL name updated, continue monitoring
           this.addStatusItem(`✅ New URL name submitted: ${newUrlName}`, "completed");
           this.showToast("success", "URL Name Updated", `Using new URL name: ${newUrlName}`);
           
-          // Restart progress monitoring
+          // Restart progress monitoring with the same process ID
           this.startStickerProgressMonitoring(processId);
         }
       } else {
@@ -8145,8 +8571,38 @@ window.applyRandomEmojis = () => window.app?.applyRandomEmojis();
 window.applySequentialEmojis = () => window.app?.applySequentialEmojis();
 window.applyThemeEmojis = () => window.app?.applyThemeEmojis();
 
-// TEST METHOD - Console access for success modal testing
-window.testSuccessModal = () => window.app?.testSuccessModal();
+// TEST METHOD - Console access for success modal testing with DOM analysis
+window.testSuccessModal = () => {
+  console.log('🗓 [CONSOLE_TEST] Testing success modal from console...');
+  
+  // Check DOM state first
+  const modal = document.getElementById("success-modal");
+  const overlay = document.getElementById("modal-overlay");
+  const allModals = document.querySelectorAll('[id*="modal"], .modal');
+  
+  console.log('🗓 [CONSOLE_TEST] Current DOM state:', {
+    successModalExists: !!modal,
+    overlayExists: !!overlay,
+    totalModals: allModals.length
+  });
+  
+  if (window.app?.testSuccessModal) {
+    window.app.testSuccessModal();
+  } else {
+    console.error('🗓 [CONSOLE_TEST] app.testSuccessModal not available');
+  }
+};
+
+// Quick manual test - inject and show modal immediately
+window.quickModalTest = () => {
+  console.log('🗓 [QUICK_TEST] Manual modal injection test...');
+  
+  if (window.app?.showSuccessModal) {
+    window.app.showSuccessModal('https://t.me/addstickers/test_manual_123');
+  } else {
+    console.error('🗓 [QUICK_TEST] app.showSuccessModal not available');
+  }
+};
 
 // Handle page visibility changes
 document.addEventListener("visibilitychange", () => {
