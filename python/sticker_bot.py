@@ -1967,6 +1967,12 @@ def register_sticker_routes(app):
                                     link_match = re.search(r'https://t\.me/addstickers/[a-zA-Z0-9_]+', url_response.message)
                                     if link_match:
                                         active_processes[process_id]['shareable_link'] = link_match.group(0)
+                                    else:
+                                        # Fallback: construct link from URL name
+                                        active_processes[process_id]['shareable_link'] = f"https://t.me/addstickers/{pack_url_name}"
+                                else:
+                                    # Fallback: construct link from URL name
+                                    active_processes[process_id]['shareable_link'] = f"https://t.me/addstickers/{pack_url_name}"
                         
                         # FIXED: Increment sticker creation stats in backend
                         try:
@@ -1977,7 +1983,13 @@ def register_sticker_routes(app):
                         except Exception as stats_error:
                             logging.warning(f"[STICKER] Failed to update backend stats: {stats_error}")
                         
-                        return {"success": True, "message": "Sticker pack created successfully"}
+                        return {
+                            "success": True, 
+                            "message": "Sticker pack created successfully",
+                            "shareable_link": active_processes.get(process_id, {}).get('shareable_link'),
+                            "pack_url_name": pack_url_name,
+                            "completed": True
+                        }
                     else:
                         # Update process status after successful skip
                         with process_lock:
