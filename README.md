@@ -1,168 +1,52 @@
-# 🎨 Complete Sticker - Advanced Telegram Sticker Creator
+# Complete Sticker
 
-<div align="center">
+A desktop application for creating and managing Telegram sticker packs. Built with Electron (frontend) and Python (backend).
 
-![Complete Sticker Logo](https://img.shields.io/badge/Complete%20Sticker-Professional%20Grade-blue?style=for-the-badge&logo=telegram)
+## Overview
 
-**Professional-grade desktop application for creating, managing, and publishing Telegram sticker packs with advanced automation and GPU acceleration.**
+This application automates the process of converting media files to Telegram sticker format and uploading them as sticker packs. It handles video conversion using FFmpeg and interfaces with Telegram through the Telethon library.
 
-[![Python](https://img.shields.io/badge/Python-3.12+-3776ab?style=flat-square&logo=python&logoColor=white)](https://python.org)
-[![Electron](https://img.shields.io/badge/Electron-Latest-47848f?style=flat-square&logo=electron&logoColor=white)](https://electronjs.org)
-[![FFmpeg](https://img.shields.io/badge/FFmpeg-GPU%20Accelerated-green?style=flat-square&logo=ffmpeg&logoColor=white)](https://ffmpeg.org)
-[![Telethon](https://img.shields.io/badge/Telethon-Async%20API-blue?style=flat-square&logo=telegram&logoColor=white)](https://telethon.readthedocs.io)
+## Features
 
-[![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey?style=flat-square)](https://github.com/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader)
-[![Downloads](https://img.shields.io/badge/Downloads-1K+-brightgreen?style=flat-square)](https://github.com/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader/releases)
+### Media Processing
+- Video conversion to WebM format (VP9 codec) with 512×512 resolution
+- FFmpeg integration with GPU acceleration support (CUDA, AMF, QSV)
+- Batch file processing
+- Automatic format detection
 
-</div>
+### Telegram Integration
+- Telegram API authentication (phone number, SMS, 2FA)
+- Automated sticker pack creation
+- Session management with persistent connections
+- Emoji assignment for stickers
 
----
+### User Interface
+- Electron-based cross-platform desktop app
+- Drag and drop file support
+- Real-time progress tracking
+- Dark theme
 
-## 🚀 **Overview**
+## Technical Stack
 
-Complete Sticker is a cutting-edge desktop application that revolutionizes the creation and management of Telegram sticker packs. Built with enterprise-grade architecture, it combines the power of Electron's modern UI with Python's robust backend processing, delivering a seamless experience for content creators, businesses, and developers.
+- **Frontend**: Electron, JavaScript, CSS
+- **Backend**: Python 3.12+, Flask API
+- **Telegram Client**: Telethon (async)
+- **Media Processing**: FFmpeg
+- **System Monitoring**: psutil
 
-### ✨ **Key Features**
+## Installation
 
-<table>
-<tr>
-<td width="50%">
-
-#### 🎯 **Advanced Media Processing**
-- **GPU-Accelerated Conversion**: NVIDIA CUDA, AMD AMF, Intel QSV support
-- **Intelligent Fallback**: Automatic CPU processing when GPU unavailable
-- **Batch Processing**: Handle hundreds of files with progress tracking
-- **Format Optimization**: WebM (VP9) with 512×512 padding, ~254KB target
-- **Real-time Validation**: Input validation with visual feedback
-- **Smart Format Detection**: Automatic image/video format recognition
-
-</td>
-<td width="50%">
-
-#### 🤖 **Telegram Automation**
-- **Secure Authentication**: Phone, SMS code, and 2FA support
-- **Session Management**: Persistent connections with automatic reconnection
-- **Pack Creation**: Automated sticker pack creation and management
-- **Emoji Mapping**: Advanced emoji assignment with bulk operations
-- **Auto-Skip Features**: Configurable icon selection automation
-- **URL Name Validation**: Smart pack URL name generation and validation
-
-</td>
-</tr>
-<tr>
-<td width="50%">
-
-#### 🖥️ **Modern User Interface**
-- **Responsive Design**: Adaptive layout for all screen sizes
-- **Real-time Monitoring**: Live system stats and progress tracking
-- **Drag & Drop**: Intuitive file management
-- **Optimized Dark Theme**: Performance-first dark mode with CSS variables
-- **Smooth Interactions**: Zero-lag operation with instant responsiveness
-- **Accessibility**: Fixed horizontal scrolling with proper emoji category navigation
-- **Clean Aesthetics**: Simplified design prioritizing performance over heavy effects
-- **Success Modals**: Beautiful completion notifications with shareable links
-
-</td>
-<td width="50%">
-
-#### 🔒 **Enterprise Security**
-- **Encrypted Storage**: Secure credential management
-- **Session Persistence**: Reuse existing Telegram sessions
-- **Resource Management**: Proper cleanup to prevent database locks
-- **Error Handling**: Comprehensive error management and recovery
-- **Privacy First**: No data collection or telemetry
-- **Local Processing**: All operations performed locally
-
-</td>
-</tr>
-</table>
-
----
-
-## 🏗️ **Architecture**
-
-```
-graph TB
-    subgraph "Frontend Layer (Electron)"
-        A[Electron Renderer] --> B[Modern UI Components]
-        B --> C[Real-time Validation]
-        B --> D[Progress Monitoring]
-        B --> E[Success Modals]
-    end
-    
-    subgraph "Backend Layer (Python Flask)"
-        F[Flask API Server] --> H[Video Converter]
-        F --> I[Sticker Bot Core]
-        F --> J[Session Manager]
-    end
-    
-    subgraph "Processing Layer"
-        H --> N[FFmpeg Engine]
-        I --> O[Telethon Client]
-        J --> P[Session Validation]
-    end
-    
-    subgraph "Storage Layer"
-        Q[Encrypted Credentials]
-        R[Session Files]
-        S[Cache Management]
-        T[Process State]
-    end
-    
-    A --> F
-    I --> Q
-    I --> R
-    H --> S
-    F --> T
-```
-
----
-
-## 🛠️ **Technology Stack**
-
-### **Frontend**
-- **Electron** - Cross-platform desktop framework
-- **Modern JavaScript (ES2023)** - Latest language features
-- **Optimized CSS** - Performance-first layouts with CSS variables
-- **Smooth Scrolling** - Hardware-accelerated horizontal scrolling
-- **Zero-Lag Design** - Streamlined for maximum responsiveness
-- **Web APIs** - Clipboard, file system, notifications
-- **Real-time Validation** - Input validation with visual feedback
-
-### **Backend**
-- **Python 3.12+** - Core processing engine
-- **Flask** - RESTful API framework with CORS support
-- **Telethon** - Asynchronous Telegram client with session management
-- **FFmpeg** - Media processing powerhouse with GPU acceleration
-- **psutil** - System monitoring and optimization
-- **Threading** - Multi-threaded processing with locks
-
-### **Acceleration**
-- **NVIDIA CUDA** - GPU-accelerated video processing
-- **AMD AMF** - Advanced Media Framework support
-- **Intel QSV** - Quick Sync Video acceleration
-- **Multi-threading** - Parallel processing optimization
-
----
-
-## 📦 **Installation**
-
-### **Prerequisites**
-
-```bash
-# System Requirements
+### Requirements
 - Python 3.12 or higher
 - Node.js 18+ and npm
-- FFmpeg with GPU support (optional but recommended)
-- 4GB RAM minimum, 8GB recommended
+- FFmpeg (optional, for GPU acceleration)
+- 4GB RAM minimum
 - 2GB free disk space
-```
 
-### **Quick Start**
+### Setup
 
 ```bash
-# Clone the repository
+# Clone repository
 git clone https://github.com/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader.git
 cd Telegram-Sticker-Maker-And-Auto-Uploader
 
@@ -172,368 +56,92 @@ pip install -r python/requirements.txt
 # Install Node.js dependencies
 npm install
 
-# Start the application
+# Start application
 npm start
 ```
 
-### **Advanced Installation**
+## Usage
 
-<details>
-<summary><strong>🔧 GPU Acceleration Setup</strong></summary>
-
-#### **NVIDIA CUDA**
-```bash
-# Windows (using winget)
-winget install NVIDIA.CUDA
-
-# Verify installation
-nvidia-smi
-nvcc --version
-```
-
-#### **AMD AMF**
-```bash
-# Install AMD drivers with AMF support
-# Download from: https://www.amd.com/support
-```
-
-#### **Intel QSV**
-```bash
-# Install Intel Graphics drivers
-# Download from: https://www.intel.com/content/www/us/en/support/articles/000005629/graphics.html
-```
-
-</details>
-
----
-
-## 🎮 **Usage**
-
-### **Basic Workflow**
-
-1. **Launch Application**
+1. **Start the application**
    ```bash
    npm start
    ```
 
-2. **Configure Telegram**
-   - Enter API credentials from [my.telegram.org](https://my.telegram.org)
-   - Authenticate with phone number and verification code
-   - Session is automatically saved and reused
+2. **Configure Telegram credentials**
+   - Obtain API credentials from [my.telegram.org](https://my.telegram.org)
+   - Enter phone number and verification code
+   - Session is saved for future use
 
-3. **Add Media Files**
-   - Drag & drop images/videos
-   - Batch select multiple files
-   - Automatic format detection and optimization
-   - Real-time validation with visual feedback
+3. **Add media files**
+   - Drag and drop files or use file selector
+   - Supported formats: images and videos
+   - Files are automatically validated
 
-4. **Configure Sticker Pack**
-   - Set pack name (1-64 characters, validated in real-time)
-   - Set URL name (5-32 characters, letters/numbers/underscores only)
+4. **Configure sticker pack**
+   - Set pack name (1-64 characters)
+   - Set URL name (5-32 characters, alphanumeric + underscores)
    - Choose sticker type (Image or Video)
-   - Configure auto-skip icon selection
 
-5. **Create and Publish**
-   - Review and preview
-   - One-click publication with progress tracking
-   - Automatic pack sharing with copyable links
-   - Success modal with shareable Telegram link
+5. **Create pack**
+   - Review settings and click create
+   - Monitor progress in real-time
+   - Pack URL is provided upon completion
 
-### **Advanced Features**
+## Configuration
 
-<details>
-<summary><strong>🎨 Real-time Input Validation</strong></summary>
-
-```javascript
-// Pack Name Validation
-- Length: 1-64 characters
-- No special characters: <>"'&
-- Real-time green/red glow feedback
-- Validation messages below input
-
-// URL Name Validation  
-- Length: 5-32 characters
-- Allowed: letters, numbers, underscores
-- Must start with letter
-- Real-time validation with visual feedback
-```
-
-</details>
-
-<details>
-<summary><strong>⚡ Auto-Skip Icon Selection</strong></summary>
-
-```python
-# Configurable automation
-- Toggle switch in Sticker Bot UI
-- Auto-sends /skip command when enabled
-- Manual mode for custom icon upload
-- Help tooltip with detailed explanation
-- Prevents getting stuck in icon selection
-```
-
-</details>
-
-<details>
-<summary><strong>🔄 Session Management</strong></summary>
-
-```python
-# Smart session handling
-- Reuse existing Telegram sessions
-- Automatic session validation
-- Proper resource cleanup
-- Prevents database locks
-- Garbage collection optimization
-```
-
-</details>
-
----
-
-## 📊 **Performance Metrics**
-
-| Feature | Performance | Optimization |
-|---------|-------------|--------------|
-| **Video Conversion** | 10x faster with GPU | CUDA/AMF/QSV acceleration |
-| **Batch Processing** | 100+ files/minute | Parallel processing |
-| **Memory Usage** | <500MB typical | Efficient caching |
-| **Startup Time** | <3 seconds | Optimized initialization |
-| **API Response** | <100ms average | Async processing |
-| **Session Reuse** | Instant reconnection | Persistent session management |
-| **UI Performance** | 60+ FPS stable | Zero-lag operation with optimized CSS |
-| **Modal Responsiveness** | 95% improvement | Eliminated heavy effects, clean animations |
-| **Button Interactions** | <30ms response | Instant feedback with optimized event handling |
-| **Horizontal Scrolling** | Smooth scrolling | Fixed tab overflow with proper container sizing |
-| **Theme Performance** | Instant switching | CSS variables with no visual glitches |
-| **Emoji Modal** | Seamless operation | 900px width with proper tab accessibility |
-
----
-
-## 🔧 **Configuration**
-
-### **Environment Variables**
-
+### Environment Variables
 ```bash
-# Optional configuration
-export STICKER_CACHE_SIZE=1024      # Cache size in MB
-export STICKER_MAX_CONCURRENT=4     # Max concurrent conversions
-export STICKER_LOG_LEVEL=INFO       # Logging level
-export STICKER_THEME=dark           # UI theme preference
+STICKER_CACHE_SIZE=1024      # Cache size in MB
+STICKER_MAX_CONCURRENT=4     # Max concurrent conversions
+STICKER_LOG_LEVEL=INFO       # Logging level
 ```
 
-### **Advanced Settings**
+## Recent Updates
 
-```json
-{
-  "conversion": {
-    "quality": "high",
-    "batch_size": 10,
-    "retry_attempts": 3
-  },
-  "telegram": {
-    "session_timeout": 3600,
-    "max_file_size": 512000,
-    "auto_reconnect": true,
-    "auto_skip_icon": true
-  },
-  "validation": {
-    "real_time": true,
-    "glow_effects": true,
-    "pack_name_max": 64,
-    "url_name_min": 5,
-    "url_name_max": 32
-  }
-}
-```
+### v1.4.7 (September 24, 2024)
+- Fixed modal display issues
+- Enhanced process ID coordination
+- Improved UI responsiveness
+- Updated documentation
 
----
+### v1.4.6 (September 23, 2024)
+- Fixed URL modal "Try This Name" button
+- Added missing updatePackActions() method
+- Changed modal themes from error-red to choice-blue
+- Removed duplicate CSS code
 
-## 🚀 **Recent Updates**
+### v1.4.5 (September 22, 2024)
+- Resolved modal display stability issues
+- Updated UI theme to light pink
+- Improved suggestion layout responsiveness
+- Added keyboard shortcuts (Ctrl+C, Enter)
 
-### **v1.4.6 - Stable Release & Bug Fixes (September 23, 2024)**
-- 🐛 **URL Modal Fix**: Fixed "Try This Name" button not working due to process ID clearing
-- 🔧 **Missing Method Fix**: Added missing `updatePackActions()` method to prevent form reset errors
-- 🎨 **Modal Redesign**: Changed warning/error themes to positive blue themes for retry functionality
-- 🧹 **Code Cleanup**: Removed 200+ lines of duplicate CSS and optimized modal styling
-- ✨ **Enhanced UX**: Made URL name conflicts appear as positive choices rather than errors
-- 🛡️ **Button Preservation**: Improved button interaction stability after UI updates
-- 💙 **Positive Theming**: Converted retry modals from error-red to choice-blue for better UX
-
-### **v1.4.5 - UI Enhancement & Modal Stability (September 22, 2024)**
-- 🎨 **Success Modal Fix**: Resolved modal display issues with enhanced element discovery
-- 🌸 **Light Pink Theme**: Updated UI from lavender to beautiful light pink/baby pink colors
-- 📱 **Responsive Smart Suggestions**: Replaced rigid grid with flexible, responsive suggestion layout
-- 🔧 **Modal Frame Stability**: Eliminated weird vertical columns and visual artifacts
-- ✨ **Enhanced Typography**: Added monospace fonts for suggestions with improved readability
-- 🛡️ **Critical Modal Protection**: Implemented shake animation feedback for protected modals
-- 🧹 **Code Cleanup**: Removed duplicate CSS and optimized modal styling
-- ⌨️ **Keyboard Shortcuts**: Added Ctrl+C copy and Enter shortcuts for better UX
-
-### **v1.4.0 - Performance Mastery & Smooth Operation (September 19-20, 2024)**
-- 🚀 **Zero-Lag Achievement**: Eliminated all UI lag for buttery-smooth performance
-- ⚡ **Optimized Theme System**: Implemented efficient dark theme with CSS variables
-- 🎨 **Glass Morphism Removal**: Stripped heavy visual effects for maximum performance
-- 📱 **Horizontal Scrolling Fix**: Resolved emoji category tab scrolling issues
-- 🔧 **Modal Width Optimization**: Expanded emoji modal from 700px to 900px for better content fit
-- 💨 **Instant Responsiveness**: Sub-50ms button response times achieved
-- 🎯 **Smart Layout**: Fixed text overlap issues in media sections
-- ✨ **Performance Priority**: Prioritized smoothness over visual effects for optimal UX
-
-### **v1.3.0 - Performance Optimization & UI Overhaul (September 18, 2024)**
-- 🚀 **Massive Performance Boost**: Fixed critical FPS issues (16-19 FPS → 30-60 FPS)
-- ⚡ **Hardware Acceleration**: Conditional GPU acceleration with safe fallbacks
-- 🎨 **Modal Redesign**: Complete URL retry modal redesign with modern, clean styling
-- 🔧 **Button Functionality**: Fixed "Try This Name" button not sending retry requests
-- 📱 **Lightweight Monitoring**: Optimized performance profiling to reduce overhead
-- 🧹 **Code Cleanup**: Removed temporary files and optimized CSS for faster loading
-- ⌨️ **Keyboard Support**: Added Enter key support for URL retry modal
-- 🎯 **Smart Suggestions**: Improved URL name suggestions with better UX
-
-### **v1.2.0 - Auto-Skip Logic & Session Management (September 13, 2024)**
-- ✨ **Fixed Auto-Skip Logic**: Resolved issue where app got stuck after sending `/skip` command
-- 🔄 **Session Reuse**: Implemented smart session management to reuse existing Telegram sessions
-- 🧹 **Resource Cleanup**: Improved cleanup to prevent database locks and memory leaks
-- 🎨 **UI Improvements**: Updated "About Me" name to "Joon Jelly" and enhanced visual design
-- 🔧 **Backend Optimization**: Enhanced skip-icon endpoint to continue process flow properly
-
-### **v1.1.0 - Real-time Validation & Success Flow (September 13, 2024)**
-- ✨ **Real-time Validation**: Added glow effects for pack name and URL name inputs
-- 🎯 **URL Name Validation**: Implemented comprehensive validation with 3 retry attempts
-- 🎉 **Success Modal**: Beautiful completion modal with shareable Telegram links
-- 🔗 **Link Management**: Copy-to-clipboard and open-in-Telegram functionality
-- 📱 **Auto-Skip Toggle**: Moved auto-skip setting to Sticker Bot UI for better UX
-
-### **Key Performance Improvements**
-- **Zero-Lag Operation**: Completely eliminated UI lag through strategic optimization
-- **Modal Performance**: 95% improvement with removal of performance-heavy effects
-- **Scrolling**: Perfect horizontal scrolling with fixed tab container sizing
-- **Memory Usage**: 30-40% reduction through effect removal and optimized CSS
-- **FPS**: Stable 60+ FPS with consistent frame timing
-- **Button Responsiveness**: Sub-30ms response times with instant visual feedback
-- **Theme Efficiency**: Lightning-fast dark theme switching with CSS variables
-- **Container Optimization**: Fixed emoji modal width (700px → 900px) for content accessibility
-
----
-
-## 🧪 **Testing**
+## Testing
 
 ```bash
 # Run the application
 npm start
-
-# Test features
-1. Create sticker pack with auto-skip enabled
-2. Test real-time validation on pack name and URL name
-3. Verify session reuse on app restart
-4. Test success modal with shareable links
-5. Test manual icon upload mode
 ```
 
-### **Test Coverage**
-- ✅ Auto-skip functionality
-- ✅ Real-time input validation
-- ✅ Session management and reuse
-- ✅ Success modal and link sharing
-- ✅ Error handling and recovery
-- ✅ Resource cleanup
+Test the following features:
+1. Create sticker pack with different file types
+2. Test input validation on pack name and URL name
+3. Verify session persistence on app restart
+4. Test success modal functionality
 
----
+## Contributing
 
-## 📈 **Roadmap**
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
 
-### **Version 1.3** (Q4 2024)
-- [ ] **Batch Pack Creation**: Create multiple packs simultaneously
-- [ ] **Template System**: Pre-configured pack templates
-- [ ] **Advanced Analytics**: Pack performance tracking
-- [ ] **Export Options**: Multiple format exports
-
-### **Version 2.0** (Q1 2025)
-- [ ] **AI-Powered Sticker Generation**: Automatic sticker creation
-- [ ] **Cloud Sync Integration**: Cross-device synchronization
-- [ ] **Advanced Analytics Dashboard**: Detailed usage statistics
-- [ ] **Multi-language Support**: Internationalization
-
-### **Version 2.1** (Q2 2025)
-- [ ] **Mobile Companion App**: iOS/Android companion
-- [ ] **Collaborative Editing**: Team-based pack creation
-- [ ] **Plugin System**: Extensible architecture
-- [ ] **API for Developers**: RESTful API access
-
----
-
-## 🤝 **Contributing**
-
-We welcome contributions from the community! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
-
-### **Development Setup**
-
-```bash
-# Fork and clone the repository
-git clone https://github.com/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader.git
-cd Telegram-Sticker-Maker-And-Auto-Uploader
-
-# Create development environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install development dependencies
-pip install -r python/requirements.txt
-npm install
-
-# Run in development mode
-npm run dev
-```
-
-### **Code Style**
-
-- **Python**: Follow PEP 8 with proper error handling
-- **JavaScript**: Modern ES2023 with async/await patterns
-- **CSS**: BEM methodology with modern features
-- **Commits**: Descriptive commit messages with dates
-
----
-
-## 📄 **License**
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
----
+## Support
 
-## 🙏 **Acknowledgments**
-
-- **Telegram** for the amazing platform and API
-- **FFmpeg** community for the powerful media processing tools
-- **Electron** team for the cross-platform framework
-- **Python** community for the robust ecosystem
-- **Telethon** developers for the excellent async Telegram client
-- **All contributors** who help make this project better
-
----
-
-## 🔗 **Related Projects**
-
-- 🎨 **[Background Remover AI](https://github.com/RohitPoul/Background-Remover-Ai)** - AI-powered background removal tool for perfect sticker creation
-- 📱 **[Complete Sticker](https://github.com/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader)** - This repository
-
----
-
-## 📞 **Support**
-
-- **Documentation**: [Wiki](https://github.com/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader/wiki)
 - **Issues**: [GitHub Issues](https://github.com/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader/discussions)
+- **Documentation**: Check the repository wiki
 - **Contact**: [Rohit Poul](https://github.com/RohitPoul)
-
----
-
-<div align="center">
-
-**⭐ Star this repository if you find it helpful!**
-
-[![GitHub stars](https://img.shields.io/github/stars/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader?style=social)](https://github.com/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader?style=social)](https://github.com/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader/network)
-[![GitHub watchers](https://img.shields.io/github/watchers/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader?style=social)](https://github.com/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader/watchers)
-
-**Made with ❤️ by Rohit Poul**
-
-</div>
