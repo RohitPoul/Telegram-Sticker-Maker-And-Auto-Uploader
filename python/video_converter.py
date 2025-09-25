@@ -49,13 +49,25 @@ class VideoConverterCore:
             self.logger.error(f"Error updating process status: {e}")
 
     def update_file_status(self, process_id, file_index, file_data):
-        """Helper to update individual file status"""
+        """Helper to update individual file status with proper change detection"""
         try:
             with self.process_lock:
                 if process_id in self.active_processes:
                     if "file_statuses" not in self.active_processes[process_id]:
                         self.active_processes[process_id]["file_statuses"] = {}
-                    self.active_processes[process_id]["file_statuses"][file_index] = file_data
+                    
+                    # Get current file status
+                    current_status = self.active_processes[process_id]["file_statuses"].get(file_index, {})
+                    
+                    # Only update if there are actual changes
+                    has_changes = False
+                    for key, value in file_data.items():
+                        if current_status.get(key) != value:
+                            has_changes = True
+                            break
+                    
+                    # Update the file status
+                    self.active_processes[process_id]["file_statuses"][file_index].update(file_data)
 
                     # Recalculate aggregate metrics to reflect current file progress immediately
                     proc = self.active_processes[process_id]
@@ -84,7 +96,9 @@ class VideoConverterCore:
                     except Exception:
                         pass
 
-                    self.logger.debug(f"[FILE_STATUS] File {file_index}: {file_data}")
+                    # Only log if there were actual changes
+                    if has_changes:
+                        self.logger.debug(f"[FILE_STATUS] File {file_index}: {file_data}")
         except Exception as e:
             self.logger.error(f"Error updating file status: {e}")
 
@@ -248,11 +262,15 @@ class VideoConverterCore:
                 base_progress = 15 + (attempt / max_attempts) * 70  # 15-85% range for conversion attempts
 
                 if process_id and file_index is not None:
+                    # More frequent progress updates
                     self.update_file_status(process_id, file_index, {
                         'status': 'converting',
                         'progress': int(base_progress),
                         'stage': f'Attempt {attempt}/{max_attempts} - CRF:{crf} BR:{initial_bitrate}k',
-                        'filename': filename
+                        'filename': filename,
+                        'attempt': attempt,
+                        'crf': crf,
+                        'bitrate': initial_bitrate
                     })
 
                 # CPU-only mode - use standard scaling filter
@@ -372,7 +390,8 @@ class VideoConverterCore:
                         'status': 'checking',
                         'progress': 85,
                         'stage': f'Size: {file_size_kb:.1f}KB (Target: {target_size_kb}KB)',
-                        'filename': filename
+                        'filename': filename,
+                        'file_size': file_size_kb
                     })
 
                 # Check if file size is within target range
@@ -383,7 +402,9 @@ class VideoConverterCore:
                             'status': 'completed',
                             'progress': 100,
                             'stage': f'Completed! {file_size_kb:.1f}KB in {attempt} attempts',
-                            'filename': filename
+                            'filename': filename,
+                            'file_size': file_size_kb,
+                            'attempts': attempt
                         })
                     # Record final metrics
                     final_file_size = file_size_kb
@@ -458,6 +479,15 @@ class VideoConverterCore:
         
         except Exception as e:
             self.logger.error(f"[ERROR] {filename}: Conversion error: {e}")
+            
+            # Update status to error
+            if process_id and file_index is not None:
+                self.update_file_status(process_id, file_index, {
+                    'status': 'error',
+                    'progress': 0,
+                    'stage': f'Conversion error: {str(e)}',
+                    'filename': filename
+                })
             
             return False
 
