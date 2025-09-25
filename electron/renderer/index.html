@@ -57,9 +57,12 @@
       <main class="app-main">
         <!-- Video Converter Tab -->
         <div id="video-converter" class="tab-content active">
+          <div class="section-header">
+            <h2><i class="fas fa-video"></i> Video Converter</h2>
+            <p>Convert videos to Telegram-compatible format with advanced settings</p>
+          </div>
 
-
-          <div class="converter-grid">
+          <div class="settings-grid">
             <!-- File Management -->
             <div class="card">
               <div class="card-header">
@@ -157,21 +160,14 @@
         <!-- Sticker Bot Tab -->
         <div class="tab-content" id="sticker-bot">
           <div class="section-header">
-            <h2><i class="fas fa-smile"></i> Telegram Sticker Bot</h2>
-            <button
-              class="btn btn-secondary btn-sm reset-header-btn"
-              id="reset-sticker-form"
-              title="Clear form and start over (Ctrl+R)"
-            >
-              <i class="fas fa-redo"></i> Reset Form
-            </button>
+            <h2><i class="fas fa-robot"></i> Telegram Sticker Bot</h2>
+            <p>Create and manage Telegram sticker packs with ease</p>
           </div>
 
-          <div class="sticker-container">
-            <div class="sticker-grid expanded">
-              <!-- Telegram Connection -->
-              <div class="card">
-                <div class="card-header">
+          <div class="settings-grid">
+            <!-- Telegram Connection -->
+            <div class="card">
+              <div class="card-header">
                 <h3><i class="fas fa-telegram"></i> Telegram Connection</h3>
                 <div class="connection-status" id="telegram-connection-status">
                   <i class="fas fa-circle text-danger"></i>
@@ -250,51 +246,51 @@
               </div>
             </div>
 
-              <!-- Media Management -->
-              <div class="card">
-                <div class="card-header">
-                  <h3><i class="fas fa-images"></i> Media Management</h3>
-                  <div class="header-actions">
-                    <div class="media-counter">
-                      <span id="media-counter">0 files</span>
-                      <small>/120 max</small>
-                    </div>
+            <!-- Media Management -->
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fas fa-images"></i> Media Management</h3>
+                <div class="header-actions">
+                  <div class="media-counter">
+                    <span id="media-counter">0 files</span>
+                    <small>/120 max</small>
                   </div>
                 </div>
-                <div class="card-body">
-                  <div class="media-type-selector">
-                    <label class="media-type-label">Select media type:</label>
-                    <div class="media-type-buttons">
-                      <button class="media-type-btn" data-type="image" id="select-image-type">
-                        <i class="fas fa-image"></i> Images
-                      </button>
-                      <button class="media-type-btn" data-type="video" id="select-video-type">
-                        <i class="fas fa-video"></i> Videos
-                      </button>
-                    </div>
-                  </div>
-                  <div class="media-controls" style="display: none;" id="media-controls">
-                    <button class="btn btn-primary" id="add-media">
-                      <i class="fas fa-plus"></i> Add <span id="media-type-text">Media</span>
+              </div>
+              <div class="card-body">
+                <div class="media-type-selector">
+                  <label class="media-type-label">Select media type:</label>
+                  <div class="media-type-buttons">
+                    <button class="media-type-btn" data-type="image" id="select-image-type">
+                      <i class="fas fa-image"></i> Images
                     </button>
-                    <button class="btn btn-secondary" id="sort-media">
-                      <i class="fas fa-sort"></i> Sort
-                    </button>
-                    <button class="btn btn-secondary" id="clear-media">
-                      <i class="fas fa-trash"></i> Clear All
+                    <button class="media-type-btn" data-type="video" id="select-video-type">
+                      <i class="fas fa-video"></i> Videos
                     </button>
                   </div>
-                  <div class="media-sort-options" id="media-sort-options" style="display: none;">
-                    <select class="sort-select" id="sort-select">
-                      <option value="name-asc">Name (A-Z)</option>
-                      <option value="name-desc">Name (Z-A)</option>
-                      <option value="date-new">Date (Newest First)</option>
-                      <option value="date-old">Date (Oldest First)</option>
-                      <option value="size-large">Size (Largest First)</option>
-                      <option value="size-small">Size (Smallest First)</option>
-                    </select>
-                  </div>
-                  <div class="media-list" id="sticker-media-list">
+                </div>
+                <div class="media-controls" style="display: none;" id="media-controls">
+                  <button class="btn btn-primary" id="add-media">
+                    <i class="fas fa-plus"></i> Add <span id="media-type-text">Media</span>
+                  </button>
+                  <button class="btn btn-secondary" id="sort-media">
+                    <i class="fas fa-sort"></i> Sort
+                  </button>
+                  <button class="btn btn-secondary" id="clear-media">
+                    <i class="fas fa-trash"></i> Clear All
+                  </button>
+                </div>
+                <div class="media-sort-options" id="media-sort-options" style="display: none;">
+                  <select class="sort-select" id="sort-select">
+                    <option value="name-asc">Name (A-Z)</option>
+                    <option value="name-desc">Name (Z-A)</option>
+                    <option value="date-new">Date (Newest First)</option>
+                    <option value="date-old">Date (Oldest First)</option>
+                    <option value="size-large">Size (Largest First)</option>
+                    <option value="size-small">Size (Smallest First)</option>
+                  </select>
+                </div>
+                <div class="media-list" id="sticker-media-list">
                   <div class="empty-state">
                     <i class="fas fa-file-image"></i>
                     <p>No media files selected</p>
@@ -420,31 +416,30 @@
                 </div>
               </div>
             </div>
-            </div>
-          </div>
-
-          <!-- Sticker Progress Section -->
-          <div class="card" id="sticker-progress-section" style="display: none">
-            <div class="card-header">
-              <h3><i class="fas fa-magic"></i> Creating Sticker Pack</h3>
-              <button class="btn btn-danger btn-sm" id="cancel-sticker-process">
-                <i class="fas fa-stop"></i> Cancel
-              </button>
-            </div>
-            <div class="card-body">
-              <div class="progress-info">
-                <div class="current-file" id="sticker-current-file">
-                  Initializing...
-                </div>
-                <div class="progress-stats" id="sticker-progress-stats">
-                  0 / 0 stickers processed
-                </div>
+            
+            <!-- Sticker Progress Section -->
+            <div class="card" id="sticker-progress-section" style="display: none">
+              <div class="card-header">
+                <h3><i class="fas fa-magic"></i> Creating Sticker Pack</h3>
+                <button class="btn btn-danger btn-sm" id="cancel-sticker-process">
+                  <i class="fas fa-stop"></i> Cancel
+                </button>
               </div>
-              <div class="progress-bar">
-                <div class="progress-fill" id="sticker-progress-fill"></div>
-              </div>
-              <div class="progress-percentage" id="sticker-progress-percentage">
-                0%
+              <div class="card-body">
+                <div class="progress-info">
+                  <div class="current-file" id="sticker-current-file">
+                    Initializing...
+                  </div>
+                  <div class="progress-stats" id="sticker-progress-stats">
+                    0 / 0 stickers processed
+                  </div>
+                </div>
+                <div class="progress-bar">
+                  <div class="progress-fill" id="sticker-progress-fill"></div>
+                </div>
+                <div class="progress-percentage" id="sticker-progress-percentage">
+                  0%
+                </div>
               </div>
             </div>
           </div>
