@@ -1,6 +1,3 @@
-// Component-Level Performance Optimizations
-// Implements React-like optimization patterns for vanilla JavaScript
-
 class ComponentOptimizer {
   constructor() {
     this.componentCache = new Map();
@@ -74,7 +71,72 @@ class ComponentOptimizer {
     }
   }
 
-  // Virtual DOM-like diff for lists
+  // Virtual DOM-like diff for lists with virtualization
+  updateVirtualList(container, newItems, renderItem, keyFn = (item, index) => index, options = {}) {
+    const {
+      itemHeight = 60, // Approximate height of each item
+      bufferSize = 5,   // Number of items to render outside viewport
+      scrollTop = container.scrollTop || 0,
+      containerHeight = container.clientHeight || 300
+    } = options;
+    
+    // Calculate visible range
+    const startIndex = Math.max(0, Math.floor(scrollTop / itemHeight) - bufferSize);
+    const endIndex = Math.min(
+      newItems.length - 1,
+      Math.floor((scrollTop + containerHeight) / itemHeight) + bufferSize
+    );
+    
+    // Create visible items
+    const visibleItems = [];
+    for (let i = startIndex; i <= endIndex; i++) {
+      if (newItems[i]) {
+        visibleItems.push({
+          index: i,
+          item: newItems[i],
+          top: i * itemHeight
+        });
+      }
+    }
+    
+    // Update container height to maintain scrollbar
+    container.style.height = `${newItems.length * itemHeight}px`;
+    
+    // Create or update visible elements
+    const fragment = document.createDocumentFragment();
+    const existingElements = Array.from(container.children);
+    
+    visibleItems.forEach(({ index, item, top }) => {
+      const key = keyFn(item, index);
+      let element = existingElements.find(el => el.dataset.key === key);
+      
+      if (!element) {
+        element = document.createElement('div');
+        element.dataset.key = key;
+        element.style.position = 'absolute';
+        element.style.width = '100%';
+        element.style.left = '0';
+      }
+      
+      element.style.top = `${top}px`;
+      element.innerHTML = renderItem(item, index);
+      fragment.appendChild(element);
+    });
+    
+    // Remove elements that are no longer visible
+    existingElements.forEach(el => {
+      const key = el.dataset.key;
+      const isVisible = visibleItems.some(item => keyFn(item.item, item.index) === key);
+      if (!isVisible) {
+        el.remove();
+      }
+    });
+    
+    // Append new elements
+    container.appendChild(fragment);
+  }
+
+  // Virtual DOM-like diff for lists (existing implementation)
   updateList(container, newItems, renderItem, keyFn = (item, index) => index) {
     const existingItems = Array.from(container.children);
     const newKeys = newItems.map(keyFn);
@@ -330,6 +392,8 @@ class ComponentOptimizer {
     window.createOptimizedComponent = (definition) => this.createComponent(definition);
     window.updateOptimizedList = (container, items, render, key) => 
       this.updateList(container, items, render, key);
+    window.updateVirtualList = (container, items, render, key, options) => 
+      this.updateVirtualList(container, items, render, key, options);
     window.setupEventDelegation = (container, event, selector, handler) => 
       this.setupEventDelegation(container, event, selector, handler);
     window.setupLazyLoading = (elements, callback, options) => 
