@@ -219,9 +219,55 @@ class StickerBotManager {
       return;
     }
     
-    container.innerHTML = this.mediaFiles
-      .map((file, index) => this.createMediaFileItem(file, index))
-      .join("");
+    // Use virtualized list for better performance with large datasets
+    if (this.mediaFiles.length > 100) {
+      // For very large lists, we'll implement a simplified virtualized approach
+      this.updateMediaFileListVirtual(container);
+    } else {
+      // Use regular rendering for smaller lists
+      container.innerHTML = this.mediaFiles
+        .map((file, index) => this.createMediaFileItem(file, index))
+        .join("");
+    }
+  }
+
+  // Virtualized rendering for large media file lists
+  updateMediaFileListVirtual(container) {
+    // Create a simplified virtualized list that only renders visible items
+    const itemHeight = 60; // Approximate height
+    const containerHeight = container.clientHeight || 300;
+    const scrollTop = container.scrollTop || 0;
+    
+    // Calculate visible range
+    const startIndex = Math.max(0, Math.floor(scrollTop / itemHeight) - 5);
+    const endIndex = Math.min(
+      this.mediaFiles.length - 1,
+      Math.floor((scrollTop + containerHeight) / itemHeight) + 5
+    );
+    
+    // Create visible items
+    let html = '';
+    for (let i = startIndex; i <= endIndex; i++) {
+      if (this.mediaFiles[i]) {
+        html += this.createMediaFileItem(this.mediaFiles[i], i);
+      }
+    }
+    
+    container.innerHTML = html;
+    
+    // Add scroll event listener for virtualization
+    if (!container._virtualScrollHandler) {
+      container._virtualScrollHandler = () => {
+        // Debounce the update to prevent excessive re-rendering
+        if (container._scrollTimeout) {
+          clearTimeout(container._scrollTimeout);
+        }
+        container._scrollTimeout = setTimeout(() => {
+          this.updateMediaFileListVirtual(container);
+        }, 50);
+      };
+      container.addEventListener('scroll', container._virtualScrollHandler);
+    }
   }
 
   createMediaFileItem(file, index) {
