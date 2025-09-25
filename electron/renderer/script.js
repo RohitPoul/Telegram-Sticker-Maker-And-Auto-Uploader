@@ -75,11 +75,36 @@ class TelegramUtilities {
     this.telegramConnectionData = null;
     this.mediaData = {};
     
+    // Debouncing for UI updates
+    this.debouncedUpdateVideoFileList = this.debounce(this.updateVideoFileList.bind(this), 100);
+    this._lastMinorUpdate = 0;
+    
     this.init();
     this.initializeNavigation(); // Add this line to initialize navigation
     this.initializeTelegramForm(); // Add this to load saved Telegram credentials
   }
   
+  // Add a debouncing utility function
+  debounce(func, wait, immediate) {
+    let timeout;
+    return function executedFunction() {
+      const context = this;
+      const args = arguments;
+          
+      const later = function() {
+        timeout = null;
+        if (!immediate) func.apply(context, args);
+      };
+  
+      const callNow = immediate && !timeout;
+      
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+      
+      if (callNow) func.apply(context, args);
+    };
+  }
+
   // Utility function to safely add event listeners
   safeAddEventListener(elementId, event, handler, logError = true) {
     const element = document.getElementById(elementId);
@@ -2334,97 +2359,113 @@ class TelegramUtilities {
       return;
     }
     
+    // Use virtualized list for better performance with large datasets
+    if (this.videoFiles.length > 100) {
+      // Use virtualized rendering for large lists
+      window.updateVirtualList(
+        container,
+        this.videoFiles,
+        (file, index) => this.createVideoFileElement(file, index),
+        (file, index) => index,
+        {
+          itemHeight: 70, // Approximate height of each item
+          bufferSize: 10   // Number of items to render outside viewport
+        }
+      );
+    } else {
+      // Use regular rendering for smaller lists
+      this.updateVideoFileListRegular(container);
+    }
+  }
+
+  // Regular list update for smaller datasets
+  updateVideoFileListRegular(container) {
     // Use DocumentFragment for better performance
     const fragment = document.createDocumentFragment();
     
     this.videoFiles.forEach((file, index) => {
-      const statusClass = file.status || "pending";
-      const progressWidth = file.progress || 0;
-      const statusIcon = this.getStatusIcon(file.status);
-      
-      this.debugWarn('🔥 UI DEBUG - Creating File Element', {
-        index: index,
-        filename: file.name,
-        status: file.status,
-        statusClass: statusClass,
-        progress: file.progress,
-        progressWidth: progressWidth,
-        stage: file.stage,
-        statusIcon: statusIcon
-      });
-      
-      const fileElement = document.createElement('div');
-      fileElement.className = `file-item ${statusClass}`;
-      fileElement.setAttribute('data-index', index);
-      
-      const progressText = progressWidth === 100 ? '✔' : `${progressWidth}%`;
-      const statusText = file.stage || "Ready to convert";
-      
-      this.debugWarn('🔥 UI DEBUG - Element Content Details', {
-        index: index,
-        progressText: progressText,
-        statusText: statusText,
-        progressBarWidth: `${progressWidth}%`
-      });
-      
-      fileElement.innerHTML = `
-        <div class="file-info">
-          <div class="file-icon">
-            <i class="${statusIcon}"></i>
-          </div>
-          <div class="file-details">
-            <div class="file-name" title="${file.path}">${file.name}</div>
-            <div class="file-status">
-              ${statusText}
-              ${file.hexEdited ? '<span class="hex-edited-badge" title="Hex edited">🔧</span>' : ''}
-            </div>
-            <div class="file-progress-container">
-              <div class="file-progress-bar">
-                <div class="file-progress-fill" style="width: ${progressWidth}%"></div>
-              </div>
-              <div class="file-progress-text">${progressText}</div>
-            </div>
-            ${file.size ? `<div class="file-meta">Size: ${file.size} | Duration: ${file.duration}</div>` : ""}
-          </div>
-        </div>
-        <div class="file-actions">
-          <button class="btn btn-sm btn-info" onclick="app.showFileInfo(${index})" title="File Info">
-            <i class="fas fa-info-circle"></i>
-          </button>
-          <button class="btn btn-sm btn-danger" onclick="app.removeVideoFile(${index})" 
-                  ${file.status === "converting" ? "disabled" : ""} title="Remove File">
-            <i class="fas fa-trash"></i>
-          </button>
-        </div>
-      `;
-      
-      this.debugWarn('🔥 UI DEBUG - Element Created', {
-        index: index,
-        dataIndex: fileElement.getAttribute('data-index'),
-        className: fileElement.className,
-        hasProgressFill: fileElement.querySelector('.file-progress-fill') !== null,
-        progressFillWidth: fileElement.querySelector('.file-progress-fill')?.style.width,
-        hasProgressText: fileElement.querySelector('.file-progress-text') !== null,
-        progressTextContent: fileElement.querySelector('.file-progress-text')?.textContent
-      });
-      
-      fragment.appendChild(fileElement);
+      const element = this.createVideoFileElement(file, index);
+      fragment.appendChild(element);
     });
     
     // Clear and append in one operation for better performance
     container.innerHTML = '';
     container.appendChild(fragment);
+  }
+
+  // Create a single video file element
+  createVideoFileElement(file, index) {
+    const statusClass = file.status || "pending";
+    const progressWidth = file.progress || 0;
+    const statusIcon = this.getStatusIcon(file.status);
     
-    this.debugWarn('🔥 UI DEBUG - DOM Updated', {
-      containerChildCount: container.children.length,
-      elementsWithDataIndex: Array.from(container.querySelectorAll('[data-index]')).map(el => ({
-        dataIndex: el.getAttribute('data-index'),
-        className: el.className,
-        progressFillWidth: el.querySelector('.file-progress-fill')?.style.width,
-        progressText: el.querySelector('.file-progress-text')?.textContent,
-        statusText: el.querySelector('.file-status')?.textContent
-      }))
+    this.debugWarn('🔥 UI DEBUG - Creating File Element', {
+      index: index,
+      filename: file.name,
+      status: file.status,
+      statusClass: statusClass,
+      progress: file.progress,
+      progressWidth: progressWidth,
+      stage: file.stage,
+      statusIcon: statusIcon
     });
+    
+    const fileElement = document.createElement('div');
+    fileElement.className = `file-item ${statusClass}`;
+    fileElement.setAttribute('data-index', index);
+    
+    const progressText = progressWidth === 100 ? '✔' : `${progressWidth}%`;
+    const statusText = file.stage || "Ready to convert";
+    
+    this.debugWarn('🔥 UI DEBUG - Element Content Details', {
+      index: index,
+      progressText: progressText,
+      statusText: statusText,
+      progressBarWidth: `${progressWidth}%`
+    });
+    
+    fileElement.innerHTML = `
+      <div class="file-info">
+        <div class="file-icon">
+          <i class="${statusIcon}"></i>
+        </div>
+        <div class="file-details">
+          <div class="file-name" title="${file.path}">${file.name}</div>
+          <div class="file-status">
+            ${statusText}
+            ${file.hexEdited ? '<span class="hex-edited-badge" title="Hex edited">🔧</span>' : ''}
+          </div>
+          <div class="file-progress-container">
+            <div class="file-progress-bar">
+              <div class="file-progress-fill" style="width: ${progressWidth}%"></div>
+            </div>
+            <div class="file-progress-text">${progressText}</div>
+          </div>
+          ${file.size ? `<div class="file-meta">Size: ${file.size} | Duration: ${file.duration}</div>` : ""}
+        </div>
+      </div>
+      <div class="file-actions">
+        <button class="btn btn-sm btn-info" onclick="app.showFileInfo(${index})" title="File Info">
+          <i class="fas fa-info-circle"></i>
+        </button>
+        <button class="btn btn-sm btn-danger" onclick="app.removeVideoFile(${index})" 
+                ${file.status === "converting" ? "disabled" : ""} title="Remove File">
+          <i class="fas fa-trash"></i>
+        </button>
+      </div>
+    `;
+    
+    this.debugWarn('🔥 UI DEBUG - Element Created', {
+      index: index,
+      dataIndex: fileElement.getAttribute('data-index'),
+      className: fileElement.className,
+      hasProgressFill: fileElement.querySelector('.file-progress-fill') !== null,
+      progressFillWidth: fileElement.querySelector('.file-progress-fill')?.style.width,
+      hasProgressText: fileElement.querySelector('.file-progress-text') !== null,
+      progressTextContent: fileElement.querySelector('.file-progress-text')?.textContent
+    });
+    
+    return fileElement;
   }
 
   getStatusIcon(status) {
@@ -2797,7 +2838,7 @@ class TelegramUtilities {
     
   }
 
-  // Unified progress monitoring system
+  // Unified progress monitoring system with enhanced debouncing
   monitorProcess(processId) {
     if (RENDERER_DEBUG) console.log("Starting to monitor process:", processId);
     
@@ -2855,6 +2896,8 @@ class TelegramUtilities {
         // Update file statuses (only log on significant changes)
         if (progress && progress.file_statuses) {
           let hasChanges = false;
+          let significantChange = false;
+          
           Object.entries(progress.file_statuses).forEach(([index, fileStatus]) => {
             const file = this.videoFiles[parseInt(index)];
             if (file) {
@@ -2864,15 +2907,27 @@ class TelegramUtilities {
               file.progress = fileStatus.progress || 0;
               file.stage = fileStatus.stage || 'Processing';
               
-              // Only log if status changed or progress increased significantly
-              if (oldStatus !== file.status || Math.abs(oldProgress - file.progress) > 5) {
+              // Check for any change
+              if (oldStatus !== file.status || oldProgress !== file.progress) {
                 hasChanges = true;
+              }
+              
+              // Only trigger UI update for significant changes (progress > 5% change or status change)
+              if (oldStatus !== file.status || Math.abs(oldProgress - file.progress) > 5) {
+                significantChange = true;
               }
             }
           });
           
-          if (hasChanges) {
-            this.updateVideoFileList();
+          // Only update UI for significant changes
+          if (significantChange && this.debouncedUpdateVideoFileList) {
+            this.debouncedUpdateVideoFileList();
+          } else if (hasChanges) {
+            // For minor changes, update immediately but less frequently
+            if (!this._lastMinorUpdate || Date.now() - this._lastMinorUpdate > 500) {
+              this.updateVideoFileList();
+              this._lastMinorUpdate = Date.now();
+            }
           }
         }
         
