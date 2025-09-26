@@ -36,6 +36,9 @@ window.addEventListener('unhandledrejection', (event) => {
 class TelegramUtilities {
   constructor() {
     this.activeProcesses = new Map();
+    // Idempotency guards per process
+    this.iconHandledProcesses = new Set();
+    this.urlPromptHandledProcesses = new Set();
     this.videoFiles = [];
     this.mediaFiles = [];
     this.currentVideoOutput = "";
@@ -301,9 +304,7 @@ class TelegramUtilities {
       if (error.name === 'AbortError') {
         throw new Error('Request timeout - server may be overloaded. Please try again.');
       }
-      if (error.message && error.message.includes('[Errno 22]')) {
-        throw new Error('Invalid request format - please try again');
-      }
+      // Do not mask backend errors; surface original message for debugging
       if (error.message && error.message.includes('timeout')) {
         throw new Error('Request timeout - server may be overloaded. Please try again.');
       }
@@ -1382,43 +1383,43 @@ class TelegramUtilities {
       const overlay = document.getElementById("modal-overlay");
       if (overlay) {
         const successModalHTML = `
-          <div class="modal success-modal-enhanced" id="success-modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10000; max-width: 700px; width: 90%; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15); border-radius: 12px; overflow: hidden; background: white;">
-            <div style="display: flex; min-height: 320px;">
+          <div class="modal success-modal-enhanced" id="success-modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10000; max-width: 700px; width: 90%; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5); border-radius: 12px; overflow: hidden; background: var(--bg-card); border: 1px solid var(--border-color);">
+            <div style="display: flex; min-height: 320px; background: var(--bg-card); color: var(--text-primary);">
               <!-- Left side - Icon and Title -->
-              <div class="modal-header success-header" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 32px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 280px; position: relative;">
+              <div class="modal-header success-header" style="background: #0b0f12; color: white; padding: 32px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 280px; position: relative; border-right: 1px solid var(--border-color);">
                 <button class="modal-close" onclick="window.app?.hideSuccessModal()" style="position: absolute; top: 16px; right: 16px; background: none; border: none; color: white; font-size: 1.2rem; cursor: pointer; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: background-color 0.2s;" onmouseover="this.style.backgroundColor='rgba(255,255,255,0.2)'" onmouseout="this.style.backgroundColor='transparent'">
                   <i class="fas fa-times"></i>
                 </button>
                 
                 <div class="success-icon-wrapper" style="margin-bottom: 16px;">
-                  <i class="fas fa-check-circle success-icon" style="font-size: 3.5rem; color: white;"></i>
+                  <i class="fas fa-check-circle success-icon" style="font-size: 3.5rem; color: #34d399;"></i>
                 </div>
                 
                 <h3 style="font-size: 1.4rem; font-weight: 700; margin: 0 0 16px 0; text-align: center; line-height: 1.3;">Sticker Pack Created Successfully!</h3>
                 
-                <div style="background: rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 20px; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 8px;">
+                <div style="background: rgba(52, 211, 153, 0.15); padding: 8px 16px; border-radius: 20px; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 8px; color: #dcfce7;">
                   <i class="fas fa-sync-alt"></i>Retry Attempt - Success!
                 </div>
               </div>
               
               <!-- Right side - Content and Actions -->
-              <div class="modal-body success-body" style="padding: 32px; background: #f8fffe; color: #065f46; flex: 1; display: flex; flex-direction: column; justify-content: space-between;">
+              <div class="modal-body success-body" style="padding: 32px; background: var(--bg-secondary); color: var(--text-primary); flex: 1; display: flex; flex-direction: column; justify-content: space-between;">
                 <div>
                   <div class="success-message" style="margin-bottom: 24px;">
-                    <h4 style="color: #10b981; font-size: 1.1rem; margin-bottom: 8px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                    <h4 style="color: #34d399; font-size: 1.1rem; margin-bottom: 8px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
                       <span>🎉</span> Congratulations!
                     </h4>
-                    <p style="color: #065f46; font-size: 0.95rem; line-height: 1.5; margin: 0;">Your sticker pack has been successfully created and uploaded to Telegram after retry attempts.</p>
+                    <p style="color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5; margin: 0;">Your sticker pack has been successfully created and uploaded to Telegram after retry attempts.</p>
                   </div>
                   
                   <div class="link-section" style="background: rgba(16, 185, 129, 0.08); padding: 20px; border-radius: 8px; border: 1px solid rgba(16, 185, 129, 0.2); margin-bottom: 24px;">
-                    <label class="link-label" style="display: block; color: #065f46; font-weight: 600; margin-bottom: 12px; font-size: 0.9rem;">Share this link with others:</label>
+                    <label class="link-label" style="display: block; color: var(--text-secondary); font-weight: 600; margin-bottom: 12px; font-size: 0.9rem;">Share this link with others:</label>
                     <div class="link-display-enhanced" style="display: flex; gap: 10px; align-items: stretch;">
-                      <div class="link-input-wrapper" style="flex: 1; position: relative; display: flex; align-items: center; background: white; border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 6px; padding: 0 12px;">
-                        <i class="fas fa-link link-icon" style="color: #10b981; margin-right: 8px; font-size: 0.85rem;"></i>
-                        <input type="text" id="shareable-link" class="form-control link-input" readonly style="background: transparent; border: none; color: #065f46; font-size: 0.85rem; font-family: 'Courier New', monospace; font-weight: 500; flex: 1; padding: 10px 0; outline: none;">
+                      <div class="link-input-wrapper" style="flex: 1; position: relative; display: flex; align-items: center; background: rgba(31,41,55,0.9); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 6px; padding: 0 12px;">
+                        <i class="fas fa-link link-icon" style="color: #34d399; margin-right: 8px; font-size: 0.85rem;"></i>
+                        <input type="text" id="shareable-link" class="form-control link-input" readonly style="background: transparent; border: none; color: var(--text-primary); font-size: 0.85rem; font-family: 'Courier New', monospace; font-weight: 500; flex: 1; padding: 10px 0; outline: none;">
                       </div>
-                      <button class="btn btn-copy" id="copy-link-btn" style="background: #10b981; color: white; border: none; padding: 10px 16px; border-radius: 6px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: background-color 0.2s; display: flex; align-items: center; gap: 6px;" onmouseover="this.style.backgroundColor='#059669'" onmouseout="this.style.backgroundColor='#10b981'">
+                      <button class="btn btn-copy" id="copy-link-btn" style="background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; padding: 10px 16px; border-radius: 6px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: background-color 0.2s; display: flex; align-items: center; gap: 6px;" onmouseover="this.style.backgroundColor='#047857'" onmouseout="this.style.backgroundColor=''">
                         <i class="fas fa-copy"></i>
                         <span>Copy</span>
                       </button>
@@ -1427,11 +1428,11 @@ class TelegramUtilities {
                 </div>
                 
                 <div class="success-actions" style="display: flex; flex-direction: column; gap: 10px;">
-                  <button class="btn btn-primary btn-large" id="open-telegram-btn" style="background: #0ea5e9; color: white; border: none; padding: 12px 20px; border-radius: 6px; font-weight: 600; font-size: 0.95rem; cursor: pointer; transition: background-color 0.2s; display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;" onmouseover="this.style.backgroundColor='#0284c7'" onmouseout="this.style.backgroundColor='#0ea5e9'">
+                  <button class="btn btn-primary btn-large" id="open-telegram-btn" style="background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; padding: 12px 20px; border-radius: 6px; font-weight: 600; font-size: 0.95rem; cursor: pointer; transition: background-color 0.2s; display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;" onmouseover="this.style.backgroundColor='#047857'" onmouseout="this.style.backgroundColor=''">
                     <i class="fab fa-telegram" style="font-size: 1.1rem;"></i>
                     <span>Open in Telegram</span>
                   </button>
-                  <button class="btn btn-secondary btn-large" id="create-another-btn" style="background: #6b7280; color: white; border: none; padding: 12px 20px; border-radius: 6px; font-weight: 600; font-size: 0.95rem; cursor: pointer; transition: background-color 0.2s; display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;" onmouseover="this.style.backgroundColor='#4b5563'" onmouseout="this.style.backgroundColor='#6b7280'">
+                  <button class="btn btn-secondary btn-large" id="create-another-btn" style="background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); padding: 12px 20px; border-radius: 6px; font-weight: 600; font-size: 0.95rem; cursor: pointer; transition: background-color 0.2s; display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;" onmouseover="this.style.backgroundColor='var(--bg-input)'" onmouseout="this.style.backgroundColor='var(--bg-tertiary)'">
                     <i class="fas fa-plus" style="font-size: 1rem;"></i>
                     <span>Create Another Pack</span>
                   </button>
@@ -2306,6 +2307,29 @@ class TelegramUtilities {
       statusElement.textContent = 'Ready';
     }
     
+    // Reset virtual list container completely
+    const container = document.getElementById("video-file-list");
+    if (container) {
+      // Remove scroll event listeners
+      if (container._virtualScrollHandler) {
+        container.removeEventListener('scroll', container._virtualScrollHandler);
+        container._virtualScrollHandler = null;
+      }
+      if (container._scrollTimeout) {
+        clearTimeout(container._scrollTimeout);
+        container._scrollTimeout = null;
+      }
+      
+      // Reset container styles
+      container.style.height = '';
+      container.style.overflowY = '';
+      container.style.overflowX = '';
+      container.style.position = '';
+      
+      // Clear all content
+      container.innerHTML = '';
+    }
+    
     this.updateVideoFileList();
     this.showToast("info", "Cleared", `Removed ${count} video files`);
   }
@@ -2360,7 +2384,7 @@ class TelegramUtilities {
     }
     
     // Use virtualized list for better performance with large datasets
-    if (this.videoFiles.length > 100) {
+    if (this.videoFiles.length > 50) {
       // Use virtualized rendering for large lists
       window.updateVirtualList(
         container,
@@ -2368,8 +2392,10 @@ class TelegramUtilities {
         (file, index) => this.createVideoFileElement(file, index),
         (file, index) => index,
         {
-          itemHeight: 70, // Approximate height of each item
-          bufferSize: 10   // Number of items to render outside viewport
+          itemHeight: 100, // Increased height for better spacing
+          bufferSize: 15,   // Increased buffer for smoother scrolling
+          scrollTop: container.scrollTop || 0,
+          containerHeight: container.clientHeight || 300
         }
       );
     } else {
@@ -5091,7 +5117,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     this.addStatusItem(`🔍 Validating ${this.mediaFiles.length} media files...`, "info");
     
     try {
-      const processId = "sticker_" + Date.now();
+      // Sanitize process id for safe server-side handling
+      const processId = ("sticker_" + Date.now()).replace(/[^a-zA-Z0-9_-]/g, "_");
       console.log(`🔧 [FRONTEND] Creating sticker pack with process ID: ${processId}`);
       
       // Get auto-skip setting
@@ -5112,15 +5139,21 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       
       this.showLoadingOverlay("Starting sticker pack creation...");
       
+      // Build a minimal, backend-friendly payload
+      const filteredMedia = this.mediaFiles
+        .filter((f) => (stickerType === "video" ? f.type === "video" : f.type === "image"))
+        .map((f) => ({
+          file_path: String(f.file_path || ""),
+          emoji: typeof f.emoji === "string" ? f.emoji : this.defaultEmoji,
+          type: f.type === "video" ? "video" : "image",
+        }))
+        .filter((m) => m.file_path && /^[^\0]+$/.test(m.file_path));
+
       const requestData = {
         pack_name: packName,
         pack_url_name: packUrlName,
         sticker_type: stickerType,
-        media_files: this.mediaFiles.filter((f) => {
-          if (stickerType === "video") return f.type === "video";
-          if (stickerType === "image") return f.type === "image";
-          return true;
-        }),
+        media_files: filteredMedia,
         process_id: processId,
         auto_skip_icon: autoSkipIcon,
       };
@@ -5254,7 +5287,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           this.updateStickerProgressDisplay(progress);
           
           // PRIORITY CHECK 1: Check URL_NAME_TAKEN first to prevent race condition with completed status
-          if (progress.url_name_taken && progress.waiting_for_user) {
+          if (progress.url_name_taken && progress.waiting_for_user && !this.urlPromptHandledProcesses.has(processId)) {
             // URL name is taken, show retry modal (PRIORITY OVER COMPLETED STATUS)
             console.log(`🔧 [FRONTEND] URL name taken detected, showing retry modal (priority check)`);
             this.stopStickerProgressMonitoring();
@@ -5278,7 +5311,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           }
           
           // PRIORITY CHECK 2: Check for icon selection (before completed status)
-          if (progress.waiting_for_user && (progress.icon_request_message || progress.icon_request)) {
+          if (progress.waiting_for_user && (progress.icon_request_message || progress.icon_request) && !this.iconHandledProcesses.has(processId)) {
             console.log(`🔧 [FRONTEND] Icon selection required (priority check)`);
             console.log(`🔧 [FRONTEND] Progress data:`, progress);
             
@@ -5348,9 +5381,43 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
               console.log(`🔧 [FRONTEND] Icon request message: ${progress.icon_request_message}`);
               
               this.stopStickerProgressMonitoring(); // Stop monitoring - user controls when to continue
-              this.showIconModal(processId, progress.icon_request_message);
               
+              // If Telegram is already asking for short name, bypass icon modal and proceed to URL
+              const urlPrompt = (progress.icon_request_message && /short name|create a link|addstickers/i.test(progress.icon_request_message))
+                                || progress.waiting_for_url_name
+                                || false;
+              if (urlPrompt) {
+                try { this.hideIconModal(); } catch {}
+                const urlInput = document.getElementById("pack-url-name");
+                const urlName = (urlInput && typeof urlInput.value === 'string') ? urlInput.value.trim() : '';
+                if (urlName) {
+                  try {
+                    const submitRes = await this.apiRequest("POST", "/api/sticker/submit-url-name", {
+                      process_id: processId,
+                      new_url_name: urlName,
+                      current_attempt: 1,
+                      max_attempts: 3
+                    });
+                    if (submitRes && submitRes.success) {
+                      this.urlPromptHandledProcesses.add(processId);
+                      this.startStickerProgressMonitoring(processId);
+                      return;
+                    } else if (submitRes && submitRes.url_name_taken) {
+                      this.urlPromptHandledProcesses.add(processId);
+                      this.showUrlNameModal(processId, urlName, (submitRes.attempt || 1), (submitRes.max_attempts || 3));
+                      return;
+                    }
+                  } catch {}
+                }
+                // Fallback: show URL modal to collect the name
+                this.urlPromptHandledProcesses.add(processId);
+                this.showUrlNameModal(processId, progress.pack_url_name || "retry", 1, 3);
+                return;
+              }
+              
+              this.showIconModal(processId, progress.icon_request_message);
               console.log(`🔧 [FRONTEND] showIconModal called successfully, monitoring stopped`);
+              this.iconHandledProcesses.add(processId);
             }
             return; // CRITICAL: Exit early after handling icon selection
           }
@@ -5838,6 +5905,16 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     
     this.currentIconProcessId = processId;
     this.currentIconRequestMessage = iconRequestMessage;
+    this.selectedIconFile = null;
+    // Reset UI state for icon modal
+    const fileInfo = document.getElementById("icon-file-info");
+    const fileName = document.getElementById("icon-file-name");
+    const confirmBtn = document.getElementById("confirm-icon-upload");
+    const changeBtn = document.getElementById("change-icon-file");
+    if (fileInfo) fileInfo.style.display = "none";
+    if (fileName) fileName.textContent = "No file selected";
+    if (confirmBtn) confirmBtn.disabled = true;
+    if (changeBtn) changeBtn.style.display = "none"; // Change is not an option here
     
     // Performance optimization: batch DOM updates
     requestAnimationFrame(() => {
@@ -6257,7 +6334,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       overlay.classList.remove("active");
     }
     
-    this.currentIconProcessId = null;
+    // Preserve currentIconProcessId to allow progress monitoring to continue
+    // Only clear transient UI selection state
     this.currentIconRequestMessage = null;
     this.selectedIconFile = null;
   }
@@ -6273,26 +6351,30 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
 
   async selectIconFile() {
     try {
-      const result = await window.electronAPI.selectFile({
-        title: "Select Icon File",
+      // Use selectFiles which returns an array of file paths
+      const paths = await window.electronAPI.selectFiles({
         filters: [
           { name: "WEBM Files", extensions: ["webm"] },
           { name: "All Files", extensions: ["*"] }
         ]
       });
       
-      if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
-        const filePath = result.filePaths[0];
+      if (Array.isArray(paths) && paths.length > 0) {
+        const filePath = paths[0];
         const fileName = filePath.split(/[\\/]/).pop();
         
         this.selectedIconFile = filePath;
         
-        // Show file info
+        // Show file info and enable confirm
         const fileInfo = document.getElementById("icon-file-info");
         const fileNameElement = document.getElementById("icon-file-name");
+        const confirmBtn = document.getElementById("confirm-icon-upload");
+        const changeBtn = document.getElementById("change-icon-file");
         
         if (fileInfo) fileInfo.style.display = "block";
         if (fileNameElement) fileNameElement.textContent = fileName;
+        if (confirmBtn) confirmBtn.disabled = false;
+        if (changeBtn) changeBtn.style.display = "none"; // hide change file option permanently per requirements
         
         this.addStatusItem(`Selected icon file: ${fileName}`, "info");
       }
@@ -6407,6 +6489,13 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     
     try {
       this.addStatusItem("Uploading icon file...", "info");
+      const confirmBtn = document.getElementById("confirm-icon-upload");
+      const changeBtn = document.getElementById("change-icon-file");
+      if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+      }
+      if (changeBtn) changeBtn.style.display = "none";
       
       const response = await this.apiRequest("POST", "/api/sticker/upload-icon", {
         process_id: this.currentIconProcessId,
@@ -6415,15 +6504,74 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       
       if (response.success) {
         this.addStatusItem("Icon file uploaded successfully", "completed");
-        this.hideIconModal();
-        // Restart monitoring to continue with the process
+        if (confirmBtn) {
+          confirmBtn.disabled = true;
+          confirmBtn.innerHTML = '<i class="fas fa-check"></i> Uploaded';
+        }
+        // Mark icon handled for this process to avoid duplicate icon flow in polling
+        this.iconHandledProcesses.add(this.currentIconProcessId);
+        // Attempt to auto-submit URL name immediately if the bot is asking for it
+        try {
+          const urlInput = document.getElementById("pack-url-name");
+          const urlName = (urlInput && typeof urlInput.value === 'string') ? urlInput.value.trim() : '';
+          if (urlName) {
+            const submitRes = await this.apiRequest("POST", "/api/sticker/submit-url-name", {
+              process_id: this.currentIconProcessId,
+              new_url_name: urlName,
+              current_attempt: 1,
+              max_attempts: 3
+            });
+
+            if (submitRes && submitRes.success) {
+              // Close modal then continue monitoring
+              setTimeout(() => this.hideIconModal(), 200);
+              this.startStickerProgressMonitoring(this.currentIconProcessId);
+              return;
+            } else if (submitRes && submitRes.url_name_taken) {
+              // Close modal and show retry modal
+              setTimeout(() => this.hideIconModal(), 200);
+              this.showUrlNameModal(this.currentIconProcessId, urlName, (submitRes.attempt || 1), (submitRes.max_attempts || 3));
+              return;
+            }
+          }
+        } catch (e) {
+          // Safe to ignore; we will fall back to monitoring
+        }
+        // Fallback: close modal and continue monitoring
+        setTimeout(() => this.hideIconModal(), 200);
         this.startStickerProgressMonitoring(this.currentIconProcessId);
       } else {
-        this.addStatusItem(`Error uploading icon: ${response.error}`, "error");
+        // Detect Telegram size error and mark as manual continuation allowed
+        const errorText = String(response.error || '').toLowerCase();
+        if (errorText.includes('too big') || errorText.includes('maximum file size')) {
+          this.addStatusItem("Icon rejected: file too big (max 32 KB). You can continue manually in Telegram.", "warning");
+          this.showToast("warning", "Icon Too Big", "Telegram rejected the icon. Continue manually in @Stickers.");
+          setTimeout(() => this.hideIconModal(), 200);
+          this.stopStickerProgressMonitoring();
+          this.onStickerProcessCompleted(true, {
+            manual_completion_required: true,
+            message: "Icon rejected due to size. Continue manually in Telegram."
+          });
+          return;
+        }
+        // Surface common readiness error clearly
+        const friendly = response.error && response.error.includes('not waiting for user')
+          ? 'Icon step not ready yet. Please wait for the bot to request the icon and try again.'
+          : response.error;
+        this.addStatusItem(`Error uploading icon: ${friendly}`, "error");
+        if (confirmBtn) {
+          confirmBtn.disabled = false;
+          confirmBtn.innerHTML = '<i class="fas fa-check"></i> Upload This File';
+        }
       }
     } catch (error) {
       console.error("Error uploading icon:", error);
       this.addStatusItem(`Error uploading icon: ${error.message}`, "error");
+      const confirmBtn = document.getElementById("confirm-icon-upload");
+      if (confirmBtn) {
+        confirmBtn.disabled = false;
+        confirmBtn.innerHTML = '<i class="fas fa-check"></i> Upload This File';
+      }
     }
   }
 

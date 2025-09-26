@@ -9,6 +9,11 @@ const axios = require("axios");
 console.log("Using stable software rendering mode");
 app.disableHardwareAcceleration();
 
+// Minimize Chromium/Electron console noise and warnings in production/dev
+process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true';
+app.commandLine.appendSwitch('log-level', '3'); // 0=VERBOSE .. 3=WARNING
+app.commandLine.appendSwitch('disable-logging');
+
 // Apply stability-focused command line switches
 app.commandLine.appendSwitch("disable-gpu");
 app.commandLine.appendSwitch("disable-gpu-compositing");

@@ -74,66 +74,125 @@ class ComponentOptimizer {
   // Virtual DOM-like diff for lists with virtualization
   updateVirtualList(container, newItems, renderItem, keyFn = (item, index) => index, options = {}) {
     const {
-      itemHeight = 60, // Approximate height of each item
-      bufferSize = 5,   // Number of items to render outside viewport
+      itemHeight = 100, // Increased default height for media items
+      bufferSize = 10,   // Buffer for smoother scrolling
       scrollTop = container.scrollTop || 0,
       containerHeight = container.clientHeight || 300
     } = options;
+
+    // Prepare container for virtual scrolling
+    container.style.overflowY = 'auto';
+    container.style.overflowX = 'hidden';
+
+    // Auto-measure item height if requested or not yet measured
+    if (options.autoMeasure || (!container._virtualItemHeight && newItems && newItems.length > 0)) {
+      try {
+        const probeWrapper = document.createElement('div');
+        probeWrapper.style.position = 'absolute';
+        probeWrapper.style.visibility = 'hidden';
+        probeWrapper.style.pointerEvents = 'none';
+        probeWrapper.style.left = '-99999px';
+        probeWrapper.style.top = '0';
+        probeWrapper.style.width = `${Math.max(container.clientWidth, 300)}px`;
+
+        const probeContent = document.createElement('div');
+        const probeRendered = renderItem(newItems[0], 0);
+        if (probeRendered instanceof Node) {
+          probeContent.appendChild(probeRendered.cloneNode(true));
+        } else {
+          probeContent.innerHTML = String(probeRendered);
+        }
+        probeWrapper.appendChild(probeContent);
+        document.body.appendChild(probeWrapper);
+        const measured = Math.max(1, probeWrapper.offsetHeight || probeContent.offsetHeight || itemHeight);
+        document.body.removeChild(probeWrapper);
+        container._virtualItemHeight = measured;
+      } catch (e) {
+        container._virtualItemHeight = itemHeight;
+      }
+    }
+
+    const effectiveItemHeight = Math.max(1, container._virtualItemHeight || itemHeight);
+
+    // Ensure a single inner spacer element to position absolutely placed children
+    let spacer = container._virtualSpacer;
+    if (!spacer) {
+      spacer = document.createElement('div');
+      spacer.style.position = 'relative';
+      spacer.style.width = '100%';
+      spacer.className = 'virtual-spacer';
+      container._virtualSpacer = spacer;
+      // Clear container and mount spacer once
+      while (container.firstChild) container.removeChild(container.firstChild);
+      container.appendChild(spacer);
+    }
+
+    // Calculate total height on spacer (not on container)
+    const totalHeight = newItems.length * effectiveItemHeight;
+    spacer.style.height = `${totalHeight}px`;
     
-    // Calculate visible range
-    const startIndex = Math.max(0, Math.floor(scrollTop / itemHeight) - bufferSize);
+    // Calculate visible range with proper bounds checking
+    const startIndex = Math.max(0, Math.floor(scrollTop / effectiveItemHeight) - bufferSize);
     const endIndex = Math.min(
       newItems.length - 1,
-      Math.floor((scrollTop + containerHeight) / itemHeight) + bufferSize
+      Math.floor((scrollTop + containerHeight) / effectiveItemHeight) + bufferSize
     );
     
-    // Create visible items
+    // Clear existing visible children of spacer
+    while (spacer.firstChild) spacer.removeChild(spacer.firstChild);
+    
+    // Create visible items with proper spacing
     const visibleItems = [];
     for (let i = startIndex; i <= endIndex; i++) {
       if (newItems[i]) {
         visibleItems.push({
           index: i,
           item: newItems[i],
-          top: i * itemHeight
+          top: i * effectiveItemHeight
         });
       }
     }
     
-    // Update container height to maintain scrollbar
-    container.style.height = `${newItems.length * itemHeight}px`;
-    
-    // Create or update visible elements
-    const fragment = document.createDocumentFragment();
-    const existingElements = Array.from(container.children);
-    
+    // Create visible elements with proper positioning
     visibleItems.forEach(({ index, item, top }) => {
-      const key = keyFn(item, index);
-      let element = existingElements.find(el => el.dataset.key === key);
-      
-      if (!element) {
-        element = document.createElement('div');
-        element.dataset.key = key;
-        element.style.position = 'absolute';
-        element.style.width = '100%';
-        element.style.left = '0';
-      }
-      
+      const element = document.createElement('div');
+      element.dataset.key = keyFn(item, index);
+      element.dataset.index = index;
+      element.style.position = 'absolute';
       element.style.top = `${top}px`;
-      element.innerHTML = renderItem(item, index);
-      fragment.appendChild(element);
-    });
-    
-    // Remove elements that are no longer visible
-    existingElements.forEach(el => {
-      const key = el.dataset.key;
-      const isVisible = visibleItems.some(item => keyFn(item.item, item.index) === key);
-      if (!isVisible) {
-        el.remove();
+      element.style.left = '0';
+      element.style.width = '100%';
+      element.style.height = `${effectiveItemHeight}px`;
+      element.style.boxSizing = 'border-box';
+      element.style.zIndex = '1';
+      
+      // Support both HTML strings and real DOM nodes from renderItem
+      const rendered = renderItem(item, index);
+      if (rendered instanceof Node) {
+        element.appendChild(rendered);
+      } else {
+        element.innerHTML = String(rendered);
       }
+      
+      spacer.appendChild(element);
     });
     
-    // Append new elements
-    container.appendChild(fragment);
+    // Add scroll event listener for virtualization
+    if (!container._virtualScrollHandler) {
+      container._virtualScrollHandler = () => {
+        if (container._scrollTimeout) {
+          clearTimeout(container._scrollTimeout);
+        }
+        container._scrollTimeout = setTimeout(() => {
+          this.updateVirtualList(container, newItems, renderItem, keyFn, {
+            ...options,
+            scrollTop: container.scrollTop,
+            containerHeight: container.clientHeight
+          });
+        }, 16); // 60fps
+      };
+      container.addEventListener('scroll', container._virtualScrollHandler);
+    }
   }
 
   // Virtual DOM-like diff for lists (existing implementation)

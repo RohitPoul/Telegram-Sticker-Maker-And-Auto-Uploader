@@ -682,15 +682,23 @@ class StickerBotCore:
                     self.logger.error(f"[STICKER] Failed to restart conversation manager: {e}")
                     raise RuntimeError("Failed to start conversation manager")
 
-            # Convert to MediaItem objects
+            # Convert to MediaItem objects with path normalization
             media_items = []
             for media_file in media_files:
-                media_item = MediaItem(
-                    media_file['file_path'],
-                    sticker_type,
-                    media_file.get('emoji', '😀')
-                )
-                media_items.append(media_item)
+                try:
+                    raw_path = str(media_file['file_path']).strip().strip('\"\'')
+                    norm_path = os.path.normpath(raw_path)
+                    # Telethon expects a path-like; ensure absolute
+                    if not os.path.isabs(norm_path):
+                        norm_path = os.path.abspath(norm_path)
+                    media_item = MediaItem(
+                        norm_path,
+                        sticker_type,
+                        media_file.get('emoji', '😀')
+                    )
+                    media_items.append(media_item)
+                except Exception as e:
+                    self.logger.error(f"[STICKER] Skipping invalid media path '{media_file.get('file_path')}': {e}")
 
             self.logger.info(f"[STICKER] Created {len(media_items)} media items for process {process_id}")
 
@@ -1769,6 +1777,63 @@ def register_sticker_routes(app):
             if not media_files:
                 return jsonify({"success": False, "error": "No media files provided"}), 400
 
+            # Windows-safe media validation and path sanitization
+            sanitized_media_files = []
+            invalid_reasons = []
+            for idx, mf in enumerate(media_files):
+                try:
+                    raw_path = str(mf.get('file_path', '')).strip().strip('\"\'')
+                    if not raw_path:
+                        invalid_reasons.append(f"Item {idx+1}: empty path")
+                        continue
+                    # Normalize Windows paths safely
+                    norm_path = os.path.normpath(raw_path)
+                    # Disallow NUL and control chars
+                    if '\\x00' in norm_path or '\0' in norm_path:
+                        invalid_reasons.append(f"{norm_path}: contains NUL byte")
+                        continue
+                    # Guard against excessively long paths
+                    if len(norm_path) > 240:
+                        invalid_reasons.append(f"{norm_path}: path too long")
+                        continue
+                    if not os.path.isabs(norm_path):
+                        # If relative, attempt to make absolute based on current working dir
+                        norm_path = os.path.abspath(norm_path)
+                    if not os.path.exists(norm_path):
+                        invalid_reasons.append(f"{norm_path}: file not found")
+                        continue
+                    sanitized_media_files.append({
+                        'file_path': norm_path,
+                        'emoji': mf.get('emoji', '😀'),
+                        'type': mf.get('type', 'video')
+                    })
+                except Exception as ve:
+                    invalid_reasons.append(f"Item {idx+1}: {str(ve)}")
+
+            if not sanitized_media_files:
+                return jsonify({
+                    "success": False,
+                    "error": "No valid media files after validation",
+                    "details": invalid_reasons[:5]
+                }), 400
+
+            # Proactively detect OS-level invalid argument by attempting safe open/close
+            try:
+                for test_item in sanitized_media_files[:10]:  # limit to first 10 for speed
+                    try:
+                        with open(test_item['file_path'], 'rb') as _f:
+                            pass
+                    except OSError as oe:
+                        if getattr(oe, 'errno', None) == 22 or 'Invalid argument' in str(oe):
+                            return jsonify({
+                                "success": False,
+                                "error": f"Invalid path argument: {test_item['file_path']}",
+                                "code": 22
+                            }), 400
+            except Exception:
+                # Non-fatal; continue if generic error occurs here
+                pass
+
             # Start background worker if not already running
             start_sticker_pack_worker()
 
@@ -1777,7 +1842,7 @@ def register_sticker_routes(app):
                 "status": "queued",
                 "current_stage": "Waiting in queue...",
                 "progress": 0,
-                "total_files": len(media_files),
+                "total_files": len(sanitized_media_files),
                 "completed_files": 0,
                 "start_time": time.time(),
                 "type": "sticker_pack",
@@ -1818,7 +1883,8 @@ def register_sticker_routes(app):
 
             # Add task to queue
             print(f"🔧 [DEBUG] Adding task to queue: {process_id}")
-            sticker_pack_queue.put((pack_name, sticker_type, media_files, process_id))
+            # Put sanitized media into the queue to avoid OS path errors later
+            sticker_pack_queue.put((pack_name, sticker_type, sanitized_media_files, process_id))
             print(f"🔧 [DEBUG] Task added to queue successfully")
             
             # Verify process still exists after queue operation

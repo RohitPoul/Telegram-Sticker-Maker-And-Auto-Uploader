@@ -131,9 +131,8 @@ class StickerBotManager {
         return;
       }
       
-      const result = await window.electronAPI.showOpenDialog({
-        title: `Select ${this.selectedMediaType === "image" ? "Image" : "Video"} Files`,
-        properties: ["openFile", "multiSelections"],
+      // Use selectFiles which returns an array of file paths
+      const selectedPaths = await window.electronAPI.selectFiles({
         filters: [
           {
             name: `${this.selectedMediaType === "image" ? "Image" : "Video"} Files`,
@@ -142,14 +141,14 @@ class StickerBotManager {
         ],
       });
       
-      if (result.canceled || result.filePaths.length === 0) {
+      if (!Array.isArray(selectedPaths) || selectedPaths.length === 0) {
         return;
       }
       
       let addedCount = 0;
       const maxFiles = 120 - this.mediaFiles.length;
       
-      for (const filePath of result.filePaths.slice(0, maxFiles)) {
+      for (const filePath of selectedPaths.slice(0, maxFiles)) {
         if (!this.mediaFiles.some(f => f.file_path === filePath)) {
           this.mediaFiles.push({
             file_path: filePath,
@@ -167,8 +166,8 @@ class StickerBotManager {
         this.updatePackActions();
         
         let message = `Added ${addedCount} ${this.selectedMediaType} file${addedCount !== 1 ? "s" : ""}`;
-        if (result.filePaths.length > maxFiles) {
-          message += ` (${result.filePaths.length - maxFiles} files skipped due to 120 file limit)`;
+        if (selectedPaths.length > maxFiles) {
+          message += ` (${selectedPaths.length - maxFiles} files skipped due to 120 file limit)`;
         }
         
         window.uiManager?.showToast("success", "Files Added", message);
@@ -190,6 +189,29 @@ class StickerBotManager {
     
     const count = this.mediaFiles.length;
     this.mediaFiles = [];
+    
+    // Reset virtual list container completely
+    const container = document.getElementById("sticker-media-list");
+    if (container) {
+      // Remove scroll event listeners
+      if (container._virtualScrollHandler) {
+        container.removeEventListener('scroll', container._virtualScrollHandler);
+        container._virtualScrollHandler = null;
+      }
+      if (container._scrollTimeout) {
+        clearTimeout(container._scrollTimeout);
+        container._scrollTimeout = null;
+      }
+      
+      // Reset container styles
+      container.style.height = '';
+      container.style.overflowY = '';
+      container.style.overflowX = '';
+      container.style.position = '';
+      
+      // Clear all content
+      container.innerHTML = '';
+    }
     
     this.updateMediaFileList();
     this.updatePackActions();
@@ -220,7 +242,7 @@ class StickerBotManager {
     }
     
     // Use virtualized list for better performance with large datasets
-    if (this.mediaFiles.length > 100) {
+    if (this.mediaFiles.length > 50) {
       // For very large lists, we'll implement a simplified virtualized approach
       this.updateMediaFileListVirtual(container);
     } else {
@@ -233,40 +255,25 @@ class StickerBotManager {
 
   // Virtualized rendering for large media file lists
   updateMediaFileListVirtual(container) {
-    // Create a simplified virtualized list that only renders visible items
-    const itemHeight = 60; // Approximate height
-    const containerHeight = container.clientHeight || 300;
-    const scrollTop = container.scrollTop || 0;
-    
-    // Calculate visible range
-    const startIndex = Math.max(0, Math.floor(scrollTop / itemHeight) - 5);
-    const endIndex = Math.min(
-      this.mediaFiles.length - 1,
-      Math.floor((scrollTop + containerHeight) / itemHeight) + 5
-    );
-    
-    // Create visible items
-    let html = '';
-    for (let i = startIndex; i <= endIndex; i++) {
-      if (this.mediaFiles[i]) {
-        html += this.createMediaFileItem(this.mediaFiles[i], i);
-      }
-    }
-    
-    container.innerHTML = html;
-    
-    // Add scroll event listener for virtualization
-    if (!container._virtualScrollHandler) {
-      container._virtualScrollHandler = () => {
-        // Debounce the update to prevent excessive re-rendering
-        if (container._scrollTimeout) {
-          clearTimeout(container._scrollTimeout);
+    // Use the same virtual list implementation as video files
+    if (window.updateVirtualList) {
+      window.updateVirtualList(
+        container,
+        this.mediaFiles,
+        (file, index) => this.createMediaFileItem(file, index),
+        (file, index) => index,
+        {
+          itemHeight: 100, // Increased height for media items with emoji input
+          bufferSize: 15,   // Increased buffer for smoother scrolling
+          scrollTop: container.scrollTop || 0,
+          containerHeight: container.clientHeight || 300
         }
-        container._scrollTimeout = setTimeout(() => {
-          this.updateMediaFileListVirtual(container);
-        }, 50);
-      };
-      container.addEventListener('scroll', container._virtualScrollHandler);
+      );
+    } else {
+      // Fallback to simple rendering if virtual list not available
+      container.innerHTML = this.mediaFiles
+        .map((file, index) => this.createMediaFileItem(file, index))
+        .join("");
     }
   }
 
@@ -274,9 +281,10 @@ class StickerBotManager {
     const typeIcon = file.type === "image" ? "fas fa-image" : "fas fa-video";
     const fileName = file.name;
     
+
     return `
-      <div class="media-file-item" data-index="${index}">
-        <div class="media-preview">
+      <div class="media-item" data-index="${index}">
+        <div class="media-icon">
           <i class="${typeIcon}"></i>
         </div>
         <div class="media-info">
