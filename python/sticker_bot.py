@@ -2345,10 +2345,23 @@ def register_sticker_routes(app):
             # Send icon file using the conversation manager
             async def send_icon_file():
                 try:
+                    # IMPORTANT: After a successful icon upload, the bot asks for the short name
+                    # e.g. "Please provide a short name for your set. I'll use it to create a link..."
+                    # So we should wait for URL_NAME_REQUEST, not ICON_ACCEPTED
                     response = await sticker_bot.conversation_manager.send_file_and_wait(
-                        icon_file_path, BotResponseType.ICON_ACCEPTED, timeout=60.0
+                        icon_file_path, BotResponseType.URL_NAME_REQUEST, timeout=60.0
                     )
-                    return {"success": True, "message": "Icon file uploaded successfully"}
+                    # Update process to reflect we're now waiting for URL name
+                    with process_lock:
+                        if process_id in active_processes:
+                            active_processes[process_id]["current_stage"] = "Waiting for URL name..."
+                            active_processes[process_id]["waiting_for_user"] = True
+                            active_processes[process_id]["waiting_for_url_name"] = True
+                            # Nudge progress forward but not complete
+                            active_processes[process_id]["progress"] = max(
+                                active_processes[process_id].get("progress", 85), 90
+                            )
+                    return {"success": True, "message": "Icon uploaded; awaiting URL name"}
                 except Exception as e:
                     return {"success": False, "error": str(e)}
             
