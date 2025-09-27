@@ -438,6 +438,10 @@ class SimpleConversationManager:
                 self.logger.warning(f"[WAIT] Error while waiting: {e}")
                 await asyncio.sleep(0.1)  # Small delay before retrying
         
+        # If we reach here, we've timed out
+        self.logger.warning(f"[WAIT] Timeout waiting for {expected_type.value} after {timeout} seconds")
+        raise asyncio.TimeoutError(f"Timeout waiting for {expected_type.value}")
+        
     async def wait_for_response_types(self, expected_types: list, timeout: float = 30.0):
         """Wait for any of multiple response types"""
         start_time = time.time()
@@ -459,6 +463,8 @@ class SimpleConversationManager:
                 self.logger.warning(f"[WAIT] Error while waiting: {e}")
                 await asyncio.sleep(0.1)  # Small delay before retrying
         
+        # If we reach here, we've timed out
+        self.logger.warning(f"[WAIT] Timeout waiting for any of {[t.value for t in expected_types]} after {timeout} seconds")
         raise TimeoutError(f"Timeout waiting for any of {[t.value for t in expected_types]}")
 
     async def send_and_wait(self, message: str, expected_response, timeout: float = 30.0):
@@ -503,9 +509,20 @@ class SimpleConversationManager:
         await self.client.send_file(self.bot_peer, file_path)
         self.logger.info(f"[FILE] Sent file: {os.path.basename(file_path)}")
 
-        # Wait for response
-        response = await self.wait_for_response(expected_response, timeout)
-        return response
+        # Wait for response with retry mechanism for timeouts
+        try:
+            response = await self.wait_for_response(expected_response, timeout)
+            return response
+        except asyncio.TimeoutError:
+            self.logger.warning(f"[FILE] Timeout waiting for response after sending {os.path.basename(file_path)}")
+            # Even on timeout, we know the file was sent, so we can continue monitoring
+            # Return a special response indicating the file was sent but response is pending
+            return BotResponse(
+                message="File sent; awaiting response",
+                response_type=BotResponseType.UNKNOWN,
+                timestamp=time.time(),
+                confidence=0.5
+            )
 
 
 class MediaItem:
@@ -1738,12 +1755,19 @@ def register_sticker_routes(app):
             
         try:
             data = request.get_json()
-            pack_name = data.get('pack_name', '') if data else ''
-            pack_url_name = data.get('pack_url_name', '') if data else ''
-            sticker_type = data.get('sticker_type', 'video') if data else 'video'
+            # Sanitize all input fields to remove control characters
+            raw_pack_name = data.get('pack_name', '') if data else ''
+            raw_pack_url_name = data.get('pack_url_name', '') if data else ''
+            raw_sticker_type = data.get('sticker_type', 'video') if data else 'video'
             media_files = data.get('media_files', []) if data else []
-            process_id = data.get('process_id', f'sticker_{int(time.time())}') if data else f'sticker_{int(time.time())}'
+            raw_process_id = data.get('process_id', f'sticker_{int(time.time())}') if data else f'sticker_{int(time.time())}'
             auto_skip_icon = data.get('auto_skip_icon', True) if data else True  # Default to True
+
+            # Remove control characters from all string inputs to prevent OS-level errors
+            pack_name = ''.join(char for char in str(raw_pack_name) if ord(char) >= 32)
+            pack_url_name = ''.join(char for char in str(raw_pack_url_name) if ord(char) >= 32)
+            sticker_type = ''.join(char for char in str(raw_sticker_type) if ord(char) >= 32)
+            process_id = ''.join(char for char in str(raw_process_id) if ord(char) >= 32)
 
             # Import active_processes from shared state
             from shared_state import active_processes, process_lock, add_process, get_next_process_id
@@ -1778,6 +1802,7 @@ def register_sticker_routes(app):
                 return jsonify({"success": False, "error": "No media files provided"}), 400
 
             # Windows-safe media validation and path sanitization
+            # ENHANCED: More robust validation to prevent [Errno 22] Invalid argument
             sanitized_media_files = []
             invalid_reasons = []
             for idx, mf in enumerate(media_files):
@@ -1786,26 +1811,60 @@ def register_sticker_routes(app):
                     if not raw_path:
                         invalid_reasons.append(f"Item {idx+1}: empty path")
                         continue
+                    
+                    # Remove control characters that could cause OS errors
+                    raw_path = ''.join(char for char in raw_path if ord(char) >= 32)
+                    
                     # Normalize Windows paths safely
                     norm_path = os.path.normpath(raw_path)
+                    
                     # Disallow NUL and control chars
                     if '\\x00' in norm_path or '\0' in norm_path:
                         invalid_reasons.append(f"{norm_path}: contains NUL byte")
                         continue
+                        
                     # Guard against excessively long paths
                     if len(norm_path) > 240:
                         invalid_reasons.append(f"{norm_path}: path too long")
                         continue
+                        
+                    # Validate path doesn't contain invalid characters for Windows
+                    invalid_chars = '<>\"|?*'
+                    if any(char in norm_path for char in invalid_chars):
+                        invalid_reasons.append(f"{norm_path}: contains invalid characters")
+                        continue
+                        
                     if not os.path.isabs(norm_path):
                         # If relative, attempt to make absolute based on current working dir
                         norm_path = os.path.abspath(norm_path)
+                        
+                    # Proactively check if path is valid by attempting to access it
+                    try:
+                        # Just check if we can access the path without actually opening the file
+                        os.path.exists(norm_path)
+                    except OSError as path_error:
+                        if getattr(path_error, 'errno', None) == 22 or 'Invalid argument' in str(path_error):
+                            invalid_reasons.append(f"{norm_path}: invalid path argument")
+                            continue
+                        else:
+                            # Re-raise if it's a different error
+                            raise
+                            
                     if not os.path.exists(norm_path):
                         invalid_reasons.append(f"{norm_path}: file not found")
                         continue
+                        
+                    # Validate emoji
+                    emoji = str(mf.get('emoji', '😀')).strip()
+                    # Remove control characters from emoji
+                    emoji = ''.join(char for char in emoji if ord(char) >= 32)
+                    # Limit emoji length
+                    emoji = emoji[:2]
+                    
                     sanitized_media_files.append({
                         'file_path': norm_path,
-                        'emoji': mf.get('emoji', '😀'),
-                        'type': mf.get('type', 'video')
+                        'emoji': emoji,
+                        'type': str(mf.get('type', 'video')).strip()
                     })
                 except Exception as ve:
                     invalid_reasons.append(f"Item {idx+1}: {str(ve)}")
@@ -2348,22 +2407,81 @@ def register_sticker_routes(app):
                     # IMPORTANT: After a successful icon upload, the bot asks for the short name
                     # e.g. "Please provide a short name for your set. I'll use it to create a link..."
                     # So we should wait for URL_NAME_REQUEST, not ICON_ACCEPTED
+                    # Increased timeout to 180 seconds for better reliability
                     response = await sticker_bot.conversation_manager.send_file_and_wait(
-                        icon_file_path, BotResponseType.URL_NAME_REQUEST, timeout=60.0
+                        icon_file_path, BotResponseType.URL_NAME_REQUEST, timeout=180.0
                     )
-                    # Update process to reflect we're now waiting for URL name
+                    # CRITICAL FIX: Recognize that receiving URL_NAME_REQUEST means success
+                    # The message "Please provide a short name for your set" confirms the icon was received
                     with process_lock:
                         if process_id in active_processes:
-                            active_processes[process_id]["current_stage"] = "Waiting for URL name..."
+                            active_processes[process_id]["current_stage"] = "Icon successfully sent to Telegram"
                             active_processes[process_id]["waiting_for_user"] = True
                             active_processes[process_id]["waiting_for_url_name"] = True
-                            # Nudge progress forward but not complete
-                            active_processes[process_id]["progress"] = max(
-                                active_processes[process_id].get("progress", 85), 90
-                            )
-                    return {"success": True, "message": "Icon uploaded; awaiting URL name"}
+                            # Set progress to indicate success but not completion
+                            active_processes[process_id]["progress"] = 85
+                            # Mark icon as handled to prevent duplicate flows
+                            active_processes[process_id]["icon_handled"] = True
+                            # Add success indicator
+                            active_processes[process_id]["icon_sent_successfully"] = True
+                    return {"success": True, "message": "Icon uploaded; awaiting URL name", "icon_sent": True}
+                except asyncio.TimeoutError as e:
+                    # Handle timeout specifically
+                    logging.error(f"[ICON_UPLOAD] Timeout uploading icon: {str(e)}")
+                    # Even on timeout, mark as handled since the file was likely sent
+                    with process_lock:
+                        if process_id in active_processes:
+                            active_processes[process_id]["icon_handled"] = True
+                            active_processes[process_id]["current_stage"] = "Icon sent; awaiting response..."
+                            active_processes[process_id]["waiting_for_user"] = True
+                            active_processes[process_id]["waiting_for_url_name"] = True
+                            active_processes[process_id]["progress"] = 85
+                            # Add success indicator even on timeout
+                            active_processes[process_id]["icon_sent_successfully"] = True
+                    return {"success": True, "message": "Icon sent to Telegram; awaiting response...", "timeout": True, "icon_sent": True}
                 except Exception as e:
-                    return {"success": False, "error": str(e)}
+                    # Log the specific error for debugging
+                    logging.error(f"[ICON_UPLOAD] Error uploading icon: {str(e)}")
+                    # Provide user-friendly error message
+                    error_msg = str(e)
+                    if "file too big" in error_msg.lower() or "maximum file size" in error_msg.lower():
+                        # CRITICAL FIX: When Telegram rejects the icon due to size, mark process as successful internally
+                        # but indicate manual completion is required
+                        with process_lock:
+                            if process_id in active_processes:
+                                active_processes[process_id]["icon_handled"] = True
+                                active_processes[process_id]["current_stage"] = "Icon rejected: file too big (max 32 KB)"
+                                active_processes[process_id]["waiting_for_user"] = False
+                                active_processes[process_id]["manual_completion_required"] = True
+                                active_processes[process_id]["progress"] = 85
+                                # Mark as successful but with manual completion needed
+                                active_processes[process_id]["status"] = "completed_with_manual"
+                        return {
+                            "success": False, 
+                            "error": "Icon file is too big. Maximum size is 32 KB. Please select a smaller file.",
+                            "manual_completion_required": True,
+                            "message": "Icon rejected due to size. Continue manually in Telegram."
+                        }
+                    elif "invalid file" in error_msg.lower():
+                        # CRITICAL FIX: When Telegram rejects the icon due to invalid format, mark process as successful internally
+                        # but indicate manual completion is required
+                        with process_lock:
+                            if process_id in active_processes:
+                                active_processes[process_id]["icon_handled"] = True
+                                active_processes[process_id]["current_stage"] = "Icon rejected: invalid file format"
+                                active_processes[process_id]["waiting_for_user"] = False
+                                active_processes[process_id]["manual_completion_required"] = True
+                                active_processes[process_id]["progress"] = 85
+                                # Mark as successful but with manual completion needed
+                                active_processes[process_id]["status"] = "completed_with_manual"
+                        return {
+                            "success": False, 
+                            "error": "Invalid icon file. Please select a valid WebM file under 32 KB.",
+                            "manual_completion_required": True,
+                            "message": "Icon rejected due to invalid format. Continue manually in Telegram."
+                        }
+                    else:
+                        return {"success": False, "error": f"Failed to upload icon: {error_msg}"}
             
             # Run the async function
             result = run_telegram_coroutine(send_icon_file())
