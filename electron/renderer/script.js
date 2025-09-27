@@ -5336,7 +5336,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       }
       
       try {
-        const response = await this.apiRequest("GET", `/api/sticker/progress/${this.currentStickerProcessId}`);
+        const response = await this.apiRequest("GET", `/api/process-status/${this.currentStickerProcessId}`);
         
         if (response.success && response.data) {
           const progress = response.data;

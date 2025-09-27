@@ -507,7 +507,7 @@ class StickerBotManager {
       }
       
       try {
-        const response = await window.coreSystem.apiRequest("GET", `/api/sticker/progress/${this.currentStickerProcessId}`);
+        const response = await window.coreSystem.apiRequest("GET", `/api/process-status/${this.currentStickerProcessId}`);
         
         if (response.success && response.data) {
           const { status, progress, completed_files, total_files, error, shareable_link } = response.data;
@@ -549,7 +549,7 @@ class StickerBotManager {
                 
                 // Try to get final status first
                 try {
-                  const statusResponse = await window.coreSystem.apiRequest("GET", `/api/sticker/status/${this.currentStickerProcessId}`);
+                  const statusResponse = await window.coreSystem.apiRequest("GET", `/api/process-status/${this.currentStickerProcessId}`);
                   if (statusResponse.success && statusResponse.data?.shareable_link) {
                     console.log('✅ [STICKER-BOT] Found shareable link in status, showing success modal');
                     this.handleStickerPackComplete(statusResponse.data.shareable_link);
@@ -931,7 +931,8 @@ class StickerBotManager {
       const response = await window.coreSystem.apiRequest("POST", "/api/sticker/submit-url-name", {
         process_id: this.currentUrlNameProcessId,
         new_url_name: newUrlName,
-        attempt: this.currentUrlAttempt
+        current_attempt: this.currentUrlAttempt,
+        max_attempts: this.maxUrlAttempts
       });
       
       if (response.success) {
