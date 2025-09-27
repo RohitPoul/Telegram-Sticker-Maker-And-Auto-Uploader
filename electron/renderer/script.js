@@ -5211,10 +5211,32 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         .filter((f) => (stickerType === "video" ? f.type === "video" : f.type === "image"))
         .map((f) => ({
           file_path: String(f.file_path || "").replace(/[\x00-\x1f\x7f-\x9f]/g, '').trim(),
-          emoji: typeof f.emoji === "string" ? f.emoji.replace(/[\x00-\x1f\x7f-\x9f]/g, '').substring(0, 2) : this.defaultEmoji,
+          emoji: typeof f.emoji === "string" ? f.emoji.replace(/[\x00-\x1f\x7f-\x9f]/g, '').length > 0 ? Array.from(f.emoji.replace(/[\x00-\x1f\x7f-\x9f]/g, ''))[0] : this.defaultEmoji : this.defaultEmoji,
           type: f.type === "video" ? "video" : "image",
         }))
         .filter((m) => m.file_path && m.file_path.length > 0 && /^[^\0]+$/.test(m.file_path));
+
+      // Additional validation for file paths and emoji data
+      for (const media of filteredMedia) {
+        // Ensure file_path is properly sanitized
+        if (typeof media.file_path === 'string') {
+          // Remove any remaining invalid characters
+          media.file_path = media.file_path.replace(/[\x00-\x1f\x7f-\x9f]/g, '').trim();
+          // Ensure it's not empty
+          if (media.file_path.length === 0) {
+            throw new Error('Invalid file path');
+          }
+        }
+        
+        // Ensure emoji is a single valid character
+        if (typeof media.emoji === 'string' && media.emoji.length > 0) {
+          // Use only the first character and ensure it's valid
+          const emojiChars = Array.from(media.emoji);
+          media.emoji = emojiChars[0] || this.defaultEmoji;
+        } else {
+          media.emoji = this.defaultEmoji;
+        }
+      }
 
       // ENHANCED: Validate and sanitize all request data to prevent [Errno 22] Invalid argument
       // Remove any control characters that could cause issues
