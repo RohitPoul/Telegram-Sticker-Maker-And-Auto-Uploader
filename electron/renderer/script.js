@@ -5327,59 +5327,35 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     // Store last known progress for completion detection
     this.lastKnownProgress = null;
     
-
     let consecutiveErrors = 0;
-    const MAX_CONSECUTIVE_ERRORS = 5;
-    const MONITORING_TIMEOUT = 20 * 60 * 1000; // 20 minutes (increased for URL name retry scenarios)
-    const startTime = Date.now();
     
     this.stickerProgressInterval = setInterval(async () => {
+      if (!this.currentStickerProcessId) {
+        clearInterval(this.stickerProgressInterval);
+        return;
+      }
+      
       try {
-        // Check for timeout
-        if (Date.now() - startTime > MONITORING_TIMEOUT) {
-          this.stopStickerProgressMonitoring();
-          this.addStatusItem("❌ Monitoring timeout - sticker creation may have failed", "error");
-          return;
-        }
-        
-        // Use the original process ID directly - let backend handle any sanitization
-        const response = await this.apiRequest("GET", `/api/process-status/${processId}`);
+        const response = await this.apiRequest("GET", `/api/sticker/progress/${this.currentStickerProcessId}`);
         
         if (response.success && response.data) {
           const progress = response.data;
+          this.lastKnownProgress = progress; // Store for error handling
           
-          // Store progress for potential completion detection
-          this.lastKnownProgress = progress;
-          
-          // Reset error counter on success
-          consecutiveErrors = 0;
-          
-          // Update media file statuses based on progress
-          this.updateMediaStatusFromProgress(progress);
-          
-          // Update UI progress indicators
-          this.updateStickerProgressDisplay(progress);
-          
-          // PRIORITY CHECK 1: Check URL_NAME_TAKEN first to prevent race condition with completed status
-          if (progress.url_name_taken && progress.waiting_for_user && !this.urlPromptHandledProcesses.has(processId)) {
-            // URL name is taken, show retry modal (PRIORITY OVER COMPLETED STATUS)
-            this.stopStickerProgressMonitoring();
-            
+          // PRIORITY CHECK 1: Check for URL name retry attempts exhausted
+          if (progress.url_name_attempts && progress.url_name_attempts > progress.max_url_attempts) {
             const currentAttempt = progress.url_name_attempts || 1;
             const maxAttempts = progress.max_url_attempts || 3;
             
-            if (currentAttempt > maxAttempts) {
-              this.addStatusItem(`❌ All ${maxAttempts} URL name attempts exhausted. Please add sticker pack manually in Telegram bot.`, "error");
-              this.showToast("warning", "Manual Setup Required", "Please complete the sticker pack creation manually in the Telegram bot (@Stickers)");
-              
-              this.onStickerProcessCompleted(true, {
-                manual_completion_required: true,
-                message: "Please complete sticker pack creation manually in Telegram bot"
-              });
-              return;
-            }
+            this.addStatusItem(`❌ All ${maxAttempts} URL name attempts exhausted. Please add sticker pack manually in Telegram bot.`, "error");
+            this.showToast("warning", "Manual Setup Required", "Please complete the sticker pack creation manually in the Telegram bot (@Stickers)");
             
-            this.showUrlNameModal(processId, progress.original_url_name || progress.pack_url_name || progress.url_name || "retry", currentAttempt, maxAttempts);
+            this.stopStickerProgressMonitoring();
+            
+            this.onStickerProcessCompleted(true, {
+              manual_completion_required: true,
+              message: "Please complete sticker pack creation manually in Telegram bot"
+            });
             return;
           }
           
@@ -5402,6 +5378,23 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
                                 
                   // SMART COMPLETION DETECTION: Check if the pack was completed during skip
                   if (response.message && response.message.includes("Sticker pack created successfully")) {
+                    this.addStatusItem("✅ Sticker pack created successfully!", "completed");
+                    this.stopStickerProgressMonitoring();
+                                  
+                    // Extract shareable link from backend or generate from the known URL
+                    const packUrlName = response.pack_url_name || response.url_name || 
+                                        progress.pack_url_name || progress.url_name;
+                    const shareableLink = response.shareable_link || 
+                                         (packUrlName ? `https://t.me/addstickers/${packUrlName}` : null);
+                                  
+                    this.onStickerProcessCompleted(true, {
+                      shareable_link: shareableLink,
+                      pack_url_name: packUrlName,
+                      message: "✅ Sticker pack created successfully"
+                    });
+                    return; // Exit monitoring
+                  } else if (response.completed) {
+                    // Check if the response indicates completion
                     this.addStatusItem("✅ Sticker pack created successfully!", "completed");
                     this.stopStickerProgressMonitoring();
                                   
@@ -6538,9 +6531,45 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         // CRITICAL FIX: Recognize that receiving URL_NAME_REQUEST means success
         // The message "Please provide a short name for your set" confirms the icon was received
         // Also check for the new icon_sent flag
-        if ((response.message && response.message.includes('awaiting URL name')) || response.icon_sent) {
+        if ((response.message && response.message.includes('awaiting URL name')) || response.icon_sent || (response.message && response.message.includes('Icon successfully sent to Telegram'))) {
           this.addStatusItem("✅ Icon successfully sent to Telegram", "completed");
           this.showToast("success", "Icon Sent", "Icon successfully sent to Telegram");
+          
+          // Check if auto-skip is enabled - if so, we should automatically continue to URL name step
+          const autoSkipIcon = document.getElementById("auto-skip-icon");
+          const shouldAutoSkip = autoSkipIcon && autoSkipIcon.checked;
+          
+          if (shouldAutoSkip) {
+            // Auto-skip is enabled, automatically submit the URL name
+            this.addStatusItem("Auto-skip enabled, automatically submitting URL name...", "info");
+            try {
+              const urlInput = document.getElementById("pack-url-name");
+              const urlName = (urlInput && typeof urlInput.value === 'string') ? urlInput.value.trim() : '';
+              if (urlName) {
+                const submitRes = await this.apiRequest("POST", "/api/sticker/submit-url-name", {
+                  process_id: this.currentIconProcessId,
+                  new_url_name: urlName,
+                  current_attempt: 1,
+                  max_attempts: 3
+                });
+
+                if (submitRes && submitRes.success) {
+                  // Close modal then continue monitoring
+                  setTimeout(() => this.hideIconModal(), 200);
+                  this.startStickerProgressMonitoring(this.currentIconProcessId);
+                  return;
+                } else if (submitRes && submitRes.url_name_taken) {
+                  // Close modal and show retry modal
+                  setTimeout(() => this.hideIconModal(), 200);
+                  this.showUrlNameModal(this.currentIconProcessId, urlName, (submitRes.attempt || 1), (submitRes.max_attempts || 3));
+                  return;
+                }
+              }
+            } catch (e) {
+              // If auto-submit fails, fall back to manual process
+              this.addStatusItem(`Auto-submit failed: ${e.message}. Continuing with manual process.`, "warning");
+            }
+          }
           
           // Attempt to auto-submit URL name immediately if the bot is asking for it
           try {
@@ -6635,13 +6664,14 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     } catch (error) {
       console.error("Error uploading icon:", error);
       
-      // Handle timeout errors specifically
+      // Handle timeout or server overload errors
       if (error.message && (error.message.includes('timeout') || error.message.includes('Request timeout'))) {
+        const maxRetries = 3;
         if (retryCount < maxRetries) {
           this.addStatusItem(`Icon upload timed out. Retrying in 3 seconds... (attempt ${retryCount + 1}/${maxRetries})`, "warning");
           this.showToast("warning", "Upload Timeout", `Icon upload timed out. Retrying... (attempt ${retryCount + 1}/${maxRetries})`);
           
-          // Wait 3 seconds before retry (increased from 2)
+          // Wait 3 seconds before retry
           await new Promise(resolve => setTimeout(resolve, 3000));
           
           // Retry the upload
