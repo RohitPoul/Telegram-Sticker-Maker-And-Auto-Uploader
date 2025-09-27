@@ -1043,6 +1043,7 @@ def get_process_status(process_id):
                 "paused": process_data.get('paused', False),
                 # OPTIMIZED: Add fields for sticker creation
                 "waiting_for_user": process_data.get('waiting_for_user', False),
+                "waiting_for_url_name": process_data.get('waiting_for_url_name', False),
                 "icon_request_message": process_data.get('icon_request_message', ''),
                 # ENHANCED: Include shareable link for completed sticker packs with detailed logging
                 "shareable_link": process_data.get('shareable_link', ''),

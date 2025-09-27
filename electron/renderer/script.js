@@ -5458,6 +5458,41 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
                                 || false;
               if (urlPrompt) {
                 try { this.hideIconModal(); } catch {}
+                
+                // Check if auto-skip is enabled - if so, automatically submit the URL name
+                const autoSkipIcon = document.getElementById("auto-skip-icon");
+                const shouldAutoSkip = autoSkipIcon && autoSkipIcon.checked;
+                
+                if (shouldAutoSkip) {
+                  // Auto-skip is enabled, automatically submit the URL name
+                  this.addStatusItem("Auto-skip enabled, automatically submitting URL name...", "info");
+                  try {
+                    const urlInput = document.getElementById("pack-url-name");
+                    const urlName = (urlInput && typeof urlInput.value === 'string') ? urlInput.value.trim() : '';
+                    if (urlName) {
+                      const submitRes = await this.apiRequest("POST", "/api/sticker/submit-url-name", {
+                        process_id: processId,
+                        new_url_name: urlName,
+                        current_attempt: 1,
+                        max_attempts: 3
+                      });
+
+                      if (submitRes && submitRes.success) {
+                        this.urlPromptHandledProcesses.add(processId);
+                        this.startStickerProgressMonitoring(processId);
+                        return;
+                      } else if (submitRes && submitRes.url_name_taken) {
+                        this.urlPromptHandledProcesses.add(processId);
+                        this.showUrlNameModal(processId, urlName, (submitRes.attempt || 1), (submitRes.max_attempts || 3));
+                        return;
+                      }
+                    }
+                  } catch (e) {
+                    // If auto-submit fails, fall back to manual process
+                    this.addStatusItem(`Auto-submit failed: ${e.message}. Continuing with manual process.`, "warning");
+                  }
+                }
+                
                 const urlInput = document.getElementById("pack-url-name");
                 const urlName = (urlInput && typeof urlInput.value === 'string') ? urlInput.value.trim() : '';
                 if (urlName) {
