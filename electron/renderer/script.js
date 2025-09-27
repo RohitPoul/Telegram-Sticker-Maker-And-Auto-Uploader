@@ -1376,27 +1376,27 @@ class TelegramUtilities {
 
   showAutoSkipHelp() {
     const helpText = `
-      <div style="text-align: left; line-height: 1.6;">
-        <h4 style="margin: 0 0 1rem 0; color: var(--text-primary);">
+      <div style="text-align: left; line-height: 1.4; font-size: 0.9rem;">
+        <h4 style="margin: 0 0 0.75rem 0; color: var(--text-primary); font-size: 1rem;">
           <i class="fas fa-magic" style="color: var(--accent-color); margin-right: 0.5rem;"></i>
-          Auto-skip Icon Selection
+          Auto-skip Icon
         </h4>
-        <div style="margin-bottom: 1rem;">
-          <strong style="color: var(--accent-color);">When enabled:</strong>
-          <p style="margin: 0.5rem 0; color: var(--text-secondary);">
-            The bot will automatically skip the icon selection step and use the first sticker as the pack icon.
+        <div style="margin-bottom: 0.75rem;">
+          <strong style="color: var(--accent-color);">Enabled:</strong>
+          <p style="margin: 0.25rem 0; color: var(--text-secondary);">
+            Automatically skip icon step, use first sticker as pack icon.
           </p>
         </div>
         <div>
-          <strong style="color: var(--accent-color);">When disabled:</strong>
-          <p style="margin: 0.5rem 0; color: var(--text-secondary);">
-            You'll be prompted to upload a custom icon file (WEBM format, up to 32 KB, 100x100 px).
+          <strong style="color: var(--accent-color);">Disabled:</strong>
+          <p style="margin: 0.25rem 0; color: var(--text-secondary);">
+            Upload custom icon file (WEBM, 32 KB max).
           </p>
         </div>
       </div>
     `;
     
-    this.showToast("info", "Auto-skip Icon Selection", helpText, 8000);
+    this.showToast("info", "Auto-skip Icon", helpText, 5000);
   }
 
   showSuccessModal(shareableLink) {
