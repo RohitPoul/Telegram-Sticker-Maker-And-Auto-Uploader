@@ -1150,6 +1150,26 @@ html {
 }
 
 .file-actions,
+.section-header .reset-header-btn {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.75rem;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  min-height: auto;
+}
+
+.section-header .reset-header-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.section-header .reset-header-btn i {
+  font-size: 0.7rem;
+  margin-right: 0.3rem;
+}
+
 .media-actions {
   display: flex;
   gap: 0.5rem;
