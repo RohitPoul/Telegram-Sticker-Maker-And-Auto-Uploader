@@ -1336,6 +1336,9 @@ html {
   z-index: 99999;
   width: 350px;
   pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
 }
 
 .toast {
@@ -1351,6 +1354,7 @@ html {
   box-sizing: border-box;
   pointer-events: auto;
   opacity: 1;
+  position: relative;
 }
 
 .toast.success {
@@ -1435,7 +1439,7 @@ html {
 }
 
 .modal-overlay.active {
-  display: flex;
+  display: flex !important; /* Ensure it overrides any inline styles */
   animation: turboFadeIn 0.08s linear;
 }
 
