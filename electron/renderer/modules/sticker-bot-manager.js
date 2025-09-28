@@ -150,11 +150,21 @@ class StickerBotManager {
       
       for (const filePath of selectedPaths.slice(0, maxFiles)) {
         if (!this.mediaFiles.some(f => f.file_path === filePath)) {
+          // Sanitize default emoji
+          let cleanDefaultEmoji = '❤️';
+          if (typeof this.defaultEmoji === 'string') {
+            const sanitized = this.defaultEmoji.replace(/[\x00-\x1f\x7f-\x9f]/g, '');
+            if (sanitized.length > 0) {
+              const emojiChars = Array.from(sanitized);
+              cleanDefaultEmoji = emojiChars[0] || '❤️';
+            }
+          }
+              
           this.mediaFiles.push({
             file_path: filePath,
             name: filePath.split(/[\\/]/).pop(),
             type: this.selectedMediaType,
-            emoji: this.defaultEmoji,
+            emoji: cleanDefaultEmoji,
             dateAdded: Date.now(),
           });
           addedCount++;
@@ -463,10 +473,43 @@ class StickerBotManager {
         createBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating Pack...';
       }
       
+      // ENHANCED: Better sanitization to prevent [Errno 22] Invalid argument
+      const filteredMedia = this.mediaFiles
+        .map((f) => ({
+          file_path: String(f.file_path || "").replace(/[\x00-\x1f\x7f-\x9f]/g, '').trim(),
+          emoji: typeof f.emoji === "string" ? f.emoji.replace(/[\x00-\x1f\x7f-\x9f]/g, '').length > 0 ? Array.from(f.emoji.replace(/[\x00-\x1f\x7f-\x9f]/g, ''))[0] || this.defaultEmoji : this.defaultEmoji : this.defaultEmoji,
+          type: f.type === "video" ? "video" : "image",
+        }))
+        .filter((m) => m.file_path && m.file_path.length > 0 && /^[^\0]+$/.test(m.file_path));
+
+      // Additional validation for file paths and emoji data
+      for (const media of filteredMedia) {
+        // Ensure file_path is properly sanitized
+        if (typeof media.file_path === 'string') {
+          // Remove any remaining invalid characters
+          media.file_path = media.file_path.replace(/[\x00-\x1f\x7f-\x9f]/g, '').trim();
+          // Ensure it's not empty
+          if (media.file_path.length === 0) {
+            throw new Error('Invalid file path');
+          }
+        }
+        
+        // Ensure emoji is a single valid character
+        if (typeof media.emoji === 'string' && media.emoji.length > 0) {
+          // Remove control characters first
+          const cleanEmoji = media.emoji.replace(/[\x00-\x1f\x7f-\x9f]/g, '');
+          // Use only the first character and ensure it's valid
+          const emojiChars = Array.from(cleanEmoji);
+          media.emoji = emojiChars[0] || this.defaultEmoji;
+        } else {
+          media.emoji = this.defaultEmoji;
+        }
+      }
+
       const response = await window.coreSystem.apiRequest("POST", "/api/sticker/create-pack", {
         pack_name: packName,
         pack_url_name: urlName,
-        media_files: this.mediaFiles,
+        media_files: filteredMedia,
         sticker_type: this.selectedMediaType,
         auto_skip_icon: document.getElementById("auto-skip-icon")?.checked || false,
         process_id: "create_pack_" + Date.now(),
@@ -703,7 +746,16 @@ class StickerBotManager {
   
   updateFileEmoji(index, emoji) {
     if (index >= 0 && index < this.mediaFiles.length) {
-      this.mediaFiles[index].emoji = emoji || this.defaultEmoji;
+      // Sanitize emoji to prevent invalid characters
+      let sanitizedEmoji = this.defaultEmoji;
+      if (typeof emoji === "string" && emoji.length > 0) {
+        // Remove control characters
+        const cleanEmoji = emoji.replace(/[\x00-\x1f\x7f-\x9f]/g, '');
+        // Use only the first character
+        const emojiChars = Array.from(cleanEmoji);
+        sanitizedEmoji = emojiChars[0] || this.defaultEmoji;
+      }
+      this.mediaFiles[index].emoji = sanitizedEmoji;
     }
   }
 
@@ -737,11 +789,21 @@ class StickerBotManager {
         const filePath = file.path || file.webkitRelativePath || file.name;
         
         if (!this.mediaFiles.some((f) => f.file_path === filePath)) {
+          // Sanitize default emoji
+          let cleanDefaultEmoji = '❤️';
+          if (typeof this.defaultEmoji === 'string') {
+            const sanitized = this.defaultEmoji.replace(/[\x00-\x1f\x7f-\x9f]/g, '');
+            if (sanitized.length > 0) {
+              const emojiChars = Array.from(sanitized);
+              cleanDefaultEmoji = emojiChars[0] || '❤️';
+            }
+          }
+                
           this.mediaFiles.push({
             file_path: filePath,
             name: file.name,
             type: this.selectedMediaType,
-            emoji: this.defaultEmoji,
+            emoji: cleanDefaultEmoji,
             dateAdded: Date.now(),
             size: file.size,
           });
