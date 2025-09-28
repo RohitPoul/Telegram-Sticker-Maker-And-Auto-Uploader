@@ -6135,7 +6135,9 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         modal.style.willChange = 'transform, opacity';
         overlay.style.willChange = 'opacity';
         
-        modal.style.display = "block";
+        // Use consistent approach with other modals - remove inline display style and use CSS classes
+        modal.style.display = ""; // Remove inline display style
+        modal.style.opacity = "1"; // Reset opacity to 1 when showing modal
         overlay.classList.add("active");
         
         // Update the modal content with the actual message from Telegram
@@ -6493,7 +6495,9 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     const overlay = document.getElementById("modal-overlay");
     
     if (modal && overlay) {
-      modal.style.display = "none";
+      // Use consistent approach with other modals - remove inline styles and use CSS classes
+      modal.style.display = ""; // Remove inline display style
+      modal.style.opacity = "0"; // Set opacity to 0
       overlay.classList.remove("active");
     }
     
@@ -6707,6 +6711,11 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
             pack_url_name: response.pack_url_name,
             message: "✅ Sticker pack created successfully"
           });
+        } else if (response.waiting_for_user && response.url_name_taken) {
+          // Handle the case where Telegram immediately asks for URL name after icon upload
+          this.addStatusItem("Icon uploaded - please provide URL name", "warning");
+          // Show URL name modal for user input
+          this.showUrlNameModal(this.currentIconProcessId, response.original_url_name || response.pack_url_name || response.url_name || "retry");
         } else {
           // Continue monitoring for remaining steps (URL name step)
           this.startStickerProgressMonitoring(this.currentIconProcessId);
@@ -6902,16 +6911,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     
     console.log('✅ Toast element created');
     
-    // CRITICAL FIX: Add toast stacking - new toasts appear below existing ones
-    const existingToasts = toastContainer.querySelectorAll('.toast');
-    if (existingToasts.length > 0) {
-      // Insert new toast after the last existing toast
-      const lastToast = existingToasts[existingToasts.length - 1];
-      lastToast.insertAdjacentElement('afterend', toast);
-    } else {
-      // First toast, append normally
-      toastContainer.appendChild(toast);
-    }
+    // Simply append the toast - CSS flexbox will handle proper stacking
+    toastContainer.appendChild(toast);
     
     console.log('✅ Toast added to container');
     
@@ -6920,9 +6921,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       if (toast && toast.parentNode) {
         toast.remove();
         console.log('✅ Toast removed');
-        
-        // CRITICAL FIX: Move remaining toasts up when one is removed
-        this.repositionToasts();
       }
     }, duration);
     
@@ -6930,9 +6928,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     toast.onclick = () => {
       toast.remove();
       console.log('✅ Toast clicked and removed');
-      
-      // CRITICAL FIX: Move remaining toasts up when one is removed
-      this.repositionToasts();
     };
   }
 
