@@ -392,7 +392,7 @@ class StickerBotManager {
       this.saveSettings();
       window.uiManager?.updateTelegramStatus("connecting");
       
-      const response = await window.coreSystem.apiRequest("POST", "/api/sticker/connect", {
+      const response = await window.coreSystem.apiRequest("POST", "/api/telegram/connect", {
         api_id: apiId,
         api_hash: apiHash,
         phone_number: phoneNumber,
