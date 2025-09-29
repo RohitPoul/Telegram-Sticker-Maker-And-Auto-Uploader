@@ -1564,114 +1564,7 @@ def register_sticker_routes(app):
         sticker_bot = StickerBotCore()
         logging.info(f"[DEBUG] sticker_bot initialized successfully")
     
-    @app.route('/api/sticker/connect', methods=['POST', 'OPTIONS'], strict_slashes=False)
-    def connect_sticker_bot():
-        """ULTIMATE FIX - This function is guaranteed to work without scoping errors"""
-        thread_name = threading.current_thread().name
-        logging.info(f"[DEBUG] Flask route /api/sticker/connect called from thread: {thread_name}")
-        
-        # Initialize ALL variables at the very beginning to prevent ANY scoping issues
-        safe_phone_number = ''
-        safe_api_id = ''
-        safe_api_hash = ''
-        safe_process_id = ''
-        success = False
-        error_message = ''
-        needs_code = False
-        needs_password = False
-        
-        if request.method == 'OPTIONS':
-            logging.info(f"[DEBUG] OPTIONS request, returning 200")
-            return '', 200
-            
-        try:
-            logging.info(f"[DEBUG] Processing POST request in thread: {thread_name}")
-            
-            # Safe data extraction with null checks
-            try:
-                # Log raw request data for debugging
-                raw_data = request.get_data(as_text=True)
-                logging.info(f"[TRACE] Raw request data: {raw_data}")
 
-                data = request.get_json()
-                logging.info(f"[TRACE] Parsed JSON data: {data}")
-
-                if not data:
-                    logging.warning(f"[DEBUG] No JSON data received in thread: {thread_name}")
-                    return jsonify({
-                        "success": False, 
-                        "error": "No data provided", 
-                        "phone_number": safe_phone_number,
-                        "needs_code": False,
-                        "needs_password": False
-                    }), 400
-                
-                # Explicitly log each field for tracing
-                logging.info(f"[TRACE] Extracting fields: {list(data.keys())}")
-                safe_api_id = data.get('api_id', '')
-                safe_api_hash = data.get('api_hash', '')
-                safe_phone_number = data.get('phone_number', '')
-                safe_process_id = data.get('process_id', '')
-
-                logging.info(f"[TRACE] Extracted values: api_id={safe_api_id}, api_hash={safe_api_hash}, phone_number={safe_phone_number}, process_id={safe_process_id}")
-                
-            except Exception as data_error:
-                logging.error(f"[DEBUG] Error parsing JSON data in thread {thread_name}: {data_error}")
-                logging.error(f"[DEBUG] Error details: {traceback.format_exc()}")
-                return jsonify({
-                    "success": False, 
-                    "error": f"Invalid JSON data: {str(data_error)}", 
-                    "phone_number": safe_phone_number,
-                    "needs_code": False,
-                    "needs_password": False
-                }), 400
-            
-            logging.info(f"[DEBUG] Request data - API ID: {safe_api_id}, Phone: {safe_phone_number}, Process ID: {safe_process_id}")
-
-            # Early validation to prevent processing with missing data
-            if not all([safe_api_id, safe_api_hash, safe_phone_number]):
-                logging.warning(f"[DEBUG] Missing required fields in thread: {thread_name}")
-                return jsonify({
-                    "success": False, 
-                    "error": "Missing required fields", 
-                    "phone_number": safe_phone_number,
-                    "needs_code": False,
-                    "needs_password": False
-                }), 400
-
-            # ULTIMATE FIX - Now implement the actual working logic
-            logging.critical(f"🚀 ULTIMATE FIX: Processing connection with api_id={safe_api_id}, phone={safe_phone_number}")
-            
-            # Use the thread-safe handler for actual connection
-            try:
-                from telegram_connection_handler import get_telegram_handler
-                handler = get_telegram_handler()
-                result = handler.connect_telegram(safe_api_id, safe_api_hash, safe_phone_number)
-                logging.info(f"[DEBUG] Handler result: {result}")
-                return jsonify(result)
-            except Exception as handler_error:
-                logging.error(f"[DEBUG] Handler error: {handler_error}")
-                # Fallback to working response
-                return jsonify({
-                    "success": False,
-                    "error": f"Connection error: {str(handler_error)}",
-                    "phone_number": safe_phone_number,
-                    "needs_code": False,
-                    "needs_password": False
-                })
-
-        except Exception as e:
-            logging.error(f"[DEBUG] Flask route error in thread {thread_name}: {e}")
-            logging.error(f"[DEBUG] Error type: {type(e)}")
-            logging.error(f"[DEBUG] Full traceback: {traceback.format_exc()}")
-            # Use safe_phone_number which is always defined
-            return jsonify({
-                "success": False, 
-                "error": str(e), 
-                "phone_number": safe_phone_number,
-                "needs_code": False,
-                "needs_password": False
-            }), 500
 
     @app.route('/api/sticker/verify-code', methods=['POST', 'OPTIONS'], strict_slashes=False)
     def verify_code():
@@ -2447,6 +2340,7 @@ def register_sticker_routes(app):
                                 "icon_sent": True,
                                 "url_name_taken": True,
                                 "original_url_name": pack_url_name,
+                                "waiting_for_user": True,  # CRITICAL: Add this flag to match skip flow
                                 "completed": False  # Explicitly indicate process is not complete
                             }
 
@@ -2476,7 +2370,7 @@ def register_sticker_routes(app):
                         return {
                             "success": True,
                             "message": "Sticker pack created successfully",
-                            "completed": True,
+                            "completed": True,  # This is only set to True when the entire flow is complete
                             "shareable_link": shareable_link
                         }
 
@@ -2524,7 +2418,7 @@ def register_sticker_routes(app):
                             "manual_completion_required": True,
                             "error": "Icon file is too big. Maximum size is 32 KB. Please select a smaller file."
                         }
-                    elif "invalid file" in error_msg.lower():
+                    elif "invalid file" in error_msg.lower() or "file type" in error_msg.lower() or "not a valid" in error_msg.lower():
                         # CRITICAL FIX: When Telegram rejects the icon due to invalid format, mark process as successful internally
                         # but indicate manual completion is required
                         with process_lock:
@@ -2536,11 +2430,14 @@ def register_sticker_routes(app):
                                 active_processes[process_id]["progress"] = 100
                                 # Mark as successful but with manual completion needed
                                 active_processes[process_id]["status"] = "completed_manual"
+                                # CRITICAL FIX: Add flag to indicate the process should be marked as successful
+                                active_processes[process_id]["completed"] = True
                         return {
                             "success": True,
                             "message": "Invalid icon file. Creation succeeded — please complete manually in Telegram.",
                             "manual_completion_required": True,
-                            "error": "Invalid icon file. Please select a valid WebM file under 32 KB."
+                            "error": "Invalid icon file. Please select a valid WebM file under 32 KB.",
+                            "completed": True  # Indicate that the process is completed but requires manual completion
                         }
                     else:
                         return {"success": False, "error": f"Failed to upload icon: {error_msg}"}
