@@ -20,28 +20,8 @@ try:
 except Exception:
     pass
 
-def run_telegram_coroutine(coro):
-    """
-    Helper function to run async coroutines in sync context
-    Uses the telegram handler's event loop for consistency
-    """
-    try:
-        from telegram_connection_handler import get_telegram_handler
-        handler = get_telegram_handler()
-        if handler:
-            return handler.run_async(coro)
-        else:
-            # Fallback: create new event loop
-            import asyncio
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                return loop.run_until_complete(coro)
-            finally:
-                loop.close()
-    except Exception as e:
-        logging.error(f"Error running telegram coroutine: {e}")
-        raise
+# Note: run_telegram_coroutine is defined later with robust retry and event-loop handling.
+# The earlier simplified version has been removed to avoid duplicate definitions.
 
 def validate_url_name(url_name):
     """Validate URL name according to Telegram sticker pack rules"""
@@ -1319,7 +1299,8 @@ def run_telegram_coroutine(coro):
                 if handler and handler._loop and handler._running:
                     # Use the handler's dedicated event loop
                     future = asyncio.run_coroutine_threadsafe(coro, handler._loop)
-                    return future.result(timeout=30)
+                    # Allow up to 180s to accommodate longer Telegram waits
+                    return future.result(timeout=180)
             except Exception as e:
                 logging.warning(f"Could not use handler's event loop: {e}")
             
@@ -1755,7 +1736,7 @@ def register_sticker_routes(app):
             
         try:
             data = request.get_json()
-            # Sanitize all input fields to remove control characters
+            # Sanitize all input fields to remove only null bytes which cause OS-level errors
             raw_pack_name = data.get('pack_name', '') if data else ''
             raw_pack_url_name = data.get('pack_url_name', '') if data else ''
             raw_sticker_type = data.get('sticker_type', 'video') if data else 'video'
@@ -1763,11 +1744,11 @@ def register_sticker_routes(app):
             raw_process_id = data.get('process_id', f'sticker_{int(time.time())}') if data else f'sticker_{int(time.time())}'
             auto_skip_icon = data.get('auto_skip_icon', True) if data else True  # Default to True
 
-            # Remove control characters from all string inputs to prevent OS-level errors
-            pack_name = ''.join(char for char in str(raw_pack_name) if ord(char) >= 32)
-            pack_url_name = ''.join(char for char in str(raw_pack_url_name) if ord(char) >= 32)
-            sticker_type = ''.join(char for char in str(raw_sticker_type) if ord(char) >= 32)
-            process_id = ''.join(char for char in str(raw_process_id) if ord(char) >= 32)
+            # Remove only null bytes which are the main cause of OS errors
+            pack_name = str(raw_pack_name).replace('\x00', '')
+            pack_url_name = str(raw_pack_url_name).replace('\x00', '')
+            sticker_type = str(raw_sticker_type).replace('\x00', '')
+            process_id = str(raw_process_id).replace('\x00', '')
 
             # Import active_processes from shared state
             from shared_state import active_processes, process_lock, add_process, get_next_process_id
@@ -1812,14 +1793,14 @@ def register_sticker_routes(app):
                         invalid_reasons.append(f"Item {idx+1}: empty path")
                         continue
                     
-                    # Remove control characters that could cause OS errors
-                    raw_path = ''.join(char for char in raw_path if ord(char) >= 32)
+                    # Remove only null bytes which are the main cause of OS errors
+                    raw_path = raw_path.replace('\x00', '')
                     
                     # Normalize Windows paths safely
                     norm_path = os.path.normpath(raw_path)
                     
                     # Disallow NUL and control chars
-                    if '\\x00' in norm_path or '\0' in norm_path:
+                    if '\x00' in norm_path:
                         invalid_reasons.append(f"{norm_path}: contains NUL byte")
                         continue
                         
@@ -1856,8 +1837,8 @@ def register_sticker_routes(app):
                         
                     # Validate emoji
                     emoji = str(mf.get('emoji', '😀')).strip()
-                    # Remove control characters from emoji
-                    emoji = ''.join(char for char in emoji if ord(char) >= 32)
+                    # Remove only null bytes which are the main cause of OS errors
+                    emoji = emoji.replace('\x00', '')
                     # Limit emoji length
                     emoji = emoji[:2]
                     
@@ -2411,19 +2392,100 @@ def register_sticker_routes(app):
                     response = await sticker_bot.conversation_manager.send_file_and_wait(
                         icon_file_path, BotResponseType.URL_NAME_REQUEST, timeout=180.0
                     )
-                    # CRITICAL FIX: Recognize that receiving URL_NAME_REQUEST means success
-                    # The message "Please provide a short name for your set" confirms the icon was received
+                    
+                    logging.info(f"[ICON_UPLOAD] Icon upload successful, received URL name request: {response.message[:100]}...")
+                    
+                    # Get the pack URL name that was already provided
                     with process_lock:
                         if process_id in active_processes:
+                            pack_url_name = active_processes[process_id].get('pack_url_name', '')
+                            # Update process status - now waiting for URL name submission
                             active_processes[process_id]["current_stage"] = "Icon successfully sent to Telegram"
+                            active_processes[process_id]["progress"] = 85
+                            active_processes[process_id]["icon_handled"] = True
+                            active_processes[process_id]["icon_sent_successfully"] = True
+                            active_processes[process_id]["last_message"] = "Icon uploaded; providing URL name..."
+                            active_processes[process_id]["last_message_time"] = time.time()
+                            active_processes[process_id]["status"] = "processing"  # Ensure status shows as processing
+                    
+                    logging.info(f"[ICON_UPLOAD] Proceeding with URL name submission: {pack_url_name}")
+                    
+                    # CRITICAL FIX: Always proceed with URL name submission if we have one
+                    if pack_url_name:
+                        # Indicate we're submitting the URL automatically
+                        with process_lock:
+                            if process_id in active_processes:
+                                active_processes[process_id]['waiting_for_user'] = False
+                                active_processes[process_id]['waiting_for_url_name'] = False
+                                active_processes[process_id]['current_stage'] = 'Providing URL name...'
+
+                        url_response = await sticker_bot.conversation_manager.send_and_wait(
+                            pack_url_name, [BotResponseType.PACK_SUCCESS, BotResponseType.URL_NAME_TAKEN], timeout=60.0
+                        )
+
+                        if url_response.response_type == BotResponseType.URL_NAME_TAKEN:
+                            logging.warning(f"[ICON_UPLOAD] URL name '{pack_url_name}' is already taken")
+                            # Prompt user for a different name, mirroring skip flow
+                            with process_lock:
+                                if process_id in active_processes:
+                                    active_processes[process_id]['status'] = 'waiting_for_url_name'
+                                    active_processes[process_id]['current_stage'] = f'URL name "{pack_url_name}" is already taken. Please provide a new name.'
+                                    active_processes[process_id]['waiting_for_user'] = True
+                                    active_processes[process_id]['waiting_for_url_name'] = True
+                                    active_processes[process_id]['url_name_taken'] = True
+                                    active_processes[process_id]['original_url_name'] = pack_url_name
+                                    active_processes[process_id]['url_name_attempts'] = 1
+                                    active_processes[process_id]['max_url_attempts'] = 3
+                                    active_processes[process_id]['progress'] = 85
+                                    # CRITICAL: Ensure we don't mark as completed when URL is taken
+                                    active_processes[process_id]['completed'] = False
+                                    active_processes[process_id].pop('shareable_link', None)
+
+                            return {
+                                "success": True,
+                                "message": "Icon uploaded; URL name taken — awaiting new name",
+                                "icon_sent": True,
+                                "url_name_taken": True,
+                                "original_url_name": pack_url_name,
+                                "completed": False  # Explicitly indicate process is not complete
+                            }
+
+                        # Success: pack created, mirror skip flow completion
+                        shareable_link = None
+                        try:
+                            if "https://t.me/addstickers/" in url_response.message:
+                                import re
+                                link_match = re.search(r'https://t\.me/addstickers/[a-zA-Z0-9_]+', url_response.message)
+                                if link_match:
+                                    shareable_link = link_match.group(0)
+                        except Exception:
+                            pass
+
+                        with process_lock:
+                            if process_id in active_processes:
+                                active_processes[process_id]['waiting_for_user'] = False
+                                active_processes[process_id]['waiting_for_url_name'] = False
+                                active_processes[process_id]['current_stage'] = 'Sticker pack created successfully'
+                                active_processes[process_id]['progress'] = 100
+                                active_processes[process_id]['status'] = 'completed'
+                                active_processes[process_id]['url_name_taken'] = False
+                                active_processes[process_id].pop('original_url_name', None)
+                                if shareable_link:
+                                    active_processes[process_id]['shareable_link'] = shareable_link
+
+                        return {
+                            "success": True,
+                            "message": "Sticker pack created successfully",
+                            "completed": True,
+                            "shareable_link": shareable_link
+                        }
+
+                    # No provided URL name; await user input like before
+                    with process_lock:
+                        if process_id in active_processes:
                             active_processes[process_id]["waiting_for_user"] = True
                             active_processes[process_id]["waiting_for_url_name"] = True
-                            # Set progress to indicate success but not completion
-                            active_processes[process_id]["progress"] = 85
-                            # Mark icon as handled to prevent duplicate flows
-                            active_processes[process_id]["icon_handled"] = True
-                            # Add success indicator
-                            active_processes[process_id]["icon_sent_successfully"] = True
+
                     return {"success": True, "message": "Icon uploaded; awaiting URL name", "icon_sent": True}
                 except asyncio.TimeoutError as e:
                     # Handle timeout specifically
@@ -2453,14 +2515,14 @@ def register_sticker_routes(app):
                                 active_processes[process_id]["current_stage"] = "Icon rejected: file too big (max 32 KB)"
                                 active_processes[process_id]["waiting_for_user"] = False
                                 active_processes[process_id]["manual_completion_required"] = True
-                                active_processes[process_id]["progress"] = 85
+                                active_processes[process_id]["progress"] = 100
                                 # Mark as successful but with manual completion needed
-                                active_processes[process_id]["status"] = "completed_with_manual"
+                                active_processes[process_id]["status"] = "completed_manual"
                         return {
-                            "success": False, 
-                            "error": "Icon file is too big. Maximum size is 32 KB. Please select a smaller file.",
+                            "success": True,
+                            "message": "Icon file is too big. Creation succeeded — please complete manually in Telegram.",
                             "manual_completion_required": True,
-                            "message": "Icon rejected due to size. Continue manually in Telegram."
+                            "error": "Icon file is too big. Maximum size is 32 KB. Please select a smaller file."
                         }
                     elif "invalid file" in error_msg.lower():
                         # CRITICAL FIX: When Telegram rejects the icon due to invalid format, mark process as successful internally
@@ -2471,14 +2533,14 @@ def register_sticker_routes(app):
                                 active_processes[process_id]["current_stage"] = "Icon rejected: invalid file format"
                                 active_processes[process_id]["waiting_for_user"] = False
                                 active_processes[process_id]["manual_completion_required"] = True
-                                active_processes[process_id]["progress"] = 85
+                                active_processes[process_id]["progress"] = 100
                                 # Mark as successful but with manual completion needed
-                                active_processes[process_id]["status"] = "completed_with_manual"
+                                active_processes[process_id]["status"] = "completed_manual"
                         return {
-                            "success": False, 
-                            "error": "Invalid icon file. Please select a valid WebM file under 32 KB.",
+                            "success": True,
+                            "message": "Invalid icon file. Creation succeeded — please complete manually in Telegram.",
                             "manual_completion_required": True,
-                            "message": "Icon rejected due to invalid format. Continue manually in Telegram."
+                            "error": "Invalid icon file. Please select a valid WebM file under 32 KB."
                         }
                     else:
                         return {"success": False, "error": f"Failed to upload icon: {error_msg}"}
