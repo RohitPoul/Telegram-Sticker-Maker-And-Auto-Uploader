@@ -1473,6 +1473,17 @@ html {
   }
 }
 
+@keyframes successModalAppear {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
 /* DEPRECATED: Remove old heavy animations */
 @keyframes fadeIn {
   from { opacity: 0; }
@@ -1532,23 +1543,28 @@ html {
 }
 
 
-/* URL Name Selection Modal - Clean & Positive */
+/* URL Name Selection Modal - Success Theme (Green/Black) */
 .url-name-retry-modal {
     /* Advanced, robust modal container - prevents cropping */
     max-width: 640px;
     width: 92%;
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: 14px;
-    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+    background: linear-gradient(135deg, rgba(17, 24, 39, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%);
+    border-radius: 16px;
+    box-shadow: 0 25px 50px -12px rgba(16, 185, 129, 0.25),
+               0 0 0 1px rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.2);
     /* Make modal a column flexbox so header/body/footer layout is stable */
     display: flex;
     flex-direction: column;
     /* Constrain total height and delegate scrolling to the body only */
     max-height: 88vh;
     overflow: hidden;
-    animation: modalSlideIn 0.3s ease-out;
+    animation: successModalAppear 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     position: relative;
+    /* CRITICAL FIX: Ensure modal is centered */
+    margin: auto;
+    /* TURBO: Optimize for faster display */
+    will-change: auto;
 }
 
 @keyframes modalSlideIn {
@@ -1563,20 +1579,20 @@ html {
 }
 
 .url-name-retry-modal .modal-header {
-    background: var(--bg-tertiary);
-    padding: 1.25rem 1.75rem;
-    border-bottom: 1px solid var(--border-color);
+    background: linear-gradient(135deg, #065f46 0%, #064e3b 100%);
+    color: white;
+    padding: 24px;
     text-align: center;
-    position: sticky;
-    top: 0;
-    z-index: 1;
+    border-bottom: none;
+    position: relative;
 }
 
 .url-name-retry-modal .modal-header h3 {
-    font-size: 1.2rem;
-    font-weight: 600;
-    margin: 0 0 0.5rem;
-    color: var(--text-primary);
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0;
+    letter-spacing: 0.5px;
+    color: white;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1591,8 +1607,8 @@ html {
 }
 
 .url-name-retry-modal .modal-header .status-badge {
-    background: var(--primary-color);
-    color: white;
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
     padding: 0.2rem 0.6rem;
     border-radius: 8px;
     font-size: 0.7rem;
@@ -1600,6 +1616,7 @@ html {
     text-transform: uppercase;
     margin-left: 0.5rem;
     flex-shrink: 0;
+    border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
 .url-name-retry-modal .modal-header .attempt-info {
@@ -1610,8 +1627,8 @@ html {
 
 .url-name-retry-modal .modal-body {
     /* Scroll inside body to ensure footer is always visible */
-    padding: 1.25rem 1.75rem;
-    background: var(--bg-card);
+    padding: 24px;
+    background: var(--bg-secondary);
     overflow: auto;
     -webkit-overflow-scrolling: touch;
     flex: 1 1 auto;
@@ -1668,7 +1685,7 @@ html {
 }
 
 .section-label i {
-    color: var(--primary-color);
+    color: #34d399;
     font-size: 0.95rem;
 }
 
@@ -5122,17 +5139,53 @@ html {
   font-size: 0.95rem;
 }
 
-/* Icon Selection Modal Styles - Clean & Responsive */
+/* Icon Selection Modal Styles - Vertical Layout */
 .icon-selection-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Icon Info Section */
+.icon-info {
   text-align: center;
-  padding: 0;
+  padding: 1rem;
+  background: rgba(33, 150, 243, 0.1);
+  border: 1px solid rgba(33, 150, 243, 0.2);
+  border-radius: 8px;
+}
+
+.icon-info .info-icon {
+  font-size: 2rem;
+  color: var(--primary-color);
+  margin-bottom: 0.5rem;
+}
+
+.icon-info .info-message {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.3rem;
+}
+
+.icon-info .info-details {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+/* Icon Options Section */
+.icon-options-section {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 1.2rem;
+  border: 1px solid rgba(16, 185, 129, 0.2);
 }
 
 .icon-options {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  margin-bottom: 1.5rem;
+  margin-top: 1rem;
 }
 
 .icon-option {
@@ -5156,12 +5209,12 @@ html {
   text-align: center;
 }
 
+/* Selected File Preview */
 .icon-file-info {
-  background: var(--bg-tertiary);
-  border-radius: var(--border-radius);
-  padding: 1.5rem;
-  border: 1px solid var(--border-color);
-  margin-top: 1rem;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 1.2rem;
+  border: 1px solid rgba(16, 185, 129, 0.2);
 }
 
 .file-preview {
@@ -5169,16 +5222,16 @@ html {
   align-items: center;
   justify-content: center;
   gap: 0.75rem;
-  margin-bottom: 1rem;
+  margin: 1rem 0;
   padding: 1rem;
   background: var(--bg-card);
-  border-radius: var(--border-radius);
-  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  border: 1px solid rgba(16, 185, 129, 0.2);
 }
 
 .file-preview i {
   font-size: 1.5rem;
-  color: var(--primary-color);
+  color: #34d399;
 }
 
 .file-preview span {
@@ -5201,8 +5254,22 @@ html {
 /* Responsive adjustments for icon modal */
 @media (max-width: 768px) {
   #icon-modal {
-    min-width: 320px;
-    max-width: 95%;
+    width: 95%;
+    max-width: none;
+    margin: 20px;
+  }
+  
+  #icon-modal .modal-header,
+  #icon-modal .modal-body,
+  #icon-modal .modern-footer {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+  
+  #icon-modal .modal-header h3 {
+    font-size: 1.1rem;
+    flex-direction: column;
+    gap: 0.3rem;
   }
   
   .icon-option .btn {
@@ -5218,41 +5285,89 @@ html {
     width: 100%;
     max-width: 200px;
   }
+  
+  #icon-modal .modern-footer {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  #icon-modal .footer-actions {
+    justify-content: center;
+  }
 }
-/* Enhanced Icon Modal Styling - Dark Theme */
+/* Enhanced Icon Modal Styling - Success Theme (Green/Black) */
 #icon-modal {
   max-width: 520px;
   min-width: 480px;
   width: 90%;
-  background: var(--bg-secondary);
+  background: linear-gradient(135deg, rgba(17, 24, 39, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%);
   border-radius: 16px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
-  border: 1px solid var(--border-color);
+  box-shadow: 0 25px 50px -12px rgba(16, 185, 129, 0.25),
+             0 0 0 1px rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.2);
   overflow: hidden;
+  animation: successModalAppear 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* CRITICAL FIX: Ensure modal is centered */
+  margin: auto;
+  /* Make modal a column flexbox so header/body/footer layout is stable */
+  display: flex;
+  flex-direction: column;
+  /* Constrain total height and delegate scrolling to the body only */
+  max-height: 88vh;
+  position: relative;
 }
 
 #icon-modal .modal-header {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--border-color);
+  background: linear-gradient(135deg, #065f46 0%, #064e3b 100%);
+  color: white;
+  padding: 1.25rem 1.75rem;
+  text-align: center;
+  border-bottom: none;
+  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 #icon-modal .modal-header h3 {
-  font-size: 1.3rem;
-  margin: 0;
+  font-size: 1.2rem;
   font-weight: 600;
-  color: var(--text-primary);
+  margin: 0 0 0.5rem;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+#icon-modal .modal-header .status-badge {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  padding: 0.2rem 0.6rem;
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-left: 0.5rem;
+  flex-shrink: 0;
+  border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
 #icon-modal .modal-body {
-  padding: 24px;
+  padding: 1.25rem 1.75rem;
   background: var(--bg-secondary);
   color: var(--text-primary);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  flex: 1 1 auto;
 }
 
 #icon-modal .modal-footer {
-  padding: 20px 24px;
+  padding: 1rem 1.75rem;
   background: var(--bg-secondary);
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid rgba(16, 185, 129, 0.1);
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
 }
