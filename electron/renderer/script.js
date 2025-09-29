@@ -278,8 +278,8 @@ class TelegramUtilities {
     }
     
     // ENHANCED: Sanitize path to prevent [Errno 22] Invalid argument
-    // Remove any null bytes or control characters that could cause OS errors
-    const sanitizedPath = path.replace(/[\x00-\x1f\x7f-\x9f]/g, '').trim();
+    // Remove only null bytes which are the main cause of OS errors
+    const sanitizedPath = path.replace(/\x00/g, '').trim();
     
     if (!sanitizedPath || sanitizedPath.length === 0) {
       throw new Error('Invalid API path after sanitization');
@@ -299,8 +299,8 @@ class TelegramUtilities {
         try {
           // Stringify and parse to ensure valid JSON
           const jsonString = JSON.stringify(body);
-          // Remove any null bytes or control characters that could cause OS errors
-          const sanitizedJsonString = jsonString.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '');
+          // Remove only null bytes which are the main cause of OS errors
+          const sanitizedJsonString = jsonString.replace(/\x00/g, '');
           sanitizedBody = sanitizedJsonString;
         } catch (jsonError) {
           console.error('[API] Error serializing request body:', jsonError);
