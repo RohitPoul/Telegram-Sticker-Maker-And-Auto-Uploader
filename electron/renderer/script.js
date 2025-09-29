@@ -4116,7 +4116,7 @@ class TelegramUtilities {
       
       while (retryCount < maxRetries) {
         try {
-          response = await this.apiRequest("POST", "/api/sticker/connect", {
+          response = await this.apiRequest("POST", "/api/telegram/connect", {
             api_id: apiId,
             api_hash: apiHash,
             phone_number: phoneNumber,
@@ -5596,6 +5596,24 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
             return; // CRITICAL: Exit early after handling icon selection
           }
           
+          // PRIORITY CHECK 3: Check for URL name retry after icon upload
+          if (progress.waiting_for_user && progress.url_name_taken && !this.urlPromptHandledProcesses.has(processId)) {
+            // Mark as handled to prevent duplicate processing
+            this.urlPromptHandledProcesses.add(processId);
+            
+            // Stop monitoring while user provides new URL name
+            this.stopStickerProgressMonitoring();
+            
+            // Show URL name modal with the original taken name
+            const takenName = progress.original_url_name || progress.pack_url_name || "retry";
+            const currentAttempt = progress.url_name_attempts || 1;
+            const maxAttempts = progress.max_url_attempts || 3;
+            
+            this.addStatusItem(`URL name '${takenName}' is taken. Showing retry options (${currentAttempt}/${maxAttempts})`, "warning");
+            this.showUrlNameModal(processId, takenName, currentAttempt, maxAttempts);
+            return; // Exit early after handling URL name retry
+          }
+          
           // REMAINING STATUS CHECKS (after priority checks)
           if (progress.status === "completed") {
             // CRITICAL FIX: Only show completion if workflow is actually finished
@@ -6125,37 +6143,24 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     if (confirmBtn) confirmBtn.disabled = true;
     if (changeBtn) changeBtn.style.display = "none"; // Change is not an option here
     
-    // Performance optimization: batch DOM updates
-    requestAnimationFrame(() => {
-      const modal = document.getElementById("icon-modal");
-      const overlay = document.getElementById("modal-overlay");
+    // Optimized modal display without unnecessary GPU acceleration
+    const modal = document.getElementById("icon-modal");
+    const overlay = document.getElementById("modal-overlay");
+    
+    if (modal && overlay) {
+      // Use consistent approach with other modals
+      modal.style.display = "flex"; // Direct display style for immediate showing
+      overlay.classList.add("active");
       
-      if (modal && overlay) {
-        // GPU acceleration for smooth animation
-        modal.style.willChange = 'transform, opacity';
-        overlay.style.willChange = 'opacity';
-        
-        // Use consistent approach with other modals - remove inline display style and use CSS classes
-        modal.style.display = ""; // Remove inline display style
-        modal.style.opacity = "1"; // Reset opacity to 1 when showing modal
-        overlay.classList.add("active");
-        
-        // Update the modal content with the actual message from Telegram
-        const iconInfo = modal.querySelector(".icon-info p");
-        if (iconInfo && iconRequestMessage) {
-          iconInfo.textContent = iconRequestMessage;
-        }
-        
-        // Reset file selection
-        this.resetIconFileSelection();
-        
-        // Clean up GPU hints after animation
-        setTimeout(() => {
-          modal.style.willChange = 'auto';
-          overlay.style.willChange = 'auto';
-        }, 250);
+      // Update the modal content with the actual message from Telegram
+      const iconInfo = modal.querySelector(".icon-info p");
+      if (iconInfo && iconRequestMessage) {
+        iconInfo.textContent = iconRequestMessage;
       }
-    });
+      
+      // Reset file selection
+      this.resetIconFileSelection();
+    }
   }
 
   showUrlNameModal(processId, takenName, currentAttempt = 1, maxAttempts = 3) {
@@ -6718,19 +6723,33 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           this.showUrlNameModal(this.currentIconProcessId, response.original_url_name || response.pack_url_name || response.url_name || "retry");
         } else {
           // Continue monitoring for remaining steps (URL name step)
+          // CRITICAL FIX: Ensure we follow the same flow as skip button
+          this.workflowState.iconUploaded = true;
+          this.workflowState.currentStep = 'url_name';
           this.startStickerProgressMonitoring(this.currentIconProcessId);
         }
       } else {
         // Detect Telegram size error and mark as manual continuation allowed
         const errorText = String(response.error || '').toLowerCase();
-        if (errorText.includes('too big') || errorText.includes('maximum file size') || response.manual_completion_required) {
-          this.addStatusItem("Icon rejected: file too big (max 32 KB). You can continue manually in Telegram.", "warning");
-          this.showToast("warning", "Icon Too Big", "Telegram rejected the icon. Continue manually in @Stickers.");
+        if (errorText.includes('too big') || errorText.includes('maximum file size') || 
+            errorText.includes('invalid file') || errorText.includes('file type') || 
+            response.manual_completion_required) {
+          // CRITICAL FIX: Handle both size and format errors with appropriate messages
+          const isSizeError = errorText.includes('too big') || errorText.includes('maximum file size');
+          const errorMessage = isSizeError ? 
+            "Icon rejected: file too big (max 32 KB). You can continue manually in Telegram." : 
+            "Icon rejected: invalid file format. You can continue manually in Telegram.";
+          const toastMessage = isSizeError ? 
+            "Telegram rejected the icon due to size. Continue manually in @Stickers." : 
+            "Telegram rejected the icon due to format. Continue manually in @Stickers.";
+          
+          this.addStatusItem(errorMessage, "warning");
+          this.showToast("warning", "Icon Rejected", toastMessage);
           setTimeout(() => this.hideIconModal(), 200);
           this.stopStickerProgressMonitoring();
           this.onStickerProcessCompleted(true, {
             manual_completion_required: true,
-            message: response.message || "Icon rejected due to size. Continue manually in Telegram."
+            message: response.message || errorMessage
           });
           return;
         }
