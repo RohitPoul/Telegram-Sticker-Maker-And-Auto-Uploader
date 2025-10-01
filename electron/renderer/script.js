@@ -1815,11 +1815,18 @@ class TelegramUtilities {
     modal.style.display = "none";
     modal.style.opacity = "0";
     modal.style.visibility = "visible";
-    modal.style.zIndex = "10000";
+    modal.style.zIndex = "10000"; // Ensure highest z-index
+    
+    // CRITICAL FIX: Ensure proper positioning using fixed positioning
     modal.style.position = "fixed";
     modal.style.top = "50%";
     modal.style.left = "50%";
     modal.style.transform = "translate(-50%, -50%)";
+    modal.style.margin = "0";
+    
+    // Ensure modal is brought to front
+    modal.style.setProperty('z-index', '10000', 'important');
+    
     modal.style.maxWidth = "700px";
     modal.style.width = "90%";
     
@@ -1849,8 +1856,14 @@ class TelegramUtilities {
     // Add critical modal protection (prevent outside click dismissal)
     modal.setAttribute('data-critical', 'true');
     
-    // Verify visibility after a short delay
+    // CRITICAL FIX: Ensure modal stays in view by recalculating position
     setTimeout(() => {
+      // Force reflow to ensure proper positioning
+      modal.style.transform = "translate(-50%, -50%)";
+      modal.style.top = "50%";
+      modal.style.left = "50%";
+      
+      // Verify visibility after a short delay
       const computedStyle = getComputedStyle(modal);
       console.log(`🎉 [SUCCESS_MODAL] Visibility check:`, {
         display: computedStyle.display,
@@ -1872,12 +1885,28 @@ class TelegramUtilities {
           overlayRect: overlay.getBoundingClientRect()
         });
       }
-    }, 200);
+      
+      // CRITICAL FIX: Scroll to modal if it's not in view
+      const rect = modal.getBoundingClientRect();
+      const isInViewport = (
+        rect.top >= 0 &&
+        rect.left >= 0 &&
+        rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+        rect.right <= (window.innerWidth || document.documentElement.clientWidth)
+      );
+      
+      if (!isInViewport) {
+        console.log(`🎉 [SUCCESS_MODAL] Modal not in viewport, scrolling to it`);
+        // Scroll the modal into view
+        modal.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+      }
+      
+      // CRITICAL FIX: Ensure modal is above all other elements
+      modal.style.zIndex = "10000";
+      overlay.style.zIndex = "9999";
+    }, 100);
     
     console.log(`🎉 [SUCCESS_MODAL] Modal should now be visible`);
-    
-    // Add comprehensive status message
-    this.addStatusItem(`🎉 Sticker pack created successfully! Shareable link: ${shareableLink}`, "completed");
     
     // Setup event listeners for modal buttons
     this.setupSuccessModalEventListeners(shareableLink);
@@ -1902,6 +1931,12 @@ class TelegramUtilities {
       modal.style.display = "none";
       modal.style.opacity = "0";
       modal.removeAttribute('data-critical');
+      // Reset positioning styles
+      modal.style.position = "";
+      modal.style.top = "";
+      modal.style.left = "";
+      modal.style.transform = "";
+      modal.style.margin = "";
       console.log(`🎉 [SUCCESS_MODAL] Modal hidden`);
     }
     
@@ -2000,28 +2035,6 @@ class TelegramUtilities {
     this.showSuccessModal(testLink);
   }
   
-  createAnotherPack() {
-    // Hide the success modal
-    this.hideSuccessModal();
-    
-    // Switch to the sticker bot tab to create another pack
-    const stickerTab = document.querySelector('.nav-item[data-tab="sticker-bot"]');
-    if (stickerTab) {
-      stickerTab.click();
-    }
-    
-    // Show helpful toast
-    this.showToast("info", "Ready for New Pack", "You can now create another sticker pack!");
-    
-    // Focus on the media files area
-    setTimeout(() => {
-      const mediaSection = document.querySelector('#sticker-bot .media-files-card');
-      if (mediaSection) {
-        mediaSection.scrollIntoView({ behavior: 'smooth' });
-      }
-    }, 500);
-  }
-
   createAnotherPack() {
     console.log('🔄 [RESET] Starting complete process reset...');
     
@@ -5085,6 +5098,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     if (modal) {
       modal.style.opacity = "1";
       modal.style.display = "block";
+      // Ensure proper z-index for emoji modal
+      modal.style.zIndex = "9000";
     }
     
     this.showModal("emoji-modal");
@@ -6051,8 +6066,26 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         // Remove any explicit display style that might override the CSS
         overlay.style.display = "";
         overlay.style.visibility = "";
+        
+        // CRITICAL FIX: Ensure proper modal positioning
         modal.style.display = "block";
         modal.style.opacity = "1"; // Reset opacity to 1 when showing modal
+        
+        // Ensure modal is properly centered
+        modal.style.position = "fixed";
+        modal.style.top = "50%";
+        modal.style.left = "50%";
+        modal.style.transform = "translate(-50%, -50%)";
+        modal.style.margin = "0";
+        
+        // Ensure proper z-index stacking
+        if (modalId === "success-modal") {
+          modal.style.zIndex = "10000";
+        } else if (modalId === "emoji-modal" || modalId === "icon-modal" || modalId === "url-name-modal") {
+          modal.style.zIndex = "9000";
+        } else {
+          modal.style.zIndex = "8000";
+        }
         
         // Special handling for emoji modal
         if (modalId === "emoji-modal") {
@@ -6102,6 +6135,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       modals.forEach((modal) => {
         modal.style.display = "none";
         modal.style.opacity = "0";
+        // Reset z-index when hiding
+        modal.style.zIndex = "";
       });
       
       // Clear modal inputs
@@ -6113,29 +6148,18 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       // Reset emoji modal flags
       this.isSavingEmoji = false;
       this.isEmojiModalLocked = false;
+      this.preventEmojiModalClosure = false;
     });
   }
 
   // Icon Selection Modal Functions
-  showIconModal(processId, iconRequestMessage) {
-    this.currentIconProcessId = processId;
-    this.currentIconRequestMessage = iconRequestMessage;
-    this.selectedIconFile = null;
+  showIconModal(iconRequestMessage) {
+    console.log(`🖼️ [ICON_MODAL] Showing icon modal with message: ${iconRequestMessage}`);
     
-    // CRITICAL FIX: Update workflow state to track icon modal phase
-    this.workflowState.currentStep = 'icon_upload';
+    // Hide any existing loading overlay
+    this.hideLoadingOverlay();
     
-    // CRITICAL FIX: Remove timeout to prevent getting stuck in icon modal
-    // User requested: "we dont need timeout here cause it is auto sending we want user to give order if they dont we wait no matter what"
-    // this.iconModalTimeout = setTimeout(() => {
-    //   if (this.workflowState.currentStep === 'icon_upload' && !this.workflowState.iconUploaded) {
-    //     this.addStatusItem("Icon modal timeout - automatically skipping icon step", "warning");
-    //     this.showToast("warning", "Auto Skip", "Icon step timed out. Automatically skipping to continue workflow.");
-    //     this.skipIconSelection();
-    //   }
-    // }, 30000); // 30 second timeout
-    
-    // Reset UI state for icon modal
+    // Reset file info display
     const fileInfo = document.getElementById("icon-file-info");
     const fileName = document.getElementById("icon-file-name");
     const confirmBtn = document.getElementById("confirm-icon-upload");
@@ -6153,6 +6177,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       // Use consistent approach with other modals
       modal.style.display = "flex"; // Direct display style for immediate showing
       modal.style.opacity = "1"; // Set opacity to 1 immediately
+      // Ensure proper z-index for icon modal
+      modal.style.zIndex = "9000";
       overlay.classList.add("active");
       
       // Update the modal content with the actual message from Telegram
@@ -6174,103 +6200,141 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     }
   }
 
-  showUrlNameModal(processId, takenName, currentAttempt = 1, maxAttempts = 3) {
+  showUrlNameModal(takenUrlName, attemptNumber, maxAttempts) {
+    console.log(`🔗 [URL_MODAL] Showing URL name modal - taken: ${takenUrlName}, attempt: ${attemptNumber}/${maxAttempts}`);
+    
+    // Hide any existing loading overlay
+    this.hideLoadingOverlay();
+    
+    const modal = document.getElementById("url-name-modal");
+    const overlay = document.getElementById("modal-overlay");
+    const takenNameElement = document.getElementById("taken-url-name");
+    const attemptCounter = document.getElementById("attempt-counter");
+    const newUrlInput = document.getElementById("new-url-name");
+    
+    if (!modal || !overlay) {
+      console.error(`🔗 [URL_MODAL] Modal or overlay not found - modal: ${!!modal}, overlay: ${!!overlay}`);
+      return;
+    }
+    
+    // Set modal content
+    if (takenNameElement) takenNameElement.textContent = takenUrlName;
+    if (attemptCounter) attemptCounter.textContent = `Attempt ${attemptNumber} of ${maxAttempts}`;
+    
+    // Clear any previous input
+    if (newUrlInput) newUrlInput.value = "";
+    
+    // Ensure proper z-index for URL name modal
+    modal.style.zIndex = "9000";
+    
+    // Show modal using the standard method
+    this.showModal("url-name-modal");
+    
+    // Focus on the input field
+    setTimeout(() => {
+      if (newUrlInput) {
+        newUrlInput.focus();
+      }
+    }, 100);
+  }
+
+  // Fixed the malformed function
+  showUrlNameModalWithSuggestions(processId, takenName, currentAttempt, maxAttempts) {
     try {
-      const modal = document.getElementById("url-name-modal");
-      const overlay = document.getElementById("modal-overlay");
-      const takenNameSpan = document.getElementById("taken-url-name");
-      const newUrlNameInput = document.getElementById("new-url-name");
-      const attemptCounter = document.getElementById("attempt-counter");
-      const suggestionsContainer = document.getElementById("url-suggestions");
+      var modal = document.getElementById("url-name-modal");
+      var overlay = document.getElementById("modal-overlay");
+      var takenNameSpan = document.getElementById("taken-url-name");
+      var attemptCounter = document.getElementById("attempt-counter");
+      var newUrlNameInput = document.getElementById("new-url-name");
+      var suggestionsContainer = document.getElementById("url-suggestions");
       
       if (!modal || !overlay) {
         console.error(`Critical: Modal elements not found!`);
         return;
       }
     
-    // Update taken name display
-    if (takenNameSpan) {
-      takenNameSpan.textContent = takenName;
-    }
+      // Update taken name display
+      if (takenNameSpan) {
+        takenNameSpan.textContent = takenName;
+      }
     
-    // Update attempt counter (simplified)
-    if (attemptCounter) {
-      attemptCounter.textContent = `Attempt ${currentAttempt} of ${maxAttempts}`;
-    }
+      // Update attempt counter (simplified)
+      if (attemptCounter) {
+        attemptCounter.textContent = `Attempt ${currentAttempt} of ${maxAttempts}`;
+      }
     
-    // Generate smart suggestions
-    this.generateUrlSuggestions(takenName, suggestionsContainer);
+      // Generate smart suggestions
+      this.generateUrlSuggestions(takenName, suggestionsContainer);
     
-    if (newUrlNameInput) {
-      // Start with a smart suggestion
-      const timestamp = Date.now().toString().slice(-6);
-      const baseNameClean = takenName.replace(/[^a-zA-Z0-9]/g, '').substring(0, 20);
-      const suggestedName = `${baseNameClean}_${timestamp}`;
-      newUrlNameInput.value = suggestedName;
-      
-      // Simple validation without complex DOM manipulation
-      const validateInput = () => {
-        const value = newUrlNameInput.value.trim();
-        const validation = this.validateUrlName(value);
-        const container = newUrlNameInput.closest('.url-input-container');
+      if (newUrlNameInput) {
+        // Start with a smart suggestion
+        var timestamp = Date.now().toString().slice(-6);
+        var baseNameClean = takenName.replace(/[^a-zA-Z0-9]/g, '').substring(0, 20);
+        var suggestedName = `${baseNameClean}_${timestamp}`;
+        newUrlNameInput.value = suggestedName;
         
-        // Only apply styling if elements exist
-        if (container) {
-          if (value.length === 0) {
-            container.style.borderColor = 'var(--border-color)';
-          } else if (validation.valid) {
-            container.style.borderColor = 'var(--success-color)';
-          } else {
-            container.style.borderColor = 'var(--error-color)';
+        // Simple validation without complex DOM manipulation
+        var validateInput = function() {
+          var value = newUrlNameInput.value.trim();
+          var validation = this.validateUrlName(value);
+          var container = newUrlNameInput.closest('.url-input-container');
+          
+          // Only apply styling if elements exist
+          if (container) {
+            if (value.length === 0) {
+              container.style.borderColor = 'var(--border-color)';
+            } else if (validation.valid) {
+              container.style.borderColor = 'var(--success-color)';
+            } else {
+              container.style.borderColor = 'var(--error-color)';
+            }
           }
-        }
-      };
-      
-      // Remove any existing event listeners
-      newUrlNameInput.removeEventListener('input', validateInput);
-      newUrlNameInput.addEventListener('input', validateInput);
-      
-      // Add Enter key support
-      newUrlNameInput.removeEventListener('keypress', this.handleUrlRetryKeypress);
-      this.handleUrlRetryKeypress = (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          this.submitNewUrlName();
-        }
-      };
-      newUrlNameInput.addEventListener('keypress', this.handleUrlRetryKeypress);
-      
-      // Initial validation
-      setTimeout(() => {
-        validateInput();
-        newUrlNameInput.focus();
-        newUrlNameInput.select();
-      }, 150);
-    }
+        }.bind(this);
+        
+        // Remove any existing event listeners
+        newUrlNameInput.removeEventListener('input', validateInput);
+        newUrlNameInput.addEventListener('input', validateInput);
+        
+        // Add Enter key support
+        newUrlNameInput.removeEventListener('keypress', this.handleUrlRetryKeypress);
+        this.handleUrlRetryKeypress = function(e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            this.submitNewUrlName();
+          }
+        }.bind(this);
+        newUrlNameInput.addEventListener('keypress', this.handleUrlRetryKeypress);
+        
+        // Initial validation
+        setTimeout(function() {
+          validateInput();
+          newUrlNameInput.focus();
+          newUrlNameInput.select();
+        }, 150);
+      }
     
-    // Store retry information - CRITICAL: Do this BEFORE any modal manipulation
-    this.currentUrlNameProcessId = processId;
-    this.currentUrlAttempt = currentAttempt;
-    this.maxUrlAttempts = maxAttempts;
+      // Store retry information - CRITICAL: Do this BEFORE any modal manipulation
+      this.currentUrlNameProcessId = processId;
+      this.currentUrlAttempt = currentAttempt;
+      this.maxUrlAttempts = maxAttempts;
     
-    // ENHANCED: Also sync with StickerBotManager if available
-    if (window.app?.stickerBot) {
-      window.app.stickerBot.currentUrlNameProcessId = processId;
-      window.app.stickerBot.currentUrlAttempt = currentAttempt;
-      window.app.stickerBot.maxUrlAttempts = maxAttempts;
-    }
+      // ENHANCED: Also sync with StickerBotManager if available
+      if (window.app?.stickerBot) {
+        window.app.stickerBot.currentUrlNameProcessId = processId;
+        window.app.stickerBot.currentUrlAttempt = currentAttempt;
+        window.app.stickerBot.maxUrlAttempts = maxAttempts;
+      }
     
-    // Show modal with proper overlay
-    overlay.classList.add("active");
-    modal.style.display = "flex";
+      // Show modal with proper overlay
+      overlay.classList.add("active");
+      modal.style.display = "flex";
     
-    // Add status message
-    if (currentAttempt <= maxAttempts) {
-      this.addStatusItem(`URL name '${takenName}' is taken. Showing retry options (${currentAttempt}/${maxAttempts})`, "warning");
-    } else {
-      this.addStatusItem(`All retry attempts exhausted for URL name '${takenName}'.`, "error");
-    }
-    
+      // Add status message
+      if (currentAttempt <= maxAttempts) {
+        this.addStatusItem(`URL name '${takenName}' is taken. Showing retry options (${currentAttempt}/${maxAttempts})`, "warning");
+      } else {
+        this.addStatusItem(`All retry attempts exhausted for URL name '${takenName}'.`, "error");
+      }
     } catch (error) {
       console.error('Error showing URL name modal:', error);
       this.showToast('error', 'Modal Error', 'Failed to show URL retry modal');
@@ -6280,14 +6344,14 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   generateUrlSuggestions(baseName, container) {
     if (!container) return;
     
-    const cleanBase = baseName.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().substring(0, 15);
-    const random = () => Math.floor(Math.random() * 999) + 100;
-    const currentYear = new Date().getFullYear();
-    const month = String(new Date().getMonth() + 1).padStart(2, '0');
-    const day = String(new Date().getDate()).padStart(2, '0');
+    var cleanBase = baseName.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().substring(0, 15);
+    var random = function() { return Math.floor(Math.random() * 999) + 100; };
+    var currentYear = new Date().getFullYear();
+    var month = String(new Date().getMonth() + 1).padStart(2, '0');
+    var day = String(new Date().getDate()).padStart(2, '0');
     
     // Advanced smart suggestion categories
-    const creativeCategories = {
+    var creativeCategories = {
       professional: [`${cleanBase}_official`, `${cleanBase}_studio`, `${cleanBase}_premium`, `${cleanBase}_pro`],
       versioned: [`${cleanBase}_v${random()}`, `${cleanBase}_${currentYear}`, `${cleanBase}_v2`, `${cleanBase}_latest`],
       themed: [`${cleanBase}_collection`, `${cleanBase}_pack`, `${cleanBase}_set`, `${cleanBase}_bundle`],
@@ -6296,19 +6360,19 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     };
     
     // Smart selection algorithm - pick diverse suggestions from different categories
-    const smartSuggestions = [];
-    const categories = Object.keys(creativeCategories);
-    const usedPrefixes = new Set();
+    var smartSuggestions = [];
+    var categories = Object.keys(creativeCategories);
+    var usedPrefixes = new Set();
     
     // Select one from each category, avoiding repetitive patterns
-    categories.forEach(category => {
-      const options = creativeCategories[category].filter(suggestion => {
-        const prefix = suggestion.split('_')[1];
+    categories.forEach(function(category) {
+      var options = creativeCategories[category].filter(function(suggestion) {
+        var prefix = suggestion.split('_')[1];
         return !usedPrefixes.has(prefix) && suggestion.length >= 5 && suggestion.length <= 32;
       });
       
       if (options.length > 0) {
-        const selected = options[Math.floor(Math.random() * options.length)];
+        var selected = options[Math.floor(Math.random() * options.length)];
         smartSuggestions.push(selected);
         usedPrefixes.add(selected.split('_')[1]);
       }
@@ -6316,23 +6380,23 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     
     // Add fallback unique suggestions if needed
     while (smartSuggestions.length < 5) {
-      const uniqueId = Date.now().toString().slice(-4) + Math.floor(Math.random() * 99);
-      const fallback = `${cleanBase}_${uniqueId}`;
+      var uniqueId = Date.now().toString().slice(-4) + Math.floor(Math.random() * 99);
+      var fallback = `${cleanBase}_${uniqueId}`;
       if (!smartSuggestions.includes(fallback)) {
         smartSuggestions.push(fallback);
       }
     }
     
     // Take exactly 5 diverse suggestions
-    const finalSuggestions = smartSuggestions.slice(0, 5);
+    var finalSuggestions = smartSuggestions.slice(0, 5);
     
-    container.innerHTML = finalSuggestions.map(suggestion => 
-      `<button class="suggestion-btn" onclick="window.app?.applySuggestion('${suggestion}')">${suggestion}</button>`
-    ).join('');
+    container.innerHTML = finalSuggestions.map(function(suggestion) {
+      return `<button class="suggestion-btn" onclick="window.app?.applySuggestion('${suggestion}')">${suggestion}</button>`;
+    }).join('');
   }
   
   applySuggestion(suggestion) {
-    const input = document.getElementById("new-url-name");
+    var input = document.getElementById("new-url-name");
     if (input) {
       input.value = suggestion;
       input.dispatchEvent(new Event('input')); // Trigger validation
