@@ -279,11 +279,7 @@ class TelegramUtilities {
     
     // ENHANCED: Sanitize path to prevent [Errno 22] Invalid argument
     // Remove only null bytes which are the main cause of OS errors
-    // ENHANCED: More comprehensive sanitization to prevent [Errno 22] Invalid argument
-    let sanitizedPath = path.replace(/\x00/g, '').trim();
-    
-    // Additional sanitization for URL-safe characters
-    sanitizedPath = sanitizedPath.replace(/[^a-zA-Z0-9\-_/.]/g, encodeURIComponent);
+    const sanitizedPath = path.replace(/\x00/g, '').trim();
     
     if (!sanitizedPath || sanitizedPath.length === 0) {
       throw new Error('Invalid API path after sanitization');
@@ -303,11 +299,8 @@ class TelegramUtilities {
         try {
           // Stringify and parse to ensure valid JSON
           const jsonString = JSON.stringify(body);
-          // Remove control characters that could cause OS errors
-          // ENHANCED: More comprehensive sanitization to prevent [Errno 22] Invalid argument
-          let sanitizedJsonString = jsonString.replace(/[\x00-\x1f\x7f-\x9f]/g, '');
-          // Additional URL-safe encoding for special characters
-          sanitizedJsonString = sanitizedJsonString.replace(/[^\x20-\x7e\u00a0-\u024f\u1e00-\u1eff]/g, encodeURIComponent);
+          // Remove only null bytes which are the main cause of OS errors
+          const sanitizedJsonString = jsonString.replace(/\x00/g, '');
           sanitizedBody = sanitizedJsonString;
         } catch (jsonError) {
           console.error('[API] Error serializing request body:', jsonError);
@@ -475,7 +468,6 @@ class TelegramUtilities {
     const uploadIconBtn = document.getElementById("upload-icon-btn");
     const skipIconBtn = document.getElementById("skip-icon-btn");
     const confirmIconUploadBtn = document.getElementById("confirm-icon-upload");
-    const changeIconFileBtn = document.getElementById("change-icon-file");
     const cancelIconSelectionBtn = document.getElementById("cancel-icon-selection");
     
     if (uploadIconBtn) {
@@ -486,9 +478,6 @@ class TelegramUtilities {
     }
     if (confirmIconUploadBtn) {
       confirmIconUploadBtn.addEventListener("click", () => this.confirmIconUpload());
-    }
-    if (changeIconFileBtn) {
-      changeIconFileBtn.addEventListener("click", () => this.selectIconFile());
     }
     if (cancelIconSelectionBtn) {
       cancelIconSelectionBtn.addEventListener("click", () => this.hideIconModal());
@@ -2043,13 +2032,38 @@ class TelegramUtilities {
   }
   
   createAnotherPack() {
+    // Hide the success modal
+    this.hideSuccessModal();
+    
+    // Switch to the sticker bot tab to create another pack
+    const stickerTab = document.querySelector('.nav-item[data-tab="sticker-bot"]');
+    if (stickerTab) {
+      stickerTab.click();
+    }
+    
+    // Show helpful toast
+    this.showToast("info", "Ready for New Pack", "You can now create another sticker pack!");
+    
+    // Focus on the media files area
+    setTimeout(() => {
+      const mediaSection = document.querySelector('#sticker-bot .media-files-card');
+      if (mediaSection) {
+        mediaSection.scrollIntoView({ behavior: 'smooth' });
+      }
+    }, 500);
+  }
+
+  createAnotherPack() {
     console.log('🔄 [RESET] Starting complete process reset...');
     
     this.hideSuccessModal();
     
     // STEP 1: Clear form inputs and reset to initial state
-    document.getElementById("pack-name").value = "";
-    document.getElementById("pack-url-name").value = "";
+    const packNameInput = document.getElementById("pack-name");
+    const urlNameInput = document.getElementById("pack-url-name");
+    
+    if (packNameInput) packNameInput.value = "";
+    if (urlNameInput) urlNameInput.value = "";
     
     // STEP 2: Clear media files and reset arrays
     this.mediaFiles = [];
@@ -2057,8 +2071,6 @@ class TelegramUtilities {
     this.updatePackActions();
     
     // STEP 3: Reset validation display (clear any existing validation)
-    const packNameInput = document.getElementById("pack-name");
-    const urlNameInput = document.getElementById("pack-url-name");
     const packNameValidation = document.getElementById("pack-name-validation");
     const urlNameValidation = document.getElementById("pack-url-name-validation");
     
@@ -2094,8 +2106,8 @@ class TelegramUtilities {
     const createBtn = document.getElementById("create-sticker-pack");
     if (createBtn) {
       // Don't just enable the button - check all conditions properly
-      const packName = document.getElementById("pack-name")?.value.trim() || "";
-      const urlName = document.getElementById("pack-url-name")?.value.trim() || "";
+      const packName = packNameInput?.value.trim() || "";
+      const urlName = urlNameInput?.value.trim() || "";
       
       const isPackNameValid = packName.length > 0 && packName.length <= 64;
       const isUrlNameValid = /^[a-zA-Z][a-zA-Z0-9_]{4,31}$/.test(urlName);
@@ -2231,6 +2243,7 @@ class TelegramUtilities {
       return { valid: false, error: "URL name can only contain letters, numbers, and underscores" };
     }
 
+    return { valid: true };
     // Starting character validation (must start with letter)
     if (!/^[a-zA-Z]/.test(urlName)) {
       return { valid: false, error: "URL name must start with a letter" };
@@ -5395,7 +5408,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       // ENHANCED: Better error handling for [Errno 22] Invalid argument
       let errorMessage = error.message;
       if (error.message && (error.message.includes('Invalid argument') || error.message.includes('Errno 22'))) {
-        errorMessage = 'Invalid request data - contains invalid characters. Please check your inputs and try again. Special characters in pack name, URL, or file paths may need to be removed.';
+        errorMessage = 'Invalid request data - contains invalid characters. Please check your inputs and try again.';
       }
       
       this.addStatusItem(`❌ Error: Failed to create sticker pack - ${errorMessage}`, "error");
@@ -5465,7 +5478,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           }
           
           // PRIORITY CHECK 2: Check for icon selection (before completed status)
-          if (progress.waiting_for_user && (progress.icon_request_message || progress.icon_request) && !this.iconHandledProcesses.has(this.currentStickerProcessId)) {
+          if (progress.waiting_for_user && (progress.icon_request_message || progress.icon_request) && !this.iconHandledProcesses.has(processId)) {
             // Check auto-skip setting
             const autoSkipIcon = document.getElementById("auto-skip-icon");
             const shouldAutoSkip = autoSkipIcon && autoSkipIcon.checked;
@@ -5476,7 +5489,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
               this.addStatusItem("Auto-skipping icon selection...", "info");
               try {
                 const response = await this.apiRequest("POST", "/api/sticker/skip-icon", {
-                  process_id: this.currentStickerProcessId
+                  process_id: processId
                 });
                 if (response.success) {
                   this.addStatusItem("Icon step auto-skipped", "completed");
@@ -5522,13 +5535,13 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
                   this.addStatusItem(`Error auto-skipping icon: ${response.error}`, "error");
                   // Show manual modal as fallback
                   this.stopStickerProgressMonitoring();
-                  this.showIconModal(this.currentStickerProcessId, progress.icon_request_message);
+                  this.showIconModal(processId, progress.icon_request_message);
                 }
               } catch (error) {
                 this.addStatusItem(`Error auto-skipping icon: ${error.message}`, "error");
                 // Show manual modal as fallback
                 this.stopStickerProgressMonitoring();
-                this.showIconModal(this.currentStickerProcessId, progress.icon_request_message);
+                this.showIconModal(processId, progress.icon_request_message);
               }
             } else {
               // Manual mode: show icon selection modal and STOP monitoring
@@ -5536,10 +5549,10 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
               this.stopStickerProgressMonitoring(); // Stop monitoring - user controls when to continue
               
               // CRITICAL FIX: Store the process ID so we can restart monitoring after icon is sent
-              this.currentIconProcessId = this.currentStickerProcessId;
+              this.currentIconProcessId = processId;
               
               // CRITICAL FIX: Also store in urlPromptHandledProcesses to prevent duplicate handling
-              this.urlPromptHandledProcesses.add(this.currentStickerProcessId);
+              this.urlPromptHandledProcesses.add(processId);
               
               // If Telegram is already asking for short name, bypass icon modal and proceed to URL
               const urlPrompt = (progress.icon_request_message && /short name|create a link|addstickers/i.test(progress.icon_request_message))
@@ -5560,19 +5573,19 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
                     const urlName = (urlInput && typeof urlInput.value === 'string') ? urlInput.value.trim() : '';
                     if (urlName) {
                       const submitRes = await this.apiRequest("POST", "/api/sticker/submit-url-name", {
-                        process_id: this.currentStickerProcessId,
+                        process_id: processId,
                         new_url_name: urlName,
                         current_attempt: 1,
                         max_attempts: 3
                       });
 
                       if (submitRes && submitRes.success) {
-                        this.urlPromptHandledProcesses.add(this.currentStickerProcessId);
-                        this.startStickerProgressMonitoring(this.currentStickerProcessId);
+                        this.urlPromptHandledProcesses.add(processId);
+                        this.startStickerProgressMonitoring(processId);
                         return;
                       } else if (submitRes && submitRes.url_name_taken) {
-                        this.urlPromptHandledProcesses.add(this.currentStickerProcessId);
-                        this.showUrlNameModal(this.currentStickerProcessId, urlName, (submitRes.attempt || 1), (submitRes.max_attempts || 3));
+                        this.urlPromptHandledProcesses.add(processId);
+                        this.showUrlNameModal(processId, urlName, (submitRes.attempt || 1), (submitRes.max_attempts || 3));
                         return;
                       }
                     }
@@ -5587,41 +5600,41 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
                 if (urlName) {
                   try {
                     const submitRes = await this.apiRequest("POST", "/api/sticker/submit-url-name", {
-                      process_id: this.currentStickerProcessId,
+                      process_id: processId,
                       new_url_name: urlName,
                       current_attempt: 1,
                       max_attempts: 3
                     });
                     if (submitRes && submitRes.success) {
-                      this.urlPromptHandledProcesses.add(this.currentStickerProcessId);
-                      this.startStickerProgressMonitoring(this.currentStickerProcessId);
+                      this.urlPromptHandledProcesses.add(processId);
+                      this.startStickerProgressMonitoring(processId);
                       return;
                     } else if (submitRes && submitRes.url_name_taken) {
-                      this.urlPromptHandledProcesses.add(this.currentStickerProcessId);
-                      this.showUrlNameModal(this.currentStickerProcessId, urlName, (submitRes.attempt || 1), (submitRes.max_attempts || 3));
+                      this.urlPromptHandledProcesses.add(processId);
+                      this.showUrlNameModal(processId, urlName, (submitRes.attempt || 1), (submitRes.max_attempts || 3));
                       return;
                     }
                   } catch {}
                 }
                 // Fallback: show URL modal to collect the name
-                this.urlPromptHandledProcesses.add(this.currentStickerProcessId);
-                this.showUrlNameModal(this.currentStickerProcessId, progress.pack_url_name || "retry", 1, 3);
+                this.urlPromptHandledProcesses.add(processId);
+                this.showUrlNameModal(processId, progress.pack_url_name || "retry", 1, 3);
                 return;
               }
               
-              this.showIconModal(this.currentStickerProcessId, progress.icon_request_message);
-              this.iconHandledProcesses.add(this.currentStickerProcessId);
+              this.showIconModal(processId, progress.icon_request_message);
+              this.iconHandledProcesses.add(processId);
               
               // CRITICAL FIX: Also store in urlPromptHandledProcesses to prevent duplicate handling
-              this.urlPromptHandledProcesses.add(this.currentStickerProcessId);
+              this.urlPromptHandledProcesses.add(processId);
             }
             return; // CRITICAL: Exit early after handling icon selection
           }
           
           // PRIORITY CHECK 3: Check for URL name retry after icon upload
-          if (progress.waiting_for_user && progress.url_name_taken && !this.urlPromptHandledProcesses.has(this.currentStickerProcessId)) {
+          if (progress.waiting_for_user && progress.url_name_taken && !this.urlPromptHandledProcesses.has(processId)) {
             // Mark as handled to prevent duplicate processing
-            this.urlPromptHandledProcesses.add(this.currentStickerProcessId);
+            this.urlPromptHandledProcesses.add(processId);
             
             // Stop monitoring while user provides new URL name
             this.stopStickerProgressMonitoring();
@@ -5632,7 +5645,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
             const maxAttempts = progress.max_url_attempts || 3;
             
             this.addStatusItem(`URL name '${takenName}' is taken. Showing retry options (${currentAttempt}/${maxAttempts})`, "warning");
-            this.showUrlNameModal(this.currentStickerProcessId, takenName, currentAttempt, maxAttempts);
+            this.showUrlNameModal(takenName, currentAttempt, maxAttempts, processId);
             return; // Exit early after handling URL name retry
           }
           
@@ -6170,11 +6183,9 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     const fileInfo = document.getElementById("icon-file-info");
     const fileName = document.getElementById("icon-file-name");
     const confirmBtn = document.getElementById("confirm-icon-upload");
-    const changeBtn = document.getElementById("change-icon-file");
     if (fileInfo) fileInfo.style.display = "none";
     if (fileName) fileName.textContent = "No file selected";
     if (confirmBtn) confirmBtn.disabled = true;
-    if (changeBtn) changeBtn.style.display = "none"; // Change is not an option here
     
     // Optimized modal display without unnecessary GPU acceleration
     const modal = document.getElementById("icon-modal");
@@ -6207,8 +6218,13 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     }
   }
 
-  showUrlNameModal(takenUrlName, attemptNumber, maxAttempts) {
+  showUrlNameModal(takenUrlName, attemptNumber, maxAttempts, processId = null) {
     console.log(`🔗 [URL_MODAL] Showing URL name modal - taken: ${takenUrlName}, attempt: ${attemptNumber}/${maxAttempts}`);
+    
+    // Store process ID for later use
+    if (processId) {
+      this.currentUrlNameProcessId = processId;
+    }
     
     // Hide any existing loading overlay
     this.hideLoadingOverlay();
@@ -6228,6 +6244,12 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     if (takenNameElement) takenNameElement.textContent = takenUrlName;
     if (attemptCounter) attemptCounter.textContent = `Attempt ${attemptNumber} of ${maxAttempts}`;
     
+    // Generate URL suggestions
+    const suggestionsContainer = document.getElementById("url-suggestions");
+    if (suggestionsContainer) {
+      this.generateUrlSuggestions(takenUrlName, suggestionsContainer);
+    }
+    
     // Clear any previous input
     if (newUrlInput) newUrlInput.value = "";
     
@@ -6245,120 +6267,17 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     }, 100);
   }
 
-  // Fixed the malformed function
-  showUrlNameModalWithSuggestions(processId, takenName, currentAttempt, maxAttempts) {
-    try {
-      var modal = document.getElementById("url-name-modal");
-      var overlay = document.getElementById("modal-overlay");
-      var takenNameSpan = document.getElementById("taken-url-name");
-      var attemptCounter = document.getElementById("attempt-counter");
-      var newUrlNameInput = document.getElementById("new-url-name");
-      var suggestionsContainer = document.getElementById("url-suggestions");
-      
-      if (!modal || !overlay) {
-        console.error(`Critical: Modal elements not found!`);
-        return;
-      }
-    
-      // Update taken name display
-      if (takenNameSpan) {
-        takenNameSpan.textContent = takenName;
-      }
-    
-      // Update attempt counter (simplified)
-      if (attemptCounter) {
-        attemptCounter.textContent = `Attempt ${currentAttempt} of ${maxAttempts}`;
-      }
-    
-      // Generate smart suggestions
-      this.generateUrlSuggestions(takenName, suggestionsContainer);
-    
-      if (newUrlNameInput) {
-        // Start with a smart suggestion
-        var timestamp = Date.now().toString().slice(-6);
-        var baseNameClean = takenName.replace(/[^a-zA-Z0-9]/g, '').substring(0, 20);
-        var suggestedName = `${baseNameClean}_${timestamp}`;
-        newUrlNameInput.value = suggestedName;
-        
-        // Simple validation without complex DOM manipulation
-        var validateInput = function() {
-          var value = newUrlNameInput.value.trim();
-          var validation = this.validateUrlName(value);
-          var container = newUrlNameInput.closest('.url-input-container');
-          
-          // Only apply styling if elements exist
-          if (container) {
-            if (value.length === 0) {
-              container.style.borderColor = 'var(--border-color)';
-            } else if (validation.valid) {
-              container.style.borderColor = 'var(--success-color)';
-            } else {
-              container.style.borderColor = 'var(--error-color)';
-            }
-          }
-        }.bind(this);
-        
-        // Remove any existing event listeners
-        newUrlNameInput.removeEventListener('input', validateInput);
-        newUrlNameInput.addEventListener('input', validateInput);
-        
-        // Add Enter key support
-        newUrlNameInput.removeEventListener('keypress', this.handleUrlRetryKeypress);
-        this.handleUrlRetryKeypress = function(e) {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            this.submitNewUrlName();
-          }
-        }.bind(this);
-        newUrlNameInput.addEventListener('keypress', this.handleUrlRetryKeypress);
-        
-        // Initial validation
-        setTimeout(function() {
-          validateInput();
-          newUrlNameInput.focus();
-          newUrlNameInput.select();
-        }, 150);
-      }
-    
-      // Store retry information - CRITICAL: Do this BEFORE any modal manipulation
-      this.currentUrlNameProcessId = processId;
-      this.currentUrlAttempt = currentAttempt;
-      this.maxUrlAttempts = maxAttempts;
-    
-      // ENHANCED: Also sync with StickerBotManager if available
-      if (window.app?.stickerBot) {
-        window.app.stickerBot.currentUrlNameProcessId = processId;
-        window.app.stickerBot.currentUrlAttempt = currentAttempt;
-        window.app.stickerBot.maxUrlAttempts = maxAttempts;
-      }
-    
-      // Show modal with proper overlay
-      overlay.classList.add("active");
-      modal.style.display = "flex";
-    
-      // Add status message
-      if (currentAttempt <= maxAttempts) {
-        this.addStatusItem(`URL name '${takenName}' is taken. Showing retry options (${currentAttempt}/${maxAttempts})`, "warning");
-      } else {
-        this.addStatusItem(`All retry attempts exhausted for URL name '${takenName}'.`, "error");
-      }
-    } catch (error) {
-      console.error('Error showing URL name modal:', error);
-      this.showToast('error', 'Modal Error', 'Failed to show URL retry modal');
-    }
-  }
-  
   generateUrlSuggestions(baseName, container) {
     if (!container) return;
     
-    var cleanBase = baseName.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().substring(0, 15);
-    var random = function() { return Math.floor(Math.random() * 999) + 100; };
-    var currentYear = new Date().getFullYear();
-    var month = String(new Date().getMonth() + 1).padStart(2, '0');
-    var day = String(new Date().getDate()).padStart(2, '0');
+    const cleanBase = baseName.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().substring(0, 15);
+    const random = () => Math.floor(Math.random() * 999) + 100;
+    const currentYear = new Date().getFullYear();
+    const month = String(new Date().getMonth() + 1).padStart(2, '0');
+    const day = String(new Date().getDate()).padStart(2, '0');
     
     // Advanced smart suggestion categories
-    var creativeCategories = {
+    const creativeCategories = {
       professional: [`${cleanBase}_official`, `${cleanBase}_studio`, `${cleanBase}_premium`, `${cleanBase}_pro`],
       versioned: [`${cleanBase}_v${random()}`, `${cleanBase}_${currentYear}`, `${cleanBase}_v2`, `${cleanBase}_latest`],
       themed: [`${cleanBase}_collection`, `${cleanBase}_pack`, `${cleanBase}_set`, `${cleanBase}_bundle`],
@@ -6367,19 +6286,19 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     };
     
     // Smart selection algorithm - pick diverse suggestions from different categories
-    var smartSuggestions = [];
-    var categories = Object.keys(creativeCategories);
-    var usedPrefixes = new Set();
+    const smartSuggestions = [];
+    const categories = Object.keys(creativeCategories);
+    const usedPrefixes = new Set();
     
     // Select one from each category, avoiding repetitive patterns
-    categories.forEach(function(category) {
-      var options = creativeCategories[category].filter(function(suggestion) {
-        var prefix = suggestion.split('_')[1];
+    categories.forEach(category => {
+      const options = creativeCategories[category].filter(suggestion => {
+        const prefix = suggestion.split('_')[1];
         return !usedPrefixes.has(prefix) && suggestion.length >= 5 && suggestion.length <= 32;
       });
       
       if (options.length > 0) {
-        var selected = options[Math.floor(Math.random() * options.length)];
+        const selected = options[Math.floor(Math.random() * options.length)];
         smartSuggestions.push(selected);
         usedPrefixes.add(selected.split('_')[1]);
       }
@@ -6387,23 +6306,23 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     
     // Add fallback unique suggestions if needed
     while (smartSuggestions.length < 5) {
-      var uniqueId = Date.now().toString().slice(-4) + Math.floor(Math.random() * 99);
-      var fallback = `${cleanBase}_${uniqueId}`;
+      const uniqueId = Date.now().toString().slice(-4) + Math.floor(Math.random() * 99);
+      const fallback = `${cleanBase}_${uniqueId}`;
       if (!smartSuggestions.includes(fallback)) {
         smartSuggestions.push(fallback);
       }
     }
     
     // Take exactly 5 diverse suggestions
-    var finalSuggestions = smartSuggestions.slice(0, 5);
+    const finalSuggestions = smartSuggestions.slice(0, 5);
     
-    container.innerHTML = finalSuggestions.map(function(suggestion) {
-      return `<button class="suggestion-btn" onclick="window.app?.applySuggestion('${suggestion}')">${suggestion}</button>`;
-    }).join('');
+    container.innerHTML = finalSuggestions.map(suggestion => 
+      `<button class="suggestion-btn" onclick="window.app?.applySuggestion('${suggestion}')">${suggestion}</button>`
+    ).join('');
   }
   
   applySuggestion(suggestion) {
-    var input = document.getElementById("new-url-name");
+    const input = document.getElementById("new-url-name");
     if (input) {
       input.value = suggestion;
       input.dispatchEvent(new Event('input')); // Trigger validation
@@ -6527,7 +6446,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           this.showToast("success", "URL Name Updated", `Using new URL name: ${newUrlName}`);
           
           // Restart progress monitoring with the same process ID
-          this.startStickerProgressMonitoring(this.currentUrlNameProcessId || processId);
+          this.startStickerProgressMonitoring(processId);
         }
       } else {
         // Check if this was a URL name taken error and we have retries left
@@ -6537,7 +6456,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           if (nextAttempt <= (maxAttempts || 3)) {
             // Show retry modal with updated attempt count
             this.addStatusItem(`❌ URL name '${newUrlName}' is taken. Retry ${nextAttempt}/${maxAttempts}`, "warning");
-            this.showUrlNameModal(this.currentUrlNameProcessId || processId, newUrlName, nextAttempt, maxAttempts);
+            this.showUrlNameModal(processId, newUrlName, nextAttempt, maxAttempts);
             return; // Don't re-enable the button, show new modal
           } else {
             // Exhausted all retries - mark as completed with manual instruction
@@ -6630,12 +6549,10 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         const fileInfo = document.getElementById("icon-file-info");
         const fileNameElement = document.getElementById("icon-file-name");
         const confirmBtn = document.getElementById("confirm-icon-upload");
-        const changeBtn = document.getElementById("change-icon-file");
         
         if (fileInfo) fileInfo.style.display = "block";
         if (fileNameElement) fileNameElement.textContent = fileName;
         if (confirmBtn) confirmBtn.disabled = false;
-        if (changeBtn) changeBtn.style.display = "none"; // hide change file option permanently per requirements
         
         this.addStatusItem(`Selected icon file: ${fileName}`, "info");
       }
@@ -6689,7 +6606,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           this.addStatusItem("Icon skip completed - please provide URL name", "warning");
           this.hideIconModal();
           // Show URL name modal for user input
-          this.showUrlNameModal(this.currentIconProcessId, response.original_url_name || response.pack_url_name || response.url_name || "retry");
+          this.showUrlNameModal(response.original_url_name || response.pack_url_name || response.url_name || "retry", 1, 3, this.currentIconProcessId);
         } else if (response.error && response.error.includes("monitoring error")) {
           // Handle the "Process not found" error by showing success instead
           this.addStatusItem("✅ Sticker pack created successfully", "completed");
@@ -6753,12 +6670,10 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     try {
       this.addStatusItem(`Uploading icon file${retryCount > 0 ? ` (attempt ${retryCount + 1}/${maxRetries + 1})` : ''}...`, "info");
       const confirmBtn = document.getElementById("confirm-icon-upload");
-      const changeBtn = document.getElementById("change-icon-file");
       if (confirmBtn) {
         confirmBtn.disabled = true;
         confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
       }
-      if (changeBtn) changeBtn.style.display = "none";
       
       // Increase timeout for icon upload to match backend
       const response = await this.apiRequest("POST", "/api/sticker/upload-icon", {
@@ -6803,7 +6718,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           // Handle the case where Telegram immediately asks for URL name after icon upload
           this.addStatusItem("Icon uploaded - please provide URL name", "warning");
           // Show URL name modal for user input
-          this.showUrlNameModal(this.currentIconProcessId, response.original_url_name || response.pack_url_name || response.url_name || "retry");
+          this.showUrlNameModal(response.original_url_name || response.pack_url_name || response.url_name || "retry", 1, 3, this.currentIconProcessId);
         } else {
           // Continue monitoring for remaining steps (URL name step)
           // CRITICAL FIX: Ensure we follow the same flow as skip button
@@ -6878,7 +6793,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           confirmBtn.disabled = false;
           confirmBtn.innerHTML = '<i class="fas fa-check"></i> Upload This File';
         }
-        if (changeBtn) changeBtn.style.display = "inline-block";
+
       }
     } catch (error) {
       console.error("Error uploading icon:", error);
@@ -6927,12 +6842,10 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       }
       
       const confirmBtn = document.getElementById("confirm-icon-upload");
-      const changeBtn = document.getElementById("change-icon-file");
       if (confirmBtn) {
         confirmBtn.disabled = false;
         confirmBtn.innerHTML = '<i class="fas fa-check"></i> Upload This File';
       }
-      if (changeBtn) changeBtn.style.display = "inline-block";
     }
   }
 
