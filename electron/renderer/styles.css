@@ -5204,74 +5204,25 @@ html {
   font-size: 0.95rem;
 }
 
-/* Icon Selection Modal Styles - Vertical Layout */
+/* Icon Selection Modal Styles - Compact Layout */
 .icon-selection-content {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
-/* Icon Info Section */
-.icon-info {
-  text-align: center;
-  padding: 1rem;
-  background: rgba(33, 150, 243, 0.1);
-  border: 1px solid rgba(33, 150, 243, 0.2);
-  border-radius: 8px;
-}
-
-.icon-info .info-icon {
-  font-size: 2rem;
-  color: var(--primary-color);
-  margin-bottom: 0.5rem;
-}
-
-.icon-info .info-message {
-  font-size: 1.2rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 0.3rem;
-}
-
-.icon-info .info-details {
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-}
-
-/* Icon Options Section */
-.icon-options-section {
-  background: var(--bg-secondary);
-  border-radius: 8px;
-  padding: 1.2rem;
-  border: 1px solid rgba(16, 185, 129, 0.2);
-}
-
+/* Simplified Icon Options */
 .icon-options {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
-  margin-top: 1rem;
+  gap: 0.75rem;
 }
 
-.icon-option {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.icon-option .btn {
-  min-width: 240px;
-  padding: 1rem 1.5rem;
-  font-size: 1rem;
-  font-weight: 600;
-}
-
-.icon-option .help-text {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  margin: 0;
-  text-align: center;
+.icon-options .btn {
+  min-width: 180px;
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 500;
 }
 
 /* Selected File Preview */
@@ -5425,14 +5376,13 @@ html {
   max-width: 520px;
   min-width: 480px;
   width: 90%;
-  background: #111827; /* Simplified background */
+  background: linear-gradient(135deg, rgba(17, 24, 39, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%);
   border-radius: 16px;
   box-shadow: 0 25px 50px -12px rgba(16, 185, 129, 0.25),
              0 0 0 1px rgba(16, 185, 129, 0.15);
   border: 1px solid rgba(16, 185, 129, 0.2);
   overflow: hidden;
-  /* Remove heavy animation for faster display */
-  /* animation: successModalAppear 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); */
+  animation: successModalAppear 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   /* CRITICAL FIX: Ensure modal is centered */
   margin: auto;
   /* Make modal a column flexbox so header/body/footer layout is stable */
@@ -5449,6 +5399,266 @@ html {
   /* Optimize for performance */
   transform: translateZ(0);
   will-change: auto;
+}
+
+#icon-modal .modal-header {
+  background: linear-gradient(135deg, #065f46 0%, #064e3b 100%);
+  color: white;
+  padding: 24px;
+  text-align: center;
+  border-bottom: none;
+  position: relative;
+}
+
+#icon-modal .modal-header h3 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: 0.5px;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+#icon-modal .modal-header h3 i {
+  color: var(--primary-color);
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+#icon-modal .modal-header .status-badge {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  padding: 0.2rem 0.6rem;
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-left: 0.5rem;
+  flex-shrink: 0;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+#icon-modal .info-details {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+  font-weight: 400;
+}
+
+#icon-modal .modal-body {
+  padding: 24px;
+  background: var(--bg-secondary);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  flex: 1 1 auto;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 1rem;
+  margin-bottom: 1rem;
+}
+
+.section-title i {
+  color: #34d399;
+  font-size: 0.95rem;
+}
+
+.icon-options-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.icon-option-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.icon-option-btn:hover {
+  border-color: var(--primary-color);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.icon-option-btn .option-icon {
+  font-size: 1.5rem;
+  color: var(--primary-color);
+  background: rgba(33, 150, 243, 0.1);
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+.icon-option-btn h4 {
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.icon-option-btn p {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.file-preview-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.file-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.file-preview i {
+  color: var(--primary-color);
+  font-size: 1.2rem;
+}
+
+.file-preview span {
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-weight: 500;
+  word-break: break-all;
+}
+
+.file-actions {
+  display: flex;
+  justify-content: center;
+}
+
+.file-actions .btn {
+  min-width: 160px;
+}
+
+.file-requirements {
+  background: rgba(16, 185, 129, 0.08);
+  border-radius: 6px;
+  padding: 0.75rem;
+}
+
+.requirement {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.requirement:last-child {
+  margin-bottom: 0;
+}
+
+.requirement i {
+  color: #34d399;
+  font-size: 0.8rem;
+}
+
+#icon-modal .modern-footer {
+  background: var(--bg-tertiary);
+  padding: 1rem 1.75rem;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  /* Keep footer visible; it will sit below the scrollable body */
+  flex: 0 0 auto;
+}
+
+.footer-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  flex: 1;
+  min-width: 200px;
+}
+
+.footer-info i {
+  color: var(--info-color);
+}
+
+.footer-actions {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  #icon-modal {
+    width: 95%;
+    max-width: none;
+    margin: 20px;
+    min-width: auto;
+  }
+  
+  #icon-modal .modal-header,
+  #icon-modal .modal-body,
+  #icon-modal .modern-footer {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+  
+  #icon-modal .modal-header h3 {
+    font-size: 1.1rem;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+  
+  .icon-options-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  #icon-modal .modern-footer {
+    flex-direction: column;
+    gap: 0.75rem;
+    text-align: center;
+  }
+  
+  .footer-info {
+    justify-content: center;
+  }
+  
+  .footer-actions {
+    justify-content: center;
+    width: 100%;
+  }
 }
 
 /* Enhanced Emoji Selection Modal */
