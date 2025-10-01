@@ -2558,6 +2558,60 @@ html {
   width: 100%;
 }
 
+/* Open to be Hired Badge */
+.hire-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: linear-gradient(135deg, #4CAF50, #2E7D32);
+  border-radius: 20px;
+  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+  z-index: 10;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  animation: pulse 2s infinite;
+}
+
+.hire-badge .badge-text {
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.hire-badge .badge-batch {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.hire-badge .batch-dot {
+  width: 6px;
+  height: 6px;
+  background: white;
+  border-radius: 50%;
+  opacity: 0.8;
+}
+
+.hire-badge .batch-dot:nth-child(2) {
+  animation: blink 1.5s infinite 0.2s;
+}
+
+.hire-badge .batch-dot:nth-child(3) {
+  animation: blink 1.5s infinite 0.4s;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 0.3; }
+}
+
+/* Adjust profile avatar container to accommodate the badge */
 .profile-avatar {
   position: relative;
   display: flex;
@@ -5300,13 +5354,14 @@ html {
   max-width: 520px;
   min-width: 480px;
   width: 90%;
-  background: linear-gradient(135deg, rgba(17, 24, 39, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%);
+  background: #111827; /* Simplified background */
   border-radius: 16px;
   box-shadow: 0 25px 50px -12px rgba(16, 185, 129, 0.25),
              0 0 0 1px rgba(16, 185, 129, 0.15);
   border: 1px solid rgba(16, 185, 129, 0.2);
   overflow: hidden;
-  animation: successModalAppear 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* Remove heavy animation for faster display */
+  /* animation: successModalAppear 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); */
   /* CRITICAL FIX: Ensure modal is centered */
   margin: auto;
   /* Make modal a column flexbox so header/body/footer layout is stable */
@@ -5315,10 +5370,13 @@ html {
   /* Constrain total height and delegate scrolling to the body only */
   max-height: 88vh;
   position: relative;
+  /* Optimize for performance */
+  transform: translateZ(0);
+  will-change: auto;
 }
 
 #icon-modal .modal-header {
-  background: linear-gradient(135deg, #065f46 0%, #064e3b 100%);
+  background: #065f46; /* Simplified background */
   color: white;
   padding: 1.25rem 1.75rem;
   text-align: center;
@@ -5327,6 +5385,9 @@ html {
   position: sticky;
   top: 0;
   z-index: 1;
+  /* Optimize for performance */
+  transform: translateZ(0);
+  will-change: auto;
 }
 
 #icon-modal .modal-header h3 {
@@ -5361,6 +5422,9 @@ html {
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   flex: 1 1 auto;
+  /* Optimize for performance */
+  transform: translateZ(0);
+  will-change: auto;
 }
 
 #icon-modal .modal-footer {
@@ -5370,4 +5434,7 @@ html {
   display: flex;
   gap: 1rem;
   justify-content: flex-end;
+  /* Optimize for performance */
+  transform: translateZ(0);
+  will-change: auto;
 }
