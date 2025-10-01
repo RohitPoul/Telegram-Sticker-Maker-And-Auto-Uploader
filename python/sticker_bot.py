@@ -263,8 +263,8 @@ class AdvancedResponseMatcher:
             ],
             BotResponseType.FILE_UPLOADED: [
                 r"thanks!\s*now\s*send\s*me\s*an\s*emoji",
-                r"now\s*send\s*me\s*an\s*emoji\s*that\s*corresponds",
-                r"send\s*me\s*an\s*emoji",
+                r"now\s*send\s*me\s*the\s*(?:video\s*)?sticker",
+                r"send\s*me\s*the\s*(?:video\s*)?sticker",
             ],
             BotResponseType.EMOJI_ACCEPTED: [
                 r"congratulations\.\s*stickers\s*in\s*the\s*set",
@@ -459,8 +459,8 @@ class SimpleConversationManager:
 
         # Send message
         if os.path.exists(message):
-            await self.client.send_file(self.bot_peer, message)
-            self.logger.info(f"[MSG] Sent file: {os.path.basename(message)}")
+            await self.client.send_file(self.bot_peer, message, force_document=True)
+            self.logger.info(f"[MSG] Sent file as document: {os.path.basename(message)}")
         else:
             await self.client.send_message(self.bot_peer, message)
             self.logger.info(f"[MSG] Sent message: {message}")
@@ -485,9 +485,10 @@ class SimpleConversationManager:
             except asyncio.QueueEmpty:
                 break
 
-        # Send file
-        await self.client.send_file(self.bot_peer, file_path)
-        self.logger.info(f"[FILE] Sent file: {os.path.basename(file_path)}")
+        # Send file as document to ensure uncompressed transmission
+        # This is especially important for sticker creation where image quality must be preserved
+        await self.client.send_file(self.bot_peer, file_path, force_document=True)
+        self.logger.info(f"[FILE] Sent file as document: {os.path.basename(file_path)}")
 
         # Wait for response with retry mechanism for timeouts
         try:
@@ -516,6 +517,32 @@ class MediaItem:
 
 class StickerBotCore:
     def __init__(self, logger=None):
+        self.logger = logger or logging.getLogger(__name__)
+        self.client = None
+        self.bot_peer = None
+        self.conversation_manager = None
+
+    async def send_sticker_files(self, file_paths: List[str], bot_peer) -> List[str]:
+        """Send sticker files to Telegram bot"""
+        sent_file_ids = []
+        
+        # Process each file
+        for file_path in file_paths:
+            try:
+                # Send as document (uncompressed) instead of photo
+                sent_message = await self.client.send_file(
+                    bot_peer, 
+                    file_path, 
+                    force_document=True  # This ensures it's sent as uncompressed document
+                )
+                sent_file_ids.append(str(sent_message.id))
+                self.logger.info(f"Sent file {file_path} as document with ID {sent_message.id}")
+            except Exception as e:
+                self.logger.error(f"Error sending file {file_path}: {e}")
+                raise
+        
+        return sent_file_ids
+
         """
         Initialize StickerBotCore with enhanced connection management
         """
