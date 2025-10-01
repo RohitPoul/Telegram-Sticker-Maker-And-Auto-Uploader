@@ -1433,7 +1433,7 @@ class TelegramUtilities {
     
     // If success modal is missing, try to inject it from the original HTML
     if (!successModalInDOM) {
-      console.error(`🚨 [CRITICAL] Success modal is missing from DOM! Attempting to inject it...`);
+      console.warn(`⚠️ [SUCCESS_MODAL] Success modal not found in DOM. This might be due to HTML structure issues. Attempting to inject it...`);
       
       // Try to find the modal overlay to inject the success modal into it
       const overlay = document.getElementById("modal-overlay");
@@ -6125,14 +6125,16 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     // CRITICAL FIX: Update workflow state to track icon modal phase
     this.workflowState.currentStep = 'icon_upload';
     
-    // CRITICAL FIX: Add timeout to prevent getting stuck in icon modal
-    this.iconModalTimeout = setTimeout(() => {
-      if (this.workflowState.currentStep === 'icon_upload' && !this.workflowState.iconUploaded) {
-        this.addStatusItem("Icon modal timeout - automatically skipping icon step", "warning");
-        this.showToast("warning", "Auto Skip", "Icon step timed out. Automatically skipping to continue workflow.");
-        this.skipIconSelection();
-      }
-    }, 30000); // 30 second timeout
+    // CRITICAL FIX: Remove timeout to prevent getting stuck in icon modal
+    // User requested: "we dont need timeout here cause it is auto sending we want user to give order if they dont we wait no matter what"
+    // this.iconModalTimeout = setTimeout(() => {
+    //   if (this.workflowState.currentStep === 'icon_upload' && !this.workflowState.iconUploaded) {
+    //     this.addStatusItem("Icon modal timeout - automatically skipping icon step", "warning");
+    //     this.showToast("warning", "Auto Skip", "Icon step timed out. Automatically skipping to continue workflow.");
+    //     this.skipIconSelection();
+    //   }
+    // }, 30000); // 30 second timeout
+    
     // Reset UI state for icon modal
     const fileInfo = document.getElementById("icon-file-info");
     const fileName = document.getElementById("icon-file-name");
@@ -6150,16 +6152,25 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     if (modal && overlay) {
       // Use consistent approach with other modals
       modal.style.display = "flex"; // Direct display style for immediate showing
+      modal.style.opacity = "1"; // Set opacity to 1 immediately
       overlay.classList.add("active");
       
       // Update the modal content with the actual message from Telegram
-      const iconInfo = modal.querySelector(".icon-info p");
+      const iconInfo = modal.querySelector(".info-details");
       if (iconInfo && iconRequestMessage) {
         iconInfo.textContent = iconRequestMessage;
       }
       
       // Reset file selection
       this.resetIconFileSelection();
+      
+      // Focus management for accessibility
+      setTimeout(() => {
+        const uploadBtn = document.getElementById("upload-icon-btn");
+        if (uploadBtn) {
+          uploadBtn.focus();
+        }
+      }, 50);
     }
   }
 
@@ -6501,16 +6512,17 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     
     if (modal && overlay) {
       // Use consistent approach with other modals - remove inline styles and use CSS classes
-      modal.style.display = ""; // Remove inline display style
+      modal.style.display = "none"; // Set to none immediately
       modal.style.opacity = "0"; // Set opacity to 0
       overlay.classList.remove("active");
     }
     
-    // CRITICAL FIX: Clear timeout when modal is closed
-    if (this.iconModalTimeout) {
-      clearTimeout(this.iconModalTimeout);
-      this.iconModalTimeout = null;
-    }
+    // CRITICAL FIX: Remove timeout cleanup since we removed the timeout
+    // User requested: "we dont need timeout here cause it is auto sending we want user to give order if they dont we wait no matter what"
+    // if (this.iconModalTimeout) {
+    //   clearTimeout(this.iconModalTimeout);
+    //   this.iconModalTimeout = null;
+    // }
     
     // Preserve currentIconProcessId to allow progress monitoring to continue
     // Only clear transient UI selection state
