@@ -601,6 +601,15 @@
                     <i class="fas fa-circle"></i>
                     <span>Available for Collaboration</span>
                   </div>
+                  <!-- Open to be Hired Badge -->
+                  <div class="hire-badge">
+                    <span class="badge-text">Open to be Hired</span>
+                    <div class="badge-batch">
+                      <span class="batch-dot"></span>
+                      <span class="batch-dot"></span>
+                      <span class="batch-dot"></span>
+                    </div>
+                  </div>
                 </div>
                 <div class="profile-info">
                   <h1 class="profile-name">Joon Jelly</h1>
@@ -897,7 +906,7 @@
         </div>
 
         <!-- Icon Selection Modal - Restructured Vertical Layout -->
-        <div class="modal" id="icon-modal" style="display: none">
+        <div class="modal" id="icon-modal">
           <div class="modal-header">
             <h3>
               <i class="fas fa-image"></i>
@@ -916,42 +925,27 @@
                 <div class="info-message">
                   Icon Selection Required
                 </div>
-                <div class="info-details">
-                  Please select an icon for your sticker pack
-                </div>
               </div>
               
               <!-- Icon Selection Options -->
               <div class="icon-options-section">
-                <div class="section-label">
-                  <i class="fas fa-cog"></i>
-                  Choose an Option:
-                </div>
-                
                 <div class="icon-options">
                   <div class="icon-option">
                     <button class="btn btn-primary btn-large" id="upload-icon-btn">
                       <i class="fas fa-upload"></i> Upload Icon File
                     </button>
-                    <small class="help-text">Select a WEBM file from your computer (max 32 KB)</small>
                   </div>
                   
                   <div class="icon-option">
                     <button class="btn btn-secondary btn-large" id="skip-icon-btn">
                       <i class="fas fa-forward"></i> Skip Icon
                     </button>
-                    <small class="help-text">Use the first sticker as the pack icon</small>
                   </div>
                 </div>
               </div>
               
               <!-- Selected File Preview -->
               <div class="icon-file-info" id="icon-file-info" style="display: none">
-                <div class="section-label">
-                  <i class="fas fa-file-video"></i>
-                  Selected File:
-                </div>
-                
                 <div class="file-preview">
                   <i class="fas fa-file-video"></i>
                   <span id="icon-file-name">No file selected</span>
@@ -1065,7 +1059,7 @@
           </div>
         </div>
 
-        <!-- Success Modal - Enhanced Design */
+        <!-- Success Modal - Enhanced Design -->
         <div class="modal success-modal-enhanced" id="success-modal" style="display: none">
           <div class="modal-header success-header">
             <div class="success-icon-wrapper">
