@@ -5465,7 +5465,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           }
           
           // PRIORITY CHECK 2: Check for icon selection (before completed status)
-          if (progress.waiting_for_user && (progress.icon_request_message || progress.icon_request) && !this.iconHandledProcesses.has(processId)) {
+          if (progress.waiting_for_user && (progress.icon_request_message || progress.icon_request) && !this.iconHandledProcesses.has(this.currentStickerProcessId)) {
             // Check auto-skip setting
             const autoSkipIcon = document.getElementById("auto-skip-icon");
             const shouldAutoSkip = autoSkipIcon && autoSkipIcon.checked;
@@ -5476,7 +5476,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
               this.addStatusItem("Auto-skipping icon selection...", "info");
               try {
                 const response = await this.apiRequest("POST", "/api/sticker/skip-icon", {
-                  process_id: processId
+                  process_id: this.currentStickerProcessId
                 });
                 if (response.success) {
                   this.addStatusItem("Icon step auto-skipped", "completed");
@@ -5522,13 +5522,13 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
                   this.addStatusItem(`Error auto-skipping icon: ${response.error}`, "error");
                   // Show manual modal as fallback
                   this.stopStickerProgressMonitoring();
-                  this.showIconModal(processId, progress.icon_request_message);
+                  this.showIconModal(this.currentStickerProcessId, progress.icon_request_message);
                 }
               } catch (error) {
                 this.addStatusItem(`Error auto-skipping icon: ${error.message}`, "error");
                 // Show manual modal as fallback
                 this.stopStickerProgressMonitoring();
-                this.showIconModal(processId, progress.icon_request_message);
+                this.showIconModal(this.currentStickerProcessId, progress.icon_request_message);
               }
             } else {
               // Manual mode: show icon selection modal and STOP monitoring
@@ -5536,10 +5536,10 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
               this.stopStickerProgressMonitoring(); // Stop monitoring - user controls when to continue
               
               // CRITICAL FIX: Store the process ID so we can restart monitoring after icon is sent
-              this.currentIconProcessId = processId;
+              this.currentIconProcessId = this.currentStickerProcessId;
               
               // CRITICAL FIX: Also store in urlPromptHandledProcesses to prevent duplicate handling
-              this.urlPromptHandledProcesses.add(processId);
+              this.urlPromptHandledProcesses.add(this.currentStickerProcessId);
               
               // If Telegram is already asking for short name, bypass icon modal and proceed to URL
               const urlPrompt = (progress.icon_request_message && /short name|create a link|addstickers/i.test(progress.icon_request_message))
@@ -5560,19 +5560,19 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
                     const urlName = (urlInput && typeof urlInput.value === 'string') ? urlInput.value.trim() : '';
                     if (urlName) {
                       const submitRes = await this.apiRequest("POST", "/api/sticker/submit-url-name", {
-                        process_id: processId,
+                        process_id: this.currentStickerProcessId,
                         new_url_name: urlName,
                         current_attempt: 1,
                         max_attempts: 3
                       });
 
                       if (submitRes && submitRes.success) {
-                        this.urlPromptHandledProcesses.add(processId);
-                        this.startStickerProgressMonitoring(processId);
+                        this.urlPromptHandledProcesses.add(this.currentStickerProcessId);
+                        this.startStickerProgressMonitoring(this.currentStickerProcessId);
                         return;
                       } else if (submitRes && submitRes.url_name_taken) {
-                        this.urlPromptHandledProcesses.add(processId);
-                        this.showUrlNameModal(processId, urlName, (submitRes.attempt || 1), (submitRes.max_attempts || 3));
+                        this.urlPromptHandledProcesses.add(this.currentStickerProcessId);
+                        this.showUrlNameModal(this.currentStickerProcessId, urlName, (submitRes.attempt || 1), (submitRes.max_attempts || 3));
                         return;
                       }
                     }
@@ -5587,41 +5587,41 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
                 if (urlName) {
                   try {
                     const submitRes = await this.apiRequest("POST", "/api/sticker/submit-url-name", {
-                      process_id: processId,
+                      process_id: this.currentStickerProcessId,
                       new_url_name: urlName,
                       current_attempt: 1,
                       max_attempts: 3
                     });
                     if (submitRes && submitRes.success) {
-                      this.urlPromptHandledProcesses.add(processId);
-                      this.startStickerProgressMonitoring(processId);
+                      this.urlPromptHandledProcesses.add(this.currentStickerProcessId);
+                      this.startStickerProgressMonitoring(this.currentStickerProcessId);
                       return;
                     } else if (submitRes && submitRes.url_name_taken) {
-                      this.urlPromptHandledProcesses.add(processId);
-                      this.showUrlNameModal(processId, urlName, (submitRes.attempt || 1), (submitRes.max_attempts || 3));
+                      this.urlPromptHandledProcesses.add(this.currentStickerProcessId);
+                      this.showUrlNameModal(this.currentStickerProcessId, urlName, (submitRes.attempt || 1), (submitRes.max_attempts || 3));
                       return;
                     }
                   } catch {}
                 }
                 // Fallback: show URL modal to collect the name
-                this.urlPromptHandledProcesses.add(processId);
-                this.showUrlNameModal(processId, progress.pack_url_name || "retry", 1, 3);
+                this.urlPromptHandledProcesses.add(this.currentStickerProcessId);
+                this.showUrlNameModal(this.currentStickerProcessId, progress.pack_url_name || "retry", 1, 3);
                 return;
               }
               
-              this.showIconModal(processId, progress.icon_request_message);
-              this.iconHandledProcesses.add(processId);
+              this.showIconModal(this.currentStickerProcessId, progress.icon_request_message);
+              this.iconHandledProcesses.add(this.currentStickerProcessId);
               
               // CRITICAL FIX: Also store in urlPromptHandledProcesses to prevent duplicate handling
-              this.urlPromptHandledProcesses.add(processId);
+              this.urlPromptHandledProcesses.add(this.currentStickerProcessId);
             }
             return; // CRITICAL: Exit early after handling icon selection
           }
           
           // PRIORITY CHECK 3: Check for URL name retry after icon upload
-          if (progress.waiting_for_user && progress.url_name_taken && !this.urlPromptHandledProcesses.has(processId)) {
+          if (progress.waiting_for_user && progress.url_name_taken && !this.urlPromptHandledProcesses.has(this.currentStickerProcessId)) {
             // Mark as handled to prevent duplicate processing
-            this.urlPromptHandledProcesses.add(processId);
+            this.urlPromptHandledProcesses.add(this.currentStickerProcessId);
             
             // Stop monitoring while user provides new URL name
             this.stopStickerProgressMonitoring();
@@ -5632,7 +5632,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
             const maxAttempts = progress.max_url_attempts || 3;
             
             this.addStatusItem(`URL name '${takenName}' is taken. Showing retry options (${currentAttempt}/${maxAttempts})`, "warning");
-            this.showUrlNameModal(processId, takenName, currentAttempt, maxAttempts);
+            this.showUrlNameModal(this.currentStickerProcessId, takenName, currentAttempt, maxAttempts);
             return; // Exit early after handling URL name retry
           }
           
@@ -6527,7 +6527,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           this.showToast("success", "URL Name Updated", `Using new URL name: ${newUrlName}`);
           
           // Restart progress monitoring with the same process ID
-          this.startStickerProgressMonitoring(processId);
+          this.startStickerProgressMonitoring(this.currentUrlNameProcessId || processId);
         }
       } else {
         // Check if this was a URL name taken error and we have retries left
@@ -6537,7 +6537,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           if (nextAttempt <= (maxAttempts || 3)) {
             // Show retry modal with updated attempt count
             this.addStatusItem(`❌ URL name '${newUrlName}' is taken. Retry ${nextAttempt}/${maxAttempts}`, "warning");
-            this.showUrlNameModal(processId, newUrlName, nextAttempt, maxAttempts);
+            this.showUrlNameModal(this.currentUrlNameProcessId || processId, newUrlName, nextAttempt, maxAttempts);
             return; // Don't re-enable the button, show new modal
           } else {
             // Exhausted all retries - mark as completed with manual instruction
