@@ -905,66 +905,95 @@
           </div>
         </div>
 
-        <!-- Icon Selection Modal - Restructured Vertical Layout -->
-        <div class="modal url-name-retry-modal" id="icon-modal">
+        <!-- Icon Selection Modal - Enhanced Smart Design -->
+        <div class="modal" id="icon-modal">
           <div class="modal-header">
             <h3>
               <i class="fas fa-image"></i>
               Sticker Pack Icon
               <span class="status-badge">REQUIRED</span>
             </h3>
+            <div class="info-details">
+              Upload a 100x100 pixel WebM video as your sticker pack icon
+            </div>
           </div>
           
           <div class="modal-body">
             <div class="icon-selection-content">
-              <!-- Icon Selection Instructions -->
-              <div class="icon-info">
-                <div class="info-icon">
-                  <i class="fas fa-info-circle"></i>
-                </div>
-                <div class="info-message">
-                  Icon Selection Required
-                </div>
-              </div>
-              
-              <!-- Icon Selection Options -->
+              <!-- Enhanced Icon Options with Visual Guidance -->
               <div class="icon-options-section">
-                <div class="icon-options">
-                  <div class="icon-option">
-                    <button class="btn btn-primary btn-large" id="upload-icon-btn">
-                      <i class="fas fa-upload"></i> Upload Icon File
-                    </button>
-                  </div>
-                  
-                  <div class="icon-option">
-                    <button class="btn btn-secondary btn-large" id="skip-icon-btn">
-                      <i class="fas fa-forward"></i> Skip Icon
-                    </button>
-                  </div>
-                </div>
-              </div>
-              
-              <!-- Selected File Preview -->
-              <div class="icon-file-info" id="icon-file-info" style="display: none">
-                <div class="file-preview">
-                  <i class="fas fa-file-video"></i>
-                  <span id="icon-file-name">No file selected</span>
+                <div class="section-title">
+                  <i class="fas fa-cog"></i>
+                  Icon Options
                 </div>
                 
-                <div class="file-actions">
-                  <button class="btn btn-success" id="confirm-icon-upload">
-                    <i class="fas fa-check"></i> Upload This File
+                <div class="icon-options-grid">
+                  <button class="icon-option-btn" id="upload-icon-btn">
+                    <div class="option-icon">
+                      <i class="fas fa-upload"></i>
+                    </div>
+                    <div class="option-content">
+                      <h4>Upload Icon</h4>
+                      <p>Select a custom WebM file for your pack icon</p>
+                    </div>
                   </button>
-                  <button class="btn btn-secondary" id="change-icon-file">
-                    <i class="fas fa-edit"></i> Change File
+                  
+                  <button class="icon-option-btn" id="skip-icon-btn">
+                    <div class="option-icon">
+                      <i class="fas fa-forward"></i>
+                    </div>
+                    <div class="option-content">
+                      <h4>Skip Icon</h4>
+                      <p>Use the first sticker as the pack icon</p>
+                    </div>
                   </button>
+                </div>
+              </div>
+              
+              <!-- Selected File Preview with Enhanced Styling -->
+              <div class="icon-file-info" id="icon-file-info" style="display: none">
+                <div class="section-title">
+                  <i class="fas fa-file-video"></i>
+                  Selected File
+                </div>
+                
+                <div class="file-preview-card">
+                  <div class="file-preview">
+                    <i class="fas fa-file-video"></i>
+                    <span id="icon-file-name">No file selected</span>
+                  </div>
+                  
+                  <div class="file-actions">
+                    <button class="btn btn-success" id="confirm-icon-upload">
+                      <i class="fas fa-cloud-upload-alt"></i> Upload Icon
+                    </button>
+                  </div>
+                </div>
+                
+                <div class="file-requirements">
+                  <div class="requirement">
+                    <i class="fas fa-check-circle"></i>
+                    <span>WebM format only</span>
+                  </div>
+                  <div class="requirement">
+                    <i class="fas fa-check-circle"></i>
+                    <span>100x100 pixels recommended</span>
+                  </div>
+                  <div class="requirement">
+                    <i class="fas fa-check-circle"></i>
+                    <span>Under 32KB file size</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
           
-          <!-- Footer -->
+          <!-- Enhanced Footer with Helpful Information -->
           <div class="modern-footer">
+            <div class="footer-info">
+              <i class="fas fa-info-circle"></i>
+              <span>Telegram requires a pack icon to publish your sticker pack</span>
+            </div>
             <div class="footer-actions">
               <button class="btn btn-outline" id="cancel-icon-selection">
                 <i class="fas fa-times"></i>
