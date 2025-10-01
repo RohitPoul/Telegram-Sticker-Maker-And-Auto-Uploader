@@ -279,7 +279,11 @@ class TelegramUtilities {
     
     // ENHANCED: Sanitize path to prevent [Errno 22] Invalid argument
     // Remove only null bytes which are the main cause of OS errors
-    const sanitizedPath = path.replace(/\x00/g, '').trim();
+    // ENHANCED: More comprehensive sanitization to prevent [Errno 22] Invalid argument
+    let sanitizedPath = path.replace(/\x00/g, '').trim();
+    
+    // Additional sanitization for URL-safe characters
+    sanitizedPath = sanitizedPath.replace(/[^a-zA-Z0-9\-_/.]/g, encodeURIComponent);
     
     if (!sanitizedPath || sanitizedPath.length === 0) {
       throw new Error('Invalid API path after sanitization');
@@ -299,8 +303,11 @@ class TelegramUtilities {
         try {
           // Stringify and parse to ensure valid JSON
           const jsonString = JSON.stringify(body);
-          // Remove only null bytes which are the main cause of OS errors
-          const sanitizedJsonString = jsonString.replace(/\x00/g, '');
+          // Remove control characters that could cause OS errors
+          // ENHANCED: More comprehensive sanitization to prevent [Errno 22] Invalid argument
+          let sanitizedJsonString = jsonString.replace(/[\x00-\x1f\x7f-\x9f]/g, '');
+          // Additional URL-safe encoding for special characters
+          sanitizedJsonString = sanitizedJsonString.replace(/[^\x20-\x7e\u00a0-\u024f\u1e00-\u1eff]/g, encodeURIComponent);
           sanitizedBody = sanitizedJsonString;
         } catch (jsonError) {
           console.error('[API] Error serializing request body:', jsonError);
@@ -5388,7 +5395,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       // ENHANCED: Better error handling for [Errno 22] Invalid argument
       let errorMessage = error.message;
       if (error.message && (error.message.includes('Invalid argument') || error.message.includes('Errno 22'))) {
-        errorMessage = 'Invalid request data - contains invalid characters. Please check your inputs and try again.';
+        errorMessage = 'Invalid request data - contains invalid characters. Please check your inputs and try again. Special characters in pack name, URL, or file paths may need to be removed.';
       }
       
       this.addStatusItem(`❌ Error: Failed to create sticker pack - ${errorMessage}`, "error");
