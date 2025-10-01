@@ -1454,6 +1454,11 @@ html {
   overflow-y: auto;
   contain: layout style paint;
   animation: turboSlideIn 0.1s cubic-bezier(0.2, 0, 0.2, 1);
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  margin: 0 !important;
 }
 
 /* TURBO: Lightweight animations */
@@ -4806,6 +4811,12 @@ html {
   border: 1px solid rgba(16, 185, 129, 0.2);
   overflow: hidden;
   animation: successModalAppear 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  margin: 0 !important;
+  z-index: 10000 !important;
 }
 
 @keyframes successModalAppear {
@@ -5349,6 +5360,66 @@ html {
     justify-content: center;
   }
 }
+
+/* TURBO: Ultra-fast modal animations - optimized for 60fps */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+  /* Remove expensive backdrop-filter */
+  contain: layout style paint;
+}
+
+.modal-overlay.active {
+  display: flex !important; /* Ensure it overrides any inline styles */
+  animation: turboFadeIn 0.08s linear;
+}
+
+.modal {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  contain: layout style paint;
+  animation: turboSlideIn 0.1s cubic-bezier(0.2, 0, 0.2, 1);
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  margin: 0 !important;
+  z-index: 4000; /* Default z-index for regular modals */
+}
+
+/* SUCCESS MODAL - Dark Theme with Green Accents */
+.success-modal-enhanced {
+  max-width: 520px; /* Professional minimum width spec followed */
+  width: 90%;
+  background: linear-gradient(135deg, rgba(17, 24, 39, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%);
+  border-radius: 16px;
+  box-shadow: 0 25px 50px -12px rgba(16, 185, 129, 0.25),
+             0 0 0 1px rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  overflow: hidden;
+  animation: successModalAppear 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  margin: 0 !important;
+  z-index: 10000 !important; /* Highest z-index for success modal */
+}
+
 /* Enhanced Icon Modal Styling - Success Theme (Green/Black) */
 #icon-modal {
   max-width: 520px;
@@ -5369,72 +5440,60 @@ html {
   flex-direction: column;
   /* Constrain total height and delegate scrolling to the body only */
   max-height: 88vh;
-  position: relative;
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  margin: 0 !important;
+  z-index: 9000 !important; /* High z-index for icon modal */
   /* Optimize for performance */
   transform: translateZ(0);
   will-change: auto;
 }
 
-#icon-modal .modal-header {
-  background: #065f46; /* Simplified background */
-  color: white;
-  padding: 1.25rem 1.75rem;
-  text-align: center;
-  border-bottom: none;
-  position: relative;
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  /* Optimize for performance */
-  transform: translateZ(0);
-  will-change: auto;
+/* Enhanced Emoji Selection Modal */
+.emoji-modal-enhanced {
+  width: 900px !important;
+  max-width: 95vw;
+  max-height: 85vh;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(17, 24, 39, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%);
+  border-radius: 16px;
+  box-shadow: 0 25px 50px -12px rgba(16, 185, 129, 0.25),
+             0 0 0 1px rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  animation: successModalAppear 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  margin: 0 !important;
+  z-index: 9000 !important; /* High z-index for emoji modal */
 }
 
-#icon-modal .modal-header h3 {
-  font-size: 1.2rem;
-  font-weight: 600;
-  margin: 0 0 0.5rem;
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-#icon-modal .modal-header .status-badge {
-  background: rgba(16, 185, 129, 0.2);
-  color: #34d399;
-  padding: 0.2rem 0.6rem;
-  border-radius: 8px;
-  font-size: 0.7rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  margin-left: 0.5rem;
-  flex-shrink: 0;
-  border: 1px solid rgba(16, 185, 129, 0.3);
-}
-
-#icon-modal .modal-body {
-  padding: 1.25rem 1.75rem;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  overflow: auto;
-  -webkit-overflow-scrolling: touch;
-  flex: 1 1 auto;
-  /* Optimize for performance */
-  transform: translateZ(0);
-  will-change: auto;
-}
-
-#icon-modal .modal-footer {
-  padding: 1rem 1.75rem;
-  background: var(--bg-secondary);
-  border-top: 1px solid rgba(16, 185, 129, 0.1);
-  display: flex;
-  gap: 1rem;
-  justify-content: flex-end;
-  /* Optimize for performance */
-  transform: translateZ(0);
-  will-change: auto;
+/* URL Name Selection Modal - Success Theme (Green/Black) */
+.url-name-retry-modal {
+    /* Advanced, robust modal container - prevents cropping */
+    max-width: 640px;
+    width: 92%;
+    background: linear-gradient(135deg, rgba(17, 24, 39, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%);
+    border-radius: 16px;
+    box-shadow: 0 25px 50px -12px rgba(16, 185, 129, 0.25),
+               0 0 0 1px rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    /* Make modal a column flexbox so header/body/footer layout is stable */
+    display: flex;
+    flex-direction: column;
+    /* Constrain total height and delegate scrolling to the body only */
+    max-height: 88vh;
+    overflow: hidden;
+    animation: successModalAppear 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    margin: 0 !important;
+    z-index: 9000 !important; /* High z-index for URL name modal */
+    /* TURBO: Optimize for faster display */
+    will-change: auto;
 }
