@@ -84,7 +84,7 @@ class TelegramUtilities {
     this.lastStageWasQueue = false;
     this.lastStatusMessage = null;
     this.lastStatusType = null;
-    this.autoSkipAttempted = false;
+    // Removed autoSkipAttempted flag - auto-skip is handled entirely by backend
     this.lastStage = null;
     this.telegramConnectionData = null;
     this.mediaData = {};
@@ -135,27 +135,16 @@ class TelegramUtilities {
 
   async init() {
     try {
-      console.log('🚀 [APP] Starting app initialization...');
-      
+      // App initialization
       this.setupEventListeners();
-      console.log('🚀 [APP] Event listeners set up');
-      
       this.setupTabSwitching();
-      console.log('🚀 [APP] Tab switching set up');
-      
       this.loadSettings();
-      console.log('🚀 [APP] Settings loaded');
-      
       this.startSystemStatsMonitoring();
-      console.log('🚀 [APP] System stats monitoring started');
-      
       await this.initializeTelegramConnection();
-      console.log('🚀 [APP] Telegram connection initialized');
       
       // Update stats immediately on startup
       this.updateSystemInfo();
       this.updateDatabaseStats();
-      console.log('🚀 [APP] Initial stats updated');
       
       // Add manual refresh function for testing
       window.forceRefreshStats = () => {
@@ -165,9 +154,6 @@ class TelegramUtilities {
       
       // Initialize button states
       this.updateButtonStates();
-      console.log('🚀 [APP] Button states updated');
-      
-      console.log('🚀 [APP] App initialization completed successfully');
     } catch (error) {
       console.error('🚫 [APP] Critical error during initialization:', error);
       // Show error to user
@@ -244,30 +230,12 @@ class TelegramUtilities {
 
   // ---- Lightweight debug logger for Telegram flows ----
   logDebug(label, payload = undefined) {
-    try {
-      const ts = new Date().toISOString();
-      if (payload !== undefined) {
-        if (RENDERER_DEBUG) console.debug(`[TG ${ts}] ${label}`, payload);
-      } else {
-        if (RENDERER_DEBUG) console.debug(`[TG ${ts}] ${label}`);
-      }
-    } catch (_) {
-      // no-op
-    }
+    // Debug logging removed for production
   }
 
   // Debug warning method for detailed UI debugging
   debugWarn(label, payload = undefined) {
-    try {
-      const ts = new Date().toISOString();
-      if (payload !== undefined) {
-        if (RENDERER_DEBUG) console.warn(`[DEBUG ${ts}] ${label}`, payload);
-      } else {
-        if (RENDERER_DEBUG) console.warn(`[DEBUG ${ts}] ${label}`);
-      }
-    } catch (_) {
-      // no-op
-    }
+    // Debug logging removed for production
   }
 
   // OPTIMIZED apiRequest with better error handling and timeout
@@ -278,8 +246,8 @@ class TelegramUtilities {
     }
     
     // ENHANCED: Sanitize path to prevent [Errno 22] Invalid argument
-    // Remove only null bytes which are the main cause of OS errors
-    const sanitizedPath = path.replace(/\x00/g, '').trim();
+    // Remove all control characters which can cause OS errors
+    const sanitizedPath = path.replace(/[\x00-\x1f\x7f-\x9f]/g, '').trim();
     
     if (!sanitizedPath || sanitizedPath.length === 0) {
       throw new Error('Invalid API path after sanitization');
@@ -299,8 +267,8 @@ class TelegramUtilities {
         try {
           // Stringify and parse to ensure valid JSON
           const jsonString = JSON.stringify(body);
-          // Remove only null bytes which are the main cause of OS errors
-          const sanitizedJsonString = jsonString.replace(/\x00/g, '');
+          // Remove all control characters which can cause OS errors
+          const sanitizedJsonString = jsonString.replace(/[\x00-\x1f\x7f-\x9f]/g, '');
           sanitizedBody = sanitizedJsonString;
         } catch (jsonError) {
           console.error('[API] Error serializing request body:', jsonError);
@@ -366,18 +334,8 @@ class TelegramUtilities {
     
     const startHexEditBtn = document.getElementById("start-hex-edit");
     
-    if (RENDERER_DEBUG) console.log("📋 Found buttons:", {
-      addVideos: !!addVideosBtn,
-      clearVideos: !!clearVideosBtn,
-      browseOutput: !!browseOutputBtn,
-      startConversion: !!startConversionBtn,
-      startHexEdit: !!startHexEditBtn
-    });
-    
     if (addVideosBtn) {
       addVideosBtn.addEventListener("click", () => this.addVideoFiles());
-    } else {
-      if (RENDERER_DEBUG) console.warn("⚠️ add-videos button not found - will retry if needed");
     }
     
     // Setup emoji modal enhancements
@@ -385,28 +343,18 @@ class TelegramUtilities {
     
     if (clearVideosBtn) {
       clearVideosBtn.addEventListener("click", () => this.clearVideoFiles());
-    } else {
-      if (RENDERER_DEBUG) console.error("❌ clear-videos button not found!");
     }
     
     if (browseOutputBtn) {
       browseOutputBtn.addEventListener("click", () => this.browseVideoOutput());
-    } else {
-      if (RENDERER_DEBUG) console.error("❌ browse-video-output button not found!");
     }
     
     if (startConversionBtn) {
-      console.log("✅ Start Conversion button found and event listener added");
       startConversionBtn.addEventListener("click", () => this.startVideoConversion());
-    } else {
-      console.error("❌ start-conversion button not found!");
     }
     
     if (startHexEditBtn) {
-      console.log("✅ Start Hex Edit button found and event listener added");
       startHexEditBtn.addEventListener("click", () => this.startHexEdit());
-    } else {
-      console.error("❌ start-hex-edit button not found!");
     }
       
     // Add pause/resume event listeners
@@ -414,17 +362,11 @@ class TelegramUtilities {
     const resumeBtn = document.getElementById("resume-conversion");
     
     if (pauseBtn) {
-      pauseBtn.addEventListener("click", () => {
-        if (RENDERER_DEBUG) console.log("⏸️ PAUSE BUTTON CLICKED!");
-        this.pauseOperation();
-      });
+      pauseBtn.addEventListener("click", () => this.pauseOperation());
     }
     
     if (resumeBtn) {
-      resumeBtn.addEventListener("click", () => {
-        if (RENDERER_DEBUG) console.log("▶️ RESUME BUTTON CLICKED!");
-        this.resumeOperation();
-      });
+      resumeBtn.addEventListener("click", () => this.resumeOperation());
     }
     
     // Add hex edit pause/resume event listeners
@@ -432,17 +374,11 @@ class TelegramUtilities {
     const resumeHexBtn = document.getElementById("resume-hex-edit");
     
     if (pauseHexBtn) {
-      pauseHexBtn.addEventListener("click", () => {
-        if (RENDERER_DEBUG) console.log("⏸️ HEX PAUSE BUTTON CLICKED!");
-        this.pauseOperation();
-      });
+      pauseHexBtn.addEventListener("click", () => this.pauseOperation());
     }
     
     if (resumeHexBtn) {
-      resumeHexBtn.addEventListener("click", () => {
-        if (RENDERER_DEBUG) console.log("▶️ HEX RESUME BUTTON CLICKED!");
-        this.resumeOperation();
-      });
+      resumeHexBtn.addEventListener("click", () => this.resumeOperation());
     }
     
     // Sticker Bot Events - with null checks
@@ -493,8 +429,6 @@ class TelegramUtilities {
         e.stopPropagation();
         this.submitNewUrlName();
       });
-    } else {
-      console.warn('submit-new-url button not found!');
     }
     if (cancelUrlRetryBtn) {
       cancelUrlRetryBtn.addEventListener("click", () => this.hideUrlNameModal());
@@ -700,7 +634,6 @@ class TelegramUtilities {
             this.saveSettings();
           }
         } catch (err) {
-          if (RENDERER_DEBUG) console.error('Failed to read clipboard:', err);
           this.showToast('error', 'Clipboard Error', 'Failed to read from clipboard');
         }
       });
@@ -892,23 +825,16 @@ class TelegramUtilities {
   }
 
   handleTabSwitch(tabId) {
-    if (RENDERER_DEBUG) console.log('Switching to tab:', tabId);
     const tabContents = document.querySelectorAll(".tab-content");
-    if (RENDERER_DEBUG) console.log('All tab contents:', tabContents);
     
     tabContents.forEach((content) => {
-      if (RENDERER_DEBUG) console.log('Removing active from:', content.id);
       content.classList.remove("active");
     });
     
     const targetTab = document.getElementById(tabId);
-    if (RENDERER_DEBUG) console.log('Target tab:', targetTab);
     
     if (targetTab) {
-      if (RENDERER_DEBUG) console.log('Adding active to:', tabId);
       targetTab.classList.add("active");
-    } else {
-      if (RENDERER_DEBUG) console.error('Tab not found:', tabId);
     }
 
     switch (tabId) {
@@ -925,7 +851,8 @@ class TelegramUtilities {
         // Specific actions for about tab
         break;
       default:
-        if (RENDERER_DEBUG) console.warn('Unknown tab:', tabId);
+        // Unknown tab
+        break;
     }
   }
 
@@ -968,24 +895,13 @@ class TelegramUtilities {
   }
 
   async handleDroppedVideoFiles(files) {
-    if (RENDERER_DEBUG) console.log("=== DRAG & DROP DEBUG ===");
-    if (RENDERER_DEBUG) console.log("Raw dropped files:", files);
-    
     const videoExtensions = ["mp4", "avi", "mov", "mkv", "flv", "webm"];
     let addedCount = 0;
     
     for (let index = 0; index < files.length; index++) {
       const file = files[index];
-      if (RENDERER_DEBUG) console.log(`🗂️ Processing dropped file ${index + 1}:`, {
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        path: file.path || "NO PATH",
-        webkitRelativePath: file.webkitRelativePath
-      });
       
       const extension = file.name.split(".").pop().toLowerCase();
-      if (RENDERER_DEBUG) console.log(`📝 File extension: ${extension}`);
       
       if (videoExtensions.includes(extension)) {
         // Use file.path if available (Electron), otherwise use name
@@ -1008,18 +924,13 @@ class TelegramUtilities {
             fileObject: file // Store the actual file object for later use
           });
           addedCount++;
-          if (RENDERER_DEBUG) console.log(`✅ Added dropped file: ${file.name} with metadata:`, metadata);
           
           // IMMEDIATE UI UPDATE - Update file count instantly
           const counter = document.getElementById("video-file-count");
           if (counter) {
             counter.textContent = this.videoFiles.length;
           }
-        } else {
-          if (RENDERER_DEBUG) console.log(`⚠️ Dropped file already exists: ${file.name}`);
         }
-      } else {
-        if (RENDERER_DEBUG) console.log(`❌ Invalid extension for: ${file.name}`);
       }
     }
     
@@ -1030,8 +941,6 @@ class TelegramUtilities {
     } else {
       this.showToast("warning", "No Valid Files", "Please drop video files only");
     }
-    
-    if (RENDERER_DEBUG) console.log("=== DRAG & DROP DEBUG END ===");
   }
 
   handleDroppedMediaFiles(files) {
@@ -1205,11 +1114,6 @@ class TelegramUtilities {
       const response = await this.apiRequest("GET", "/api/health");
       
       if (!response.success) {
-        if (RENDERER_DEBUG) console.error("Backend health check failed:", {
-          status: response.status,
-          error: response.error,
-          details: response.details || 'No additional details'
-        });
         this.updateBackendStatus(false);
         document.getElementById("backend-status-text").textContent = "Disconnected";
         document.getElementById("backend-status-text").style.color = "#dc3545";
@@ -1233,11 +1137,6 @@ class TelegramUtilities {
       
 
     } catch (error) {
-      if (RENDERER_DEBUG) console.error("Backend status check failed:", {
-        message: error.message,
-        stack: error.stack,
-        timestamp: new Date().toISOString()
-      });
       this.updateBackendStatus(false);
       document.getElementById("backend-status-text").textContent = "Disconnected";
       document.getElementById("backend-status-text").style.color = "#dc3545";
@@ -1414,18 +1313,9 @@ class TelegramUtilities {
   }
 
   showSuccessModal(shareableLink) {
-    console.log(`🎉 [SUCCESS_MODAL] Showing success modal with link: ${shareableLink}`);
-    
     // CRITICAL DEBUG: Check if the success modal is missing from the DOM
     const successModalInDOM = document.getElementById("success-modal");
     const allModalElements = document.querySelectorAll('[id*="modal"], .modal');
-    
-    console.log(`🚨 [CRITICAL_DEBUG] Success modal DOM check:`, {
-      successModalExists: !!successModalInDOM,
-      totalModalElements: allModalElements.length,
-      domReadyState: document.readyState,
-      bodyChildren: document.body.children.length
-    });
     
     // If success modal is missing, try to inject it from the original HTML
     if (!successModalInDOM) {
@@ -1539,7 +1429,7 @@ class TelegramUtilities {
           document.head.appendChild(style);
         }
         
-        console.log(`✅ [SUCCESS_MODAL] Success modal injected into DOM`);
+        // console.log(`✅ [SUCCESS_MODAL] Success modal injected into DOM`);
         
         // Now proceed with normal flow
         const injectedModal = document.getElementById("success-modal");
@@ -1584,21 +1474,21 @@ class TelegramUtilities {
       const overlay = document.getElementById("modal-overlay");
       const linkInput = document.getElementById("shareable-link");
       
-      console.log(`🎉 [SUCCESS_MODAL] Direct DOM query results:`, {
+      /* console.log(`🎉 [SUCCESS_MODAL] Direct DOM query results:`, {
         modal: !!modal,
         overlay: !!overlay, 
         linkInput: !!linkInput,
         domReadyState: document.readyState,
         totalModals: document.querySelectorAll('[id*="modal"]').length,
         successModalExists: document.querySelector('#success-modal') !== null
-      });
+      }); */
       
       // Debug: Log all modal-like elements if modal not found
       if (!modal) {
         const allModalElements = document.querySelectorAll('[id*="modal"], .modal');
-        console.log(`🎉 [SUCCESS_MODAL] Found ${allModalElements.length} modal elements:`);
+        // console.log(`🎉 [SUCCESS_MODAL] Found ${allModalElements.length} modal elements:`);
         allModalElements.forEach((el, i) => {
-          console.log(`  ${i}: ${el.tagName}#${el.id}.${el.className}`);
+          // console.log(`  ${i}: ${el.tagName}#${el.id}.${el.className}`);
         });
       }
       
@@ -1611,7 +1501,7 @@ class TelegramUtilities {
     
       // If modal still not found after DOM ready, try additional retries
       if (!elements.modal) {
-        console.log(`🎉 [SUCCESS_MODAL] Modal not found after DOM ready, retrying...`);
+        // console.log(`🎉 [SUCCESS_MODAL] Modal not found after DOM ready, retrying...`);
         
         // Try multiple retries with increasing delays
         let retryCount = 0;
@@ -1623,13 +1513,13 @@ class TelegramUtilities {
             elements = findModalElements();
             
             if (elements.modal) {
-              console.log(`🎉 [SUCCESS_MODAL] Modal found on retry ${retryCount}`);
+              // console.log(`🎉 [SUCCESS_MODAL] Modal found on retry ${retryCount}`);
               this.displaySuccessModal(elements.modal, elements.overlay, elements.linkInput, shareableLink);
               return;
             }
             
             if (retryCount < maxRetries) {
-              console.log(`🎉 [SUCCESS_MODAL] Retry ${retryCount}/${maxRetries} failed, trying again...`);
+              // console.log(`🎉 [SUCCESS_MODAL] Retry ${retryCount}/${maxRetries} failed, trying again...`);
               retryFind();
               return;
             }
@@ -1691,7 +1581,7 @@ class TelegramUtilities {
               fallbackModal.style.display = "flex";
               fallbackModal.style.zIndex = "9999";
               
-              console.log('🎉 [SUCCESS_MODAL] Emergency fallback modal created and displayed');
+              // console.log('🎉 [SUCCESS_MODAL] Emergency fallback modal created and displayed');
               return;
             }
             
@@ -1707,7 +1597,7 @@ class TelegramUtilities {
                 } else if (window.electronAPI && window.electronAPI.shell && window.electronAPI.shell.openExternal) {
                   window.electronAPI.shell.openExternal(shareableLink);
                 } else {
-                  console.log('🎉 [SUCCESS_MODAL] ElectronAPI methods not available, will show link in status');
+                  // console.log('🎉 [SUCCESS_MODAL] ElectronAPI methods not available, will show link in status');
                 }
               } catch (error) {
                 console.error('🎉 [SUCCESS_MODAL] Error opening URL:', error);
@@ -1719,7 +1609,7 @@ class TelegramUtilities {
         retryFind();
       } else {
         // Modal found immediately, display it
-        console.log(`🎉 [SUCCESS_MODAL] Modal found immediately after DOM ready`);
+        // console.log(`🎉 [SUCCESS_MODAL] Modal found immediately after DOM ready`);
         this.displaySuccessModal(elements.modal, elements.overlay, elements.linkInput, shareableLink);
       }
     });
@@ -1729,17 +1619,17 @@ class TelegramUtilities {
   // TEST METHOD - Enhanced debugging  
   testSuccessModal() {
     const testLink = "https://t.me/addstickers/test_sticker_pack_123";
-    console.log(`🗓 [TEST] Triggering enhanced success modal with test link: ${testLink}`);
-    console.log(`🗓 [TEST] Current DOM ready state: ${document.readyState}`);
+    // console.log(`🗓 [TEST] Triggering enhanced success modal with test link: ${testLink}`);
+    // console.log(`🗓 [TEST] Current DOM ready state: ${document.readyState}`);
     
     // Check if elements exist before calling
     const modal = document.getElementById("success-modal") || document.querySelector('.success-modal-enhanced');
     const overlay = document.getElementById("modal-overlay") || document.querySelector('.modal-overlay');
     
-    console.log(`🗓 [TEST] Pre-check - Modal: ${!!modal}, Overlay: ${!!overlay}`);
+    // console.log(`🗓 [TEST] Pre-check - Modal: ${!!modal}, Overlay: ${!!overlay}`);
     
     if (modal) {
-      console.log(`🗓 [TEST] Modal found:`, {
+      /* console.log(`🗓 [TEST] Modal found:`, {
         id: modal.id,
         className: modal.className,
         style: modal.style.cssText,
@@ -1747,10 +1637,10 @@ class TelegramUtilities {
           display: getComputedStyle(modal).display,
           visibility: getComputedStyle(modal).visibility
         }
-      });
+      }); */
     }
     
-    console.log(`🗓 [TEST] Testing enhanced showSuccessModal with improved DOM detection...`);
+    // console.log(`🗓 [TEST] Testing enhanced showSuccessModal with improved DOM detection...`);
     this.showSuccessModal(testLink);
     
     // Schedule a check to see if modal appeared
@@ -1775,7 +1665,7 @@ class TelegramUtilities {
         });
         
         if (isVisible) {
-          console.log(`✅ [TEST] SUCCESS: Modal is properly visible!`);
+          // console.log(`✅ [TEST] SUCCESS: Modal is properly visible!`);
         } else {
           console.error(`❌ [TEST] FAILURE: Modal exists but is not visible`);
         }
@@ -1786,7 +1676,7 @@ class TelegramUtilities {
   }
 
   displaySuccessModal(modal, overlay, linkInput, shareableLink) {
-    console.log(`🎉 [SUCCESS_MODAL] Starting modal display process...`);
+    // console.log(`🎉 [SUCCESS_MODAL] Starting modal display process...`);
     
     // Validate required elements
     if (!modal) {
@@ -1802,9 +1692,9 @@ class TelegramUtilities {
     // Set the shareable link
     if (linkInput && shareableLink) {
       linkInput.value = shareableLink;
-      console.log(`🎉 [SUCCESS_MODAL] Set link input value: ${shareableLink}`);
+      // console.log(`🎉 [SUCCESS_MODAL] Set link input value: ${shareableLink}`);
     } else {
-      console.warn(`🎉 [SUCCESS_MODAL] Link input not found or no link provided - linkInput: ${!!linkInput}, shareableLink: ${!!shareableLink}`);
+      // console.warn(`🎉 [SUCCESS_MODAL] Link input not found or no link provided - linkInput: ${!!linkInput}, shareableLink: ${!!shareableLink}`);
     }
     
     // Reset any previous states and ensure modal is ready with proper centering
@@ -1841,12 +1731,12 @@ class TelegramUtilities {
     overlay.classList.add("active");
     modal.style.display = "flex";
     
-    console.log(`🎉 [SUCCESS_MODAL] Modal display set to flex, opacity transition starting...`);
+    // console.log(`🎉 [SUCCESS_MODAL] Modal display set to flex, opacity transition starting...`);
     
     // Use requestAnimationFrame for smooth display
     requestAnimationFrame(() => {
       modal.style.opacity = "1";
-      console.log(`🎉 [SUCCESS_MODAL] Opacity set to 1, modal should be visible now`);
+      // console.log(`🎉 [SUCCESS_MODAL] Opacity set to 1, modal should be visible now`);
     });
     
     // Add critical modal protection (prevent outside click dismissal)
@@ -1892,7 +1782,7 @@ class TelegramUtilities {
       );
       
       if (!isInViewport) {
-        console.log(`🎉 [SUCCESS_MODAL] Modal not in viewport, scrolling to it`);
+        // console.log(`🎉 [SUCCESS_MODAL] Modal not in viewport, scrolling to it`);
         // Scroll the modal into view
         modal.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
       }
@@ -1902,7 +1792,7 @@ class TelegramUtilities {
       overlay.style.zIndex = "9999";
     }, 100);
     
-    console.log(`🎉 [SUCCESS_MODAL] Modal should now be visible`);
+    // console.log(`🎉 [SUCCESS_MODAL] Modal should now be visible`);
     
     // Setup event listeners for modal buttons
     this.setupSuccessModalEventListeners(shareableLink);
@@ -1912,7 +1802,7 @@ class TelegramUtilities {
       const copyBtn = document.getElementById("copy-link-btn");
       if (copyBtn) {
         copyBtn.focus();
-        console.log(`🎉 [SUCCESS_MODAL] Focus set to copy button`);
+        // console.log(`🎉 [SUCCESS_MODAL] Focus set to copy button`);
       }
     }, 300);
   }
@@ -1921,7 +1811,7 @@ class TelegramUtilities {
     const modal = document.getElementById("success-modal");
     const overlay = document.getElementById("modal-overlay");
     
-    console.log(`🎉 [SUCCESS_MODAL] Hiding modal - modal found: ${!!modal}, overlay found: ${!!overlay}`);
+    // console.log(`🎉 [SUCCESS_MODAL] Hiding modal - modal found: ${!!modal}, overlay found: ${!!overlay}`);
     
     if (modal) {
       modal.style.display = "none";
@@ -1933,21 +1823,21 @@ class TelegramUtilities {
       modal.style.left = "";
       modal.style.transform = "";
       modal.style.margin = "";
-      console.log(`🎉 [SUCCESS_MODAL] Modal hidden`);
+      // console.log(`🎉 [SUCCESS_MODAL] Modal hidden`);
     }
     
     if (overlay) {
       overlay.classList.remove("active");
       overlay.style.display = "none";
       overlay.style.visibility = "hidden";
-      console.log(`🎉 [SUCCESS_MODAL] Overlay hidden`);
+      // console.log(`🎉 [SUCCESS_MODAL] Overlay hidden`);
     }
     
     // Clean up keyboard event listeners
     if (this.successModalKeyHandler) {
       document.removeEventListener('keydown', this.successModalKeyHandler);
       this.successModalKeyHandler = null;
-      console.log(`🎉 [SUCCESS_MODAL] Keyboard handlers removed`);
+      // console.log(`🎉 [SUCCESS_MODAL] Keyboard handlers removed`);
     }
     
     console.log(`🎉 [SUCCESS_MODAL] Modal hidden and cleaned up`);
@@ -2031,27 +1921,6 @@ class TelegramUtilities {
     this.showSuccessModal(testLink);
   }
   
-  createAnotherPack() {
-    // Hide the success modal
-    this.hideSuccessModal();
-    
-    // Switch to the sticker bot tab to create another pack
-    const stickerTab = document.querySelector('.nav-item[data-tab="sticker-bot"]');
-    if (stickerTab) {
-      stickerTab.click();
-    }
-    
-    // Show helpful toast
-    this.showToast("info", "Ready for New Pack", "You can now create another sticker pack!");
-    
-    // Focus on the media files area
-    setTimeout(() => {
-      const mediaSection = document.querySelector('#sticker-bot .media-files-card');
-      if (mediaSection) {
-        mediaSection.scrollIntoView({ behavior: 'smooth' });
-      }
-    }, 500);
-  }
 
   createAnotherPack() {
     console.log('🔄 [RESET] Starting complete process reset...');
@@ -2120,7 +1989,7 @@ class TelegramUtilities {
     }
     
     // STEP 8: Reset any internal flags
-    this.autoSkipAttempted = false;
+    // Removed autoSkipAttempted flag - auto-skip is handled entirely by backend
     this.lastStage = null;
     this.lastStageWasQueue = false;
     this.currentIconProcessId = null;
@@ -2144,19 +2013,22 @@ class TelegramUtilities {
       currentStep: 'initial'
     };
     
-    // STEP 10: Focus on pack name input for immediate use
+    // STEP 10: Focus on pack name input and update button state (preserve telegram connection)
     setTimeout(() => {
+      // Update button state using existing connection status (don't change it)
+      this.updatePackActions();
+      
+      // Focus on pack name input for immediate use
       if (packNameInput) {
         packNameInput.focus();
       }
+      
+      console.log('🔄 [RESET] Form reset completed - Telegram connection preserved');
     }, 100);
     
     console.log('🔄 [RESET] Complete process reset finished!');
     this.showToast("success", "Ready for New Pack", "Form cleared - ready to create another sticker pack!");
     this.addStatusItem("🔄 Ready to create new sticker pack", "ready");
-    
-    // Ensure button state is properly updated after reset
-    this.updatePackActions();
   }
 
   resetStickerForm() {
@@ -2206,8 +2078,10 @@ class TelegramUtilities {
     const hasMedia = this.mediaFiles.length > 0;
     const isConnected = this.telegramConnected;
     
-    const canCreate = isPackNameValid && isUrlNameValid && hasMedia && isConnected;
-    createBtn.disabled = !canCreate;
+    // CRITICAL FIX: Button should only be disabled if Telegram is disconnected
+    // If Telegram is connected, keep button enabled so user can see they can fill fields
+    // The actual validation will happen when they click the button
+    createBtn.disabled = !isConnected;
   }
 
   validatePackName(packName) {
@@ -2280,19 +2154,12 @@ class TelegramUtilities {
   // VIDEO CONVERTER METHODS WITH PROPER PROGRESS TRACKING
   // =============================================
   async addVideoFiles() {
-    if (RENDERER_DEBUG) console.log("=== ADD VIDEO FILES DEBUG ===");
-    if (RENDERER_DEBUG) console.log("Current video files before adding:", this.videoFiles.length);
-    
     try {
       // Check if electronAPI is available
       if (!window.electronAPI) {
-        if (RENDERER_DEBUG) console.error("❌ window.electronAPI is not available");
         this.showToast("error", "System Error", "Electron API not available");
         return;
       }
-      
-      if (RENDERER_DEBUG) console.log("✅ Electron API is available");
-      if (RENDERER_DEBUG) console.log("Container exists:", !!document.getElementById("video-file-list"));
       
       const files = await window.electronAPI.selectFiles({
         filters: [
@@ -2304,20 +2171,13 @@ class TelegramUtilities {
         ],
       });
       
-      if (RENDERER_DEBUG) console.log("📁 Selected files:", files);
-      
       if (!files || files.length === 0) {
-        if (RENDERER_DEBUG) console.log("ℹ️ No files selected");
         return;
       }
       
       let addedCount = 0;
       for (let index = 0; index < files.length; index++) {
         const file = files[index];
-        if (RENDERER_DEBUG) console.log(`📄 Processing file ${index + 1}:`, {
-          path: file,
-          exists: file ? "checking..." : "NO PATH"
-        });
         
         if (!this.videoFiles.some((f) => f.path === file)) {
           // Get file metadata first
@@ -2335,15 +2195,12 @@ class TelegramUtilities {
             height: metadata.height
           });
           addedCount++;
-          if (RENDERER_DEBUG) console.log(`✅ Added file: ${file.split(/[\\/]/).pop()} with metadata:`, metadata);
           
           // IMMEDIATE UI UPDATE - Update file count instantly
           const counter = document.getElementById("video-file-count");
           if (counter) {
             counter.textContent = this.videoFiles.length;
           }
-        } else {
-          if (RENDERER_DEBUG) console.log(`⚠️ File already exists: ${file.split(/[\\/]/).pop()}`);
         }
       }
       
@@ -2351,26 +2208,13 @@ class TelegramUtilities {
       // Force immediate update
       this.updateVideoFileList();
       
-      // Verify DOM update
-      setTimeout(() => {
-        const container = document.getElementById("video-file-list");
-        if (container) {
-          if (RENDERER_DEBUG) console.log("✅ Container children after update:", container.children.length);
-          if (RENDERER_DEBUG) console.log("✅ Container HTML preview:", container.innerHTML.substring(0, 200));
-        }
-      }, 200);
-      
       if (addedCount > 0) {
         this.showToast("success", "Files Added", `Added ${addedCount} video files`);
       } else {
         this.showToast("info", "No New Files", "All selected files were already in the list");
       }
       
-      if (RENDERER_DEBUG) console.log("=== ADD VIDEO FILES DEBUG END ===");
-      
     } catch (error) {
-      if (RENDERER_DEBUG) console.error("❌ Error adding video files:", error);
-      if (RENDERER_DEBUG) console.error("Stack trace:", error.stack);
       this.showToast("error", "Error", "Failed to add video files: " + error.message);
     }
   }
@@ -2447,7 +2291,6 @@ class TelegramUtilities {
   updateVideoFileList() {
     const container = document.getElementById("video-file-list");
     if (!container) {
-      if (RENDERER_DEBUG) console.warn('🚨 UI DEBUG - Container Not Found', 'video-file-list container not found');
       // Try again after a short delay in case DOM is still loading
       setTimeout(() => {
         const retryContainer = document.getElementById("video-file-list");
@@ -2458,23 +2301,8 @@ class TelegramUtilities {
       return;
     }
     
-    this.debugWarn('🔥 UI DEBUG - updateVideoFileList Called', {
-      fileCount: this.videoFiles.length,
-      currentOperation: this.currentOperation,
-      files: this.videoFiles.map((file, index) => ({
-        index: index,
-        name: file.name,
-        status: file.status,
-        progress: file.progress,
-        stage: file.stage,
-        path: file.path
-      }))
-    });
-    
-    if (RENDERER_DEBUG) console.log("Updating video file list with", this.videoFiles.length, "files");
-    this.videoFiles.forEach((file, index) => {
-      if (RENDERER_DEBUG) console.log(`File ${index}: ${file.name} - status=${file.status}, progress=${file.progress}, stage=${file.stage}`);
-    });
+    // Update video file list
+    const fileCount = this.videoFiles.length;
     
     // IMMEDIATE FILE COUNT UPDATE - Do this first for instant feedback
     const counter = document.getElementById("video-file-count");
@@ -2535,30 +2363,12 @@ class TelegramUtilities {
     const progressWidth = file.progress || 0;
     const statusIcon = this.getStatusIcon(file.status);
     
-    this.debugWarn('🔥 UI DEBUG - Creating File Element', {
-      index: index,
-      filename: file.name,
-      status: file.status,
-      statusClass: statusClass,
-      progress: file.progress,
-      progressWidth: progressWidth,
-      stage: file.stage,
-      statusIcon: statusIcon
-    });
-    
     const fileElement = document.createElement('div');
     fileElement.className = `file-item ${statusClass}`;
     fileElement.setAttribute('data-index', index);
     
     const progressText = progressWidth === 100 ? '✔' : `${progressWidth}%`;
     const statusText = file.stage || "Ready to convert";
-    
-    this.debugWarn('🔥 UI DEBUG - Element Content Details', {
-      index: index,
-      progressText: progressText,
-      statusText: statusText,
-      progressBarWidth: `${progressWidth}%`
-    });
     
     fileElement.innerHTML = `
       <div class="file-info">
@@ -2590,16 +2400,6 @@ class TelegramUtilities {
         </button>
       </div>
     `;
-    
-    this.debugWarn('🔥 UI DEBUG - Element Created', {
-      index: index,
-      dataIndex: fileElement.getAttribute('data-index'),
-      className: fileElement.className,
-      hasProgressFill: fileElement.querySelector('.file-progress-fill') !== null,
-      progressFillWidth: fileElement.querySelector('.file-progress-fill')?.style.width,
-      hasProgressText: fileElement.querySelector('.file-progress-text') !== null,
-      progressTextContent: fileElement.querySelector('.file-progress-text')?.textContent
-    });
     
     return fileElement;
   }
@@ -2663,7 +2463,7 @@ class TelegramUtilities {
         };
       }
     } catch (error) {
-      if (RENDERER_DEBUG) console.error('Failed to get file info:', error);
+      // Error getting file info, continue without it
     }
     
     // Format additional info
@@ -2771,7 +2571,7 @@ class TelegramUtilities {
       try {
         await this.apiRequest("POST", "/api/stop-process", { process_id: removed.process_id });
       } catch (error) {
-        if (RENDERER_DEBUG) console.error("Error stopping process:", error);
+        // Error stopping process, continue without it
       }
     }
     
@@ -2780,15 +2580,12 @@ class TelegramUtilities {
 
   async browseVideoOutput() {
     try {
-      if (RENDERER_DEBUG) console.log("[DEBUG] Starting directory selection...");
-      
       // Check if Electron API is available
       if (!window.electronAPI || !window.electronAPI.selectDirectory) {
         throw new Error("Electron directory selection API not available");
       }
       
       const directory = await window.electronAPI.selectDirectory();
-      if (RENDERER_DEBUG) console.log("[DEBUG] Directory selection result:", directory);
       
       if (directory) {
         this.currentVideoOutput = directory;
@@ -2802,13 +2599,6 @@ class TelegramUtilities {
         );
       }
     } catch (error) {
-      if (RENDERER_DEBUG) console.error("[ERROR] Error selecting directory:", error);
-      if (RENDERER_DEBUG) console.error("[ERROR] Error details:", {
-        message: error.message,
-        stack: error.stack,
-        electronAPI: !!window.electronAPI,
-        selectDirectory: !!(window.electronAPI && window.electronAPI.selectDirectory)
-      });
       this.showToast(
         "error",
         "Directory Selection Error",
@@ -5433,7 +5223,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     }
     
     // Reset auto-skip flag for this process
-    this.autoSkipAttempted = false;
+    // Removed autoSkipAttempted flag - auto-skip is handled entirely by backend
     this.lastStage = null;
     
     // CRITICAL: Track the process ID for URL name retry functionality
@@ -5479,160 +5269,148 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           
           // PRIORITY CHECK 2: Check for icon selection (before completed status)
           if (progress.waiting_for_user && (progress.icon_request_message || progress.icon_request) && !this.iconHandledProcesses.has(processId)) {
-            // Check auto-skip setting
-            const autoSkipIcon = document.getElementById("auto-skip-icon");
-            const shouldAutoSkip = autoSkipIcon && autoSkipIcon.checked;
+            // Check if auto-skip was enabled for this process (from backend)
+            const processAutoSkip = progress.auto_skip_icon !== undefined ? progress.auto_skip_icon : true; // Default to true
+            // Check if auto-skip has already been handled by the backend
+            const autoSkipHandled = progress.auto_skip_handled !== undefined ? progress.auto_skip_handled : false;
             
-            if (shouldAutoSkip && !this.autoSkipAttempted) {
-              // Auto-skip: send skip command automatically (only once)
-              this.autoSkipAttempted = true;
-              this.addStatusItem("Auto-skipping icon selection...", "info");
-              try {
-                const response = await this.apiRequest("POST", "/api/sticker/skip-icon", {
-                  process_id: processId
-                });
-                if (response.success) {
-                  this.addStatusItem("Icon step auto-skipped", "completed");
-                                
-                  // SMART COMPLETION DETECTION: Check if the pack was completed during skip
-                  if (response.message && response.message.includes("Sticker pack created successfully")) {
-                    this.addStatusItem("✅ Sticker pack created successfully!", "completed");
-                    this.stopStickerProgressMonitoring();
-                                  
-                    // Extract shareable link from backend or generate from the known URL
-                    const packUrlName = response.pack_url_name || response.url_name || 
-                                        progress.pack_url_name || progress.url_name;
-                    const shareableLink = response.shareable_link || 
-                                         (packUrlName ? `https://t.me/addstickers/${packUrlName}` : null);
-                                  
-                    this.onStickerProcessCompleted(true, {
-                      shareable_link: shareableLink,
-                      pack_url_name: packUrlName,
-                      message: "✅ Sticker pack created successfully"
-                    });
-                    return; // Exit monitoring
-                  } else if (response.completed) {
-                    // Check if the response indicates completion
-                    this.addStatusItem("✅ Sticker pack created successfully!", "completed");
-                    this.stopStickerProgressMonitoring();
-                                  
-                    // Extract shareable link from backend or generate from the known URL
-                    const packUrlName = response.pack_url_name || response.url_name || 
-                                        progress.pack_url_name || progress.url_name;
-                    const shareableLink = response.shareable_link || 
-                                         (packUrlName ? `https://t.me/addstickers/${packUrlName}` : null);
-                                  
-                    this.onStickerProcessCompleted(true, {
-                      shareable_link: shareableLink,
-                      pack_url_name: packUrlName,
-                      message: "✅ Sticker pack created successfully"
-                    });
-                    return; // Exit monitoring
-                  }
-                                
-                  // Continue monitoring for URL name step or completion
-                } else {
-                  this.addStatusItem(`Error auto-skipping icon: ${response.error}`, "error");
-                  // Show manual modal as fallback
-                  this.stopStickerProgressMonitoring();
-                  this.showIconModal(processId, progress.icon_request_message);
-                }
-              } catch (error) {
-                this.addStatusItem(`Error auto-skipping icon: ${error.message}`, "error");
-                // Show manual modal as fallback
+            // ENHANCED: Also check if the process is already completed (backend auto-skip completed the entire process)
+            const isProcessCompleted = progress.status === "completed";
+            
+            // If backend has already completed the process, handle completion directly
+            if (isProcessCompleted) {
+              // Process is already completed, handle completion directly
+              this.addStatusItem("✅ Sticker pack creation completed successfully!", "completed");
+              this.stopStickerProgressMonitoring();
+              this.onStickerProcessCompleted(true, progress);
+              return;
+            }
+            
+            // If backend has already handled auto-skip, don't show icon modal and continue monitoring
+            // BUT we still need to check for URL name conflicts even when auto-skip is handled
+            if (processAutoSkip && autoSkipHandled) {
+              // Backend is handling auto-skip, continue monitoring without showing modal
+              this.addStatusItem("Auto-skip enabled - backend handling icon selection automatically", "info");
+              
+              // Continue monitoring - don't show icon modal
+              // BUT we still need to check for URL name conflicts immediately
+              // Check for URL name retry when backend has handled auto-skip and detected conflict
+              if ((progress.waiting_for_user || progress.status === "waiting_for_url_name") && progress.url_name_taken && !this.urlPromptHandledProcesses.has(processId)) {
+                // Mark as handled to prevent duplicate processing
+                this.urlPromptHandledProcesses.add(processId);
+                
+                // Stop monitoring while user provides new URL name
                 this.stopStickerProgressMonitoring();
-                this.showIconModal(processId, progress.icon_request_message);
+                
+                // Show URL name modal with the original taken name
+                const takenName = progress.original_url_name || progress.pack_url_name || "retry";
+                const currentAttempt = progress.url_name_attempts || 1;
+                const maxAttempts = progress.max_url_attempts || 3;
+                
+                this.addStatusItem(`URL name '${takenName}' is taken. Showing retry options (${currentAttempt}/${maxAttempts})`, "warning");
+                this.showUrlNameModal(takenName, currentAttempt, maxAttempts, processId);
+                return; // Exit early after handling URL name retry
               }
-            } else {
-              // Manual mode: show icon selection modal and STOP monitoring
-              // Process will wait indefinitely for user action - no timeout
-              this.stopStickerProgressMonitoring(); // Stop monitoring - user controls when to continue
               
-              // CRITICAL FIX: Store the process ID so we can restart monitoring after icon is sent
-              this.currentIconProcessId = processId;
+              return;
+            }
+            
+            // Manual mode: show icon selection modal and STOP monitoring
+            // Process will wait indefinitely for user action - no timeout
+            this.stopStickerProgressMonitoring(); // Stop monitoring - user controls when to continue
+            
+            // CRITICAL FIX: Store the process ID so we can restart monitoring after icon is sent
+            this.currentIconProcessId = processId;
+            
+            // CRITICAL FIX: Also store in urlPromptHandledProcesses to prevent duplicate handling
+            this.urlPromptHandledProcesses.add(processId);
+            
+            // If Telegram is already asking for short name, bypass icon modal and proceed to URL
+            const urlPrompt = (progress.icon_request_message && /short name|create a link|addstickers/i.test(progress.icon_request_message))
+                              || progress.waiting_for_url_name
+                              || false;
+            if (urlPrompt) {
+              try { this.hideIconModal(); } catch {}
               
-              // CRITICAL FIX: Also store in urlPromptHandledProcesses to prevent duplicate handling
-              this.urlPromptHandledProcesses.add(processId);
+              // Check if auto-skip is enabled - if so, automatically submit the URL name
+              const autoSkipIcon = document.getElementById("auto-skip-icon");
+              const shouldAutoSkip = autoSkipIcon && autoSkipIcon.checked;
               
-              // If Telegram is already asking for short name, bypass icon modal and proceed to URL
-              const urlPrompt = (progress.icon_request_message && /short name|create a link|addstickers/i.test(progress.icon_request_message))
-                                || progress.waiting_for_url_name
-                                || false;
-              if (urlPrompt) {
-                try { this.hideIconModal(); } catch {}
-                
-                // Check if auto-skip is enabled - if so, automatically submit the URL name
-                const autoSkipIcon = document.getElementById("auto-skip-icon");
-                const shouldAutoSkip = autoSkipIcon && autoSkipIcon.checked;
-                
-                if (shouldAutoSkip) {
-                  // Auto-skip is enabled, automatically submit the URL name
-                  this.addStatusItem("Auto-skip enabled, automatically submitting URL name...", "info");
-                  try {
-                    const urlInput = document.getElementById("pack-url-name");
-                    const urlName = (urlInput && typeof urlInput.value === 'string') ? urlInput.value.trim() : '';
-                    if (urlName) {
-                      const submitRes = await this.apiRequest("POST", "/api/sticker/submit-url-name", {
-                        process_id: processId,
-                        new_url_name: urlName,
-                        current_attempt: 1,
-                        max_attempts: 3
-                      });
-
-                      if (submitRes && submitRes.success) {
-                        this.urlPromptHandledProcesses.add(processId);
-                        this.startStickerProgressMonitoring(processId);
-                        return;
-                      } else if (submitRes && submitRes.url_name_taken) {
-                        this.urlPromptHandledProcesses.add(processId);
-                        this.showUrlNameModal(processId, urlName, (submitRes.attempt || 1), (submitRes.max_attempts || 3));
-                        return;
-                      }
-                    }
-                  } catch (e) {
-                    // If auto-submit fails, fall back to manual process
-                    this.addStatusItem(`Auto-submit failed: ${e.message}. Continuing with manual process.`, "warning");
-                  }
-                }
-                
-                const urlInput = document.getElementById("pack-url-name");
-                const urlName = (urlInput && typeof urlInput.value === 'string') ? urlInput.value.trim() : '';
-                if (urlName) {
-                  try {
+              // Even if auto-skip is enabled, the backend should handle it, not the frontend
+              // But if for some reason we're here, we can still submit the URL name
+              if (shouldAutoSkip) {
+                // Auto-skip is enabled, automatically submit the URL name
+                this.addStatusItem("Auto-skip enabled, automatically submitting URL name...", "info");
+                try {
+                  const urlInput = document.getElementById("pack-url-name");
+                  const urlName = (urlInput && typeof urlInput.value === 'string') ? urlInput.value.trim() : '';
+                  if (urlName) {
                     const submitRes = await this.apiRequest("POST", "/api/sticker/submit-url-name", {
                       process_id: processId,
                       new_url_name: urlName,
                       current_attempt: 1,
                       max_attempts: 3
                     });
+
                     if (submitRes && submitRes.success) {
+                      // Only add to urlPromptHandledProcesses when URL name is actually submitted
                       this.urlPromptHandledProcesses.add(processId);
                       this.startStickerProgressMonitoring(processId);
                       return;
                     } else if (submitRes && submitRes.url_name_taken) {
+                      // Only add to urlPromptHandledProcesses when URL name taken is handled
                       this.urlPromptHandledProcesses.add(processId);
                       this.showUrlNameModal(processId, urlName, (submitRes.attempt || 1), (submitRes.max_attempts || 3));
                       return;
                     }
-                  } catch {}
+                  }
+                } catch (e) {
+                  // If auto-submit fails, fall back to manual process
+                  this.addStatusItem(`Auto-submit failed: ${e.message}. Continuing with manual process.`, "warning");
                 }
-                // Fallback: show URL modal to collect the name
-                this.urlPromptHandledProcesses.add(processId);
-                this.showUrlNameModal(processId, progress.pack_url_name || "retry", 1, 3);
-                return;
               }
               
-              this.showIconModal(processId, progress.icon_request_message);
-              this.iconHandledProcesses.add(processId);
-              
-              // CRITICAL FIX: Also store in urlPromptHandledProcesses to prevent duplicate handling
+              const urlInput = document.getElementById("pack-url-name");
+              const urlName = (urlInput && typeof urlInput.value === 'string') ? urlInput.value.trim() : '';
+              if (urlName) {
+                try {
+                  const submitRes = await this.apiRequest("POST", "/api/sticker/submit-url-name", {
+                    process_id: processId,
+                    new_url_name: urlName,
+                    current_attempt: 1,
+                    max_attempts: 3
+                  });
+                  if (submitRes && submitRes.success) {
+                    // Only add to urlPromptHandledProcesses when URL name is actually submitted
+                    this.urlPromptHandledProcesses.add(processId);
+                    this.startStickerProgressMonitoring(processId);
+                    return;
+                  } else if (submitRes && submitRes.url_name_taken) {
+                    // Only add to urlPromptHandledProcesses when URL name taken is handled
+                    this.urlPromptHandledProcesses.add(processId);
+                    this.showUrlNameModal(processId, urlName, (submitRes.attempt || 1), (submitRes.max_attempts || 3));
+                    return;
+                  }
+                } catch {}
+              }
+              // Fallback: show URL modal to collect the name
+              // Only add to urlPromptHandledProcesses when URL modal is shown
               this.urlPromptHandledProcesses.add(processId);
+              this.showUrlNameModal(processId, progress.pack_url_name || "retry", 1, 3);
+              return;
             }
+            
+            this.showIconModal(processId, progress.icon_request_message);
+            this.iconHandledProcesses.add(processId);
+            
+            // CRITICAL FIX: Don't add to urlPromptHandledProcesses here - only when URL prompt is actually handled
+            // this.urlPromptHandledProcesses.add(processId);
             return; // CRITICAL: Exit early after handling icon selection
           }
           
           // PRIORITY CHECK 3: Check for URL name retry after icon upload
-          if (progress.waiting_for_user && progress.url_name_taken && !this.urlPromptHandledProcesses.has(processId)) {
+          // Also check for URL name retry when backend has handled auto-skip and detected conflict
+          if ((progress.waiting_for_user || progress.status === "waiting_for_url_name") && progress.url_name_taken && !this.urlPromptHandledProcesses.has(processId)) {
             // Mark as handled to prevent duplicate processing
             this.urlPromptHandledProcesses.add(processId);
             
@@ -5650,9 +5428,28 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           }
           
           // REMAINING STATUS CHECKS (after priority checks)
+          // Check for URL name retry even in general status checks
+          if ((progress.waiting_for_user || progress.status === "waiting_for_url_name") && progress.url_name_taken && !this.urlPromptHandledProcesses.has(processId)) {
+            // Mark as handled to prevent duplicate processing
+            this.urlPromptHandledProcesses.add(processId);
+            
+            // Stop monitoring while user provides new URL name
+            this.stopStickerProgressMonitoring();
+            
+            // Show URL name modal with the original taken name
+            const takenName = progress.original_url_name || progress.pack_url_name || "retry";
+            const currentAttempt = progress.url_name_attempts || 1;
+            const maxAttempts = progress.max_url_attempts || 3;
+            
+            this.addStatusItem(`URL name '${takenName}' is taken. Showing retry options (${currentAttempt}/${maxAttempts})`, "warning");
+            this.showUrlNameModal(takenName, currentAttempt, maxAttempts, processId);
+            return; // Exit early after handling URL name retry
+          }
+          
           if (progress.status === "completed") {
             // CRITICAL FIX: Only show completion if workflow is actually finished
-            if (this.workflowState.packCompleted || (this.workflowState.iconUploaded && this.workflowState.urlNameSubmitted)) {
+            // ENHANCED: Also check if backend has completed the process (e.g., auto-skip scenario)
+            if (this.workflowState.packCompleted || (this.workflowState.iconUploaded && this.workflowState.urlNameSubmitted) || progress.auto_skip_handled) {
               this.addStatusItem("✅ Sticker pack creation completed successfully!", "completed");
               this.stopStickerProgressMonitoring();
               this.onStickerProcessCompleted(true, progress);
@@ -5703,7 +5500,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           consecutiveErrors++;
           
           // SMART ERROR HANDLING: Check if this is a "Process not found" after a recent skip
-          if (response.error && response.error.includes("Process not found") && this.autoSkipAttempted) {
+          // Note: autoSkipAttempted flag removed - auto-skip is handled entirely by backend
+          if (response.error && response.error.includes("Process not found")) {
             this.addStatusItem("✅ Sticker pack created successfully (process completed)", "completed");
             this.stopStickerProgressMonitoring();
             
@@ -8841,8 +8639,6 @@ This action cannot be undone. Are you sure?
     
     try {
       // STEP 1: Force backend cleanup on frontend startup (with retry)
-      console.log('🧹 [CLEAN_INIT] Step 1: Force backend cleanup...');
-      
       // Retry the force reset with backoff in case backend is still starting
       let forceResetSuccess = false;
       for (let attempt = 1; attempt <= 3; attempt++) {
@@ -8851,7 +8647,6 @@ This action cannot be undone. Are you sure?
           forceResetSuccess = true;
           break;
         } catch (error) {
-          console.log(`🔄 [CLEAN_INIT] Force reset attempt ${attempt} failed: ${error.message}`);
           if (attempt < 3) {
             // Wait longer on each attempt
             await new Promise(resolve => setTimeout(resolve, attempt * 1000));
@@ -8859,38 +8654,27 @@ This action cannot be undone. Are you sure?
         }
       }
       
-      if (!forceResetSuccess) {
-        console.log('⚠️ [CLEAN_INIT] Force reset failed, but continuing with manual cleanup...');
-      }
-      
       // STEP 2: Always set disconnected state 
-      console.log('📱 [CLEAN_INIT] Step 2: Setting disconnected state...');
       this.updateTelegramStatus('disconnected');
       this.telegramConnected = false;
       
       // STEP 3: Check actual connection status from backend (with retry)
-      console.log('🔍 [CLEAN_INIT] Step 3: Verifying clean state...');
       try {
         const statusResponse = await this.apiRequest('GET', '/api/telegram/connection-status');
         
         if (statusResponse.success && statusResponse.data) {
           const status = statusResponse.data;
-          console.log('📊 [CLEAN_INIT] Backend status:', status);
           
           // For clean workflow, we expect clean_state: true and connected: false
           if (status.clean_state && !status.connected) {
-            console.log('✅ [CLEAN_INIT] Clean workflow verified - starting fresh');
             this.addStatusItem('🔄 Clean startup completed - ready for fresh connection', 'info');
           } else if (status.connected) {
-            console.log('⚠️ [CLEAN_INIT] Unexpected connection found - will handle on next connect...');
             this.addStatusItem('⚠️ Unexpected connection state - will force cleanup on connect', 'warning');
           }
         }
       } catch (error) {
-        console.log('⚠️ [CLEAN_INIT] Status check failed, but assuming clean state:', error.message);
+        // Assume clean state on error
       }
-      
-      console.log('✅ [CLEAN_INIT] Clean workflow initialization completed');
       
     } catch (error) {
       console.error('❌ [CLEAN_INIT] Error during clean initialization:', error);
@@ -9064,34 +8848,15 @@ window.applyThemeEmojis = () => window.app?.applyThemeEmojis();
 
 // TEST METHOD - Console access for success modal testing with DOM analysis
 window.testSuccessModal = () => {
-  console.log('🗓 [CONSOLE_TEST] Testing success modal from console...');
-  
-  // Check DOM state first
-  const modal = document.getElementById("success-modal");
-  const overlay = document.getElementById("modal-overlay");
-  const allModals = document.querySelectorAll('[id*="modal"], .modal');
-  
-  console.log('🗓 [CONSOLE_TEST] Current DOM state:', {
-    successModalExists: !!modal,
-    overlayExists: !!overlay,
-    totalModals: allModals.length
-  });
-  
   if (window.app?.testSuccessModal) {
     window.app.testSuccessModal();
-  } else {
-    console.error('🗓 [CONSOLE_TEST] app.testSuccessModal not available');
   }
 };
 
 // Quick manual test - inject and show modal immediately
 window.quickModalTest = () => {
-  console.log('🗓 [QUICK_TEST] Manual modal injection test...');
-  
   if (window.app?.showSuccessModal) {
     window.app.showSuccessModal('https://t.me/addstickers/test_manual_123');
-  } else {
-    console.error('🗓 [QUICK_TEST] app.showSuccessModal not available');
   }
 };
 
@@ -9124,24 +8889,11 @@ window.addEventListener("beforeunload", (event) => {
   }
 });
 
-// Global click handler for debugging
-document.addEventListener("click", (event) => {
-  if (RENDERER_DEBUG) console.log("🖱️ Global click detected:", {
-    target: event.target,
-    id: event.target.id,
-    className: event.target.className,
-    tagName: event.target.tagName
-  });
-});
-
-if (RENDERER_DEBUG) console.log("Telegram Utilities application loaded successfully!");
-if (RENDERER_DEBUG) console.log("Telegram Utilities application loaded successfully!");
-
 // ===== TRACE BOOT BANNER =====
 (function () {
   try {
-    console.info('[TRACE] boot hook executing');
-    const banner = () => console.info('[TRACE] Frontend tracing active');
+    // console.info('[TRACE] boot hook executing');
+    const banner = () => { /* console.info('[TRACE] Frontend tracing active'); */ };
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', banner, { once: true });
     } else {
