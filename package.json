@@ -1,6 +1,6 @@
 {
   "name": "telegram-utilities",
-  "version": "1.4.9",
+  "version": "1.5.0",
   "description": "Advanced Telegram Utilities - Video Converter & Sticker Bot",
   "main": "electron/main.js",
   "scripts": {
@@ -11,7 +11,14 @@
     "build": "electron-builder",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
-    "install-python": "cd python && pip install -r requirements.txt"
+    "install-python": "cd python && pip install -r requirements.txt",
+    "lint": "eslint electron/**/*.js --fix",
+    "lint:check": "eslint electron/**/*.js",
+    "find-duplicates": "jscpd electron python --min-lines 10 --min-tokens 50",
+    "format": "prettier --write \"electron/**/*.{js,html,css}\"",
+    "format:check": "prettier --check \"electron/**/*.{js,html,css}\"",
+    "analyze": "npm run lint:check && npm run find-duplicates",
+    "cleanup": "npm run format && npm run lint"
   },
   "build": {
     "appId": "com.telegramutils.app",
@@ -46,7 +53,10 @@
   "devDependencies": {
     "cross-env": "^7.0.3",
     "electron": "^38.1.2",
-    "electron-builder": "^24.6.4"
+    "electron-builder": "^24.6.4",
+    "eslint": "^8.57.0",
+    "jscpd": "^4.0.5",
+    "prettier": "^3.2.5"
   },
   "dependencies": {
     "axios": "^1.12.2",
