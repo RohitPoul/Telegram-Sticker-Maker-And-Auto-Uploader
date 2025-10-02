@@ -1045,6 +1045,10 @@ def get_process_status(process_id):
                 "waiting_for_user": process_data.get('waiting_for_user', False),
                 "waiting_for_url_name": process_data.get('waiting_for_url_name', False),
                 "icon_request_message": process_data.get('icon_request_message', ''),
+                # ENHANCED: Include auto-skip flag to prevent duplicate skip commands
+                "auto_skip_icon": process_data.get('auto_skip_icon', True),
+                # Include flag to indicate if auto-skip has been handled by backend
+                "auto_skip_handled": process_data.get('auto_skip_handled', False),
                 # ENHANCED: Include shareable link for completed sticker packs with detailed logging
                 "shareable_link": process_data.get('shareable_link', ''),
                 "url_name_taken": process_data.get('url_name_taken', False),
@@ -1052,7 +1056,7 @@ def get_process_status(process_id):
                 "url_name_attempts": process_data.get('url_name_attempts', 0),
                 "max_url_attempts": process_data.get('max_url_attempts', 3)
             }
-            
+
             # ENHANCED DEBUG: Log detailed information for completed processes
             if process_data.get('status') == 'completed':
                 logger.info(f"[API] COMPLETED PROCESS DEBUG for {safe_process_id}:")
