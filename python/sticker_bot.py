@@ -726,10 +726,12 @@ class StickerBotCore:
 
             self.logger.info(f"[STICKER] Created {len(media_items)} media items for process {process_id}")
 
-            # Run creation using the existing run_telegram_coroutine function
-            result = run_telegram_coroutine(
-                self._create_sticker_pack_async(pack_name, pack_url_name, sticker_type, media_items, process_id, auto_skip_icon)
-            )
+            # Create a fresh coroutine to avoid reuse issues
+            async def create_pack_fresh():
+                return await self._create_sticker_pack_async(pack_name, pack_url_name, sticker_type, media_items, process_id, auto_skip_icon)
+            
+            # Run creation using the fresh coroutine
+            result = run_telegram_coroutine(create_pack_fresh())
 
             self.logger.info(f"[STICKER] Pack creation completed for process {process_id}")
             return result
@@ -828,11 +830,16 @@ class StickerBotCore:
             if auto_skip_icon:
                 self.logger.info("[STICKER] Auto-skip enabled, automatically skipping icon selection...")
                 
+                # Mark in process data that auto-skip has been handled by backend
+                with process_lock:
+                    if process_id in active_processes:
+                        active_processes[process_id]["auto_skip_handled"] = True
+                
                 # Send skip command automatically - expect URL_NAME_REQUEST not ICON_ACCEPTED
                 response = await self.conversation_manager.send_and_wait(
                     "/skip", BotResponseType.URL_NAME_REQUEST, timeout=30.0
                 )
-                
+
                 self.logger.info(f"[STICKER] Icon step skipped, received URL name request: {response.message[:100]}...")
                 
                 # Update process status - now waiting for URL name
@@ -898,7 +905,17 @@ class StickerBotCore:
                 except Exception as stats_error:
                     self.logger.warning(f"[STICKER] Failed to update stats: {stats_error}")
                 
-                return {"success": True, "message": "Sticker pack created successfully"}
+                # Return success with shareable link to trigger proper success modal
+                shareable_link = f"https://t.me/addstickers/{pack_url_name}"
+                
+                # Update process with shareable link before returning
+                with process_lock:
+                    if process_id in active_processes:
+                        active_processes[process_id]['shareable_link'] = shareable_link
+                        active_processes[process_id]['pack_url_name'] = pack_url_name
+                        active_processes[process_id]['current_stage'] = 'Pack creation completed successfully'
+                
+                return {"success": True, "message": "Sticker pack created successfully", "shareable_link": shareable_link, "pack_url_name": pack_url_name}
             else:
                 # Auto-skip is disabled, wait for user decision
                 self.logger.info("[STICKER] Auto-skip disabled, waiting for user decision on icon selection...")
@@ -1293,10 +1310,12 @@ class StickerBotCore:
 
             self.logger.info(f"[STICKER] Created {len(media_items)} media items for process {process_id}")
 
-            # Run creation using the existing run_telegram_coroutine function
-            result = run_telegram_coroutine(
-                self._create_sticker_pack_async(pack_name, pack_url_name, sticker_type, media_items, process_id, auto_skip_icon)
-            )
+            # Create a fresh coroutine to avoid reuse issues
+            async def create_pack_fresh():
+                return await self._create_sticker_pack_async(pack_name, pack_url_name, sticker_type, media_items, process_id, auto_skip_icon)
+            
+            # Run creation using the fresh coroutine
+            result = run_telegram_coroutine(create_pack_fresh())
 
             self.logger.info(f"[STICKER] Pack creation completed for process {process_id}")
             return result
@@ -1315,55 +1334,73 @@ def run_telegram_coroutine(coro):
     :return: Result of the coroutine
     """
     thread_name = threading.current_thread().name
-    max_retries = 3
     
-    for attempt in range(max_retries):
+    # Ensure we're working with a coroutine object
+    if not asyncio.iscoroutine(coro):
+        raise TypeError(f"Expected a coroutine object, got {type(coro)}")
+    
+    try:
+        # Try to use the handler's event loop first
         try:
-            # Try to use the handler's event loop first
-            try:
-                from telegram_connection_handler import get_telegram_handler
-                handler = get_telegram_handler()
-                if handler and handler._loop and handler._running:
-                    # Use the handler's dedicated event loop
-                    future = asyncio.run_coroutine_threadsafe(coro, handler._loop)
-                    # Allow up to 180s to accommodate longer Telegram waits
-                    return future.result(timeout=180)
-            except Exception as e:
-                logging.warning(f"Could not use handler's event loop: {e}")
-            
-            # Fallback to creating a new event loop if handler is not available
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_closed():
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-            except RuntimeError:
-                # No event loop in this thread, create a new one
+            from telegram_connection_handler import get_telegram_handler
+            handler = get_telegram_handler()
+            if handler and handler._loop and handler._running:
+                # Use the handler's dedicated event loop
+                future = asyncio.run_coroutine_threadsafe(coro, handler._loop)
+                # Allow up to 180s to accommodate longer Telegram waits
+                return future.result(timeout=180)
+        except Exception as e:
+            logging.warning(f"Could not use handler's event loop: {e}")
+        
+        # Fallback to creating a new event loop if handler is not available
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_closed():
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-            
-            # Check if the loop is already running (nested call)
-            if loop.is_running():
-                future = asyncio.run_coroutine_threadsafe(coro, loop)
-                return future.result(timeout=30)
-            else:
-                # Run the coroutine in the event loop
-                return loop.run_until_complete(coro)
+        except RuntimeError:
+            # No event loop in this thread, create a new one
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
         
-        except Exception as e:
-            # Handle specific database lock errors
-            if "database is locked" in str(e).lower():
-                logging.warning(f"[DATABASE] Lock detected on attempt {attempt + 1}/{max_retries}: {e}")
-                handle_database_lock_error(e, f"coroutine execution (attempt {attempt + 1})")
-                
-                if attempt < max_retries - 1:
-                    # Wait before retrying
-                    import time
-                    time.sleep(2 * (attempt + 1))  # Exponential backoff
-                    continue
-            
-            # Re-raise the original exception if not a database lock or final attempt
+        # Check if the loop is already running (nested call)
+        if loop.is_running():
+            future = asyncio.run_coroutine_threadsafe(coro, loop)
+            return future.result(timeout=30)
+        else:
+            # Run the coroutine in the event loop
+            return loop.run_until_complete(coro)
+    
+    except RuntimeError as e:
+        # Handle the specific "cannot reuse already awaited coroutine" error
+        if "cannot reuse already awaited coroutine" in str(e):
+            logging.error(f"[COROUTINE] Attempted to reuse an already awaited coroutine in thread {thread_name}")
+            raise RuntimeError("Coroutine has already been executed. This is likely due to an internal error in coroutine management.")
+        else:
+            # Re-raise other RuntimeError exceptions
             raise
+    except Exception as e:
+        # Handle specific database lock errors
+        if "database is locked" in str(e).lower():
+            logging.warning(f"[DATABASE] Lock detected: {e}")
+            handle_database_lock_error(e, "coroutine execution")
+        
+        # Re-raise the original exception
+        raise
+
+
+def create_fresh_coroutine(func, *args, **kwargs):
+    """
+    Helper function to create a fresh coroutine from a function.
+    This can be used to avoid coroutine reuse issues.
+    
+    :param func: Async function to call
+    :param args: Positional arguments for the function
+    :param kwargs: Keyword arguments for the function
+    :return: Fresh coroutine object
+    """
+    return func(*args, **kwargs)
+
 
 # Flask routes for sticker bot
 from flask import request, jsonify
@@ -2177,7 +2214,9 @@ def register_sticker_routes(app):
                         except Exception as stats_error:
                             logging.warning(f"[STICKER] Failed to update backend stats: {stats_error}")
                         
-                        return {"success": True, "message": "Sticker pack created successfully"}
+                        # Return success with shareable link for proper success modal
+                        shareable_link = f"https://t.me/addstickers/{new_url_name}"
+                        return {"success": True, "message": "Sticker pack created successfully", "shareable_link": shareable_link, "pack_url_name": new_url_name, "completed": True}
                     
                     elif url_response.response_type == BotResponseType.URL_NAME_TAKEN:
                         # URL name still taken - check if we have more attempts
