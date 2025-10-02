@@ -452,19 +452,8 @@ class TelegramUtilities {
     }
     
     // Success modal buttons - with null checks
-    const copyLinkBtn = document.getElementById("copy-link-btn");
-    const openTelegramBtn = document.getElementById("open-telegram-btn");
-    const createAnotherBtn = document.getElementById("create-another-btn");
-    
-    if (copyLinkBtn) {
-      copyLinkBtn.addEventListener("click", () => this.copyShareableLink());
-    }
-    if (openTelegramBtn) {
-      openTelegramBtn.addEventListener("click", () => this.openTelegramLink());
-    }
-    if (createAnotherBtn) {
-      createAnotherBtn.addEventListener("click", () => this.createAnotherPack());
-    }
+    // Note: Success modal buttons are dynamically created, so we don't add permanent listeners here
+    // Event listeners for success modal buttons are added when the modal is created
     
     // Real-time validation for pack name and URL name - with null checks
     const packNameInput = document.getElementById("pack-name");
@@ -1166,7 +1155,7 @@ class TelegramUtilities {
       statusElement.classList.remove("connected", "disconnected", "connecting");
       
       switch (status) {
-        case "connected":
+        case "connected": {
           statusElement.classList.add("connected");
           if (connectionStatus) {
             connectionStatus.innerHTML = '<i class="fas fa-check-circle"></i> Connected';
@@ -1185,7 +1174,8 @@ class TelegramUtilities {
           }
           this.telegramConnected = true;
           break;
-        case "connecting":
+        }
+        case "connecting": {
           statusElement.classList.add("connecting");
           if (connectionStatus) {
             connectionStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
@@ -1196,7 +1186,8 @@ class TelegramUtilities {
             connectBtnBusy.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
           }
           break;
-        default:
+        }
+        default: {
           statusElement.classList.add("disconnected");
           if (connectionStatus) {
             connectionStatus.innerHTML = '<i class="fas fa-times-circle"></i> Disconnected';
@@ -1214,6 +1205,7 @@ class TelegramUtilities {
           }
           this.telegramConnected = false;
           break;
+        }
       }
     }
   }
@@ -1554,7 +1546,7 @@ class TelegramUtilities {
                       </div>
                     </div>
                     <div class="success-actions">
-                      <button class="btn btn-primary btn-large" onclick="window.open('${shareableLink}', '_blank')">
+                      <button class="btn btn-primary btn-large" id="open-telegram-btn-fallback">
                         <i class="fab fa-telegram"></i> Open in Telegram
                       </button>
                       <button class="btn btn-secondary btn-large" onclick="window.app?.createAnotherPack(); document.getElementById('success-modal-fallback').style.display='none'; document.getElementById('modal-overlay').classList.remove('active')">
@@ -1571,6 +1563,17 @@ class TelegramUtilities {
             tempDiv.innerHTML = modalHTML.trim();
             const fallbackModal = tempDiv.firstChild;
             document.body.appendChild(fallbackModal);
+            
+            // Add event listener for the fallback open button to prevent double opening
+            const fallbackOpenBtn = document.getElementById('open-telegram-btn-fallback');
+            if (fallbackOpenBtn) {
+              fallbackOpenBtn.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                window.open(shareableLink, '_blank');
+                this.showToast("success", "Opening Telegram", "Opening your sticker pack in Telegram!");
+              };
+            }
             
             // Get the overlay (should exist)
             const overlay = document.getElementById("modal-overlay");
@@ -1616,64 +1619,6 @@ class TelegramUtilities {
   }
 
 
-  // TEST METHOD - Enhanced debugging  
-  testSuccessModal() {
-    const testLink = "https://t.me/addstickers/test_sticker_pack_123";
-    // console.log(`🗓 [TEST] Triggering enhanced success modal with test link: ${testLink}`);
-    // console.log(`🗓 [TEST] Current DOM ready state: ${document.readyState}`);
-    
-    // Check if elements exist before calling
-    const modal = document.getElementById("success-modal") || document.querySelector('.success-modal-enhanced');
-    const overlay = document.getElementById("modal-overlay") || document.querySelector('.modal-overlay');
-    
-    // console.log(`🗓 [TEST] Pre-check - Modal: ${!!modal}, Overlay: ${!!overlay}`);
-    
-    if (modal) {
-      /* console.log(`🗓 [TEST] Modal found:`, {
-        id: modal.id,
-        className: modal.className,
-        style: modal.style.cssText,
-        computed: {
-          display: getComputedStyle(modal).display,
-          visibility: getComputedStyle(modal).visibility
-        }
-      }); */
-    }
-    
-    // console.log(`🗓 [TEST] Testing enhanced showSuccessModal with improved DOM detection...`);
-    this.showSuccessModal(testLink);
-    
-    // Schedule a check to see if modal appeared
-    setTimeout(() => {
-      const modalAfter = document.getElementById("success-modal") || document.getElementById("success-modal-fallback");
-      if (modalAfter) {
-        const computed = getComputedStyle(modalAfter);
-        console.log(`🗓 [TEST] Modal state after call:`, {
-          id: modalAfter.id,
-          display: computed.display,
-          opacity: computed.opacity,
-          visibility: computed.visibility,
-          zIndex: computed.zIndex
-        });
-        
-        // Check if modal is actually visible
-        const rect = modalAfter.getBoundingClientRect();
-        const isVisible = rect.width > 0 && rect.height > 0 && computed.display !== 'none' && computed.visibility !== 'hidden';
-        console.log(`🗓 [TEST] Modal visibility analysis:`, {
-          isVisible,
-          rect: { width: rect.width, height: rect.height, top: rect.top, left: rect.left }
-        });
-        
-        if (isVisible) {
-          // console.log(`✅ [TEST] SUCCESS: Modal is properly visible!`);
-        } else {
-          console.error(`❌ [TEST] FAILURE: Modal exists but is not visible`);
-        }
-      } else {
-        console.error(`🗓 [TEST] No modal found after test!`);
-      }
-    }, 1000);
-  }
 
   displaySuccessModal(modal, overlay, linkInput, shareableLink) {
     // console.log(`🎉 [SUCCESS_MODAL] Starting modal display process...`);
@@ -1855,10 +1800,16 @@ class TelegramUtilities {
       console.warn(`🎉 [SUCCESS_MODAL] Copy button not found`);
     }
     
-    // Open in Telegram button
+    // Open in Telegram button - prevent double opening
     const openBtn = document.getElementById("open-telegram-btn");
     if (openBtn) {
-      openBtn.onclick = () => this.openTelegramLink();
+      // Remove any existing listeners first
+      openBtn.onclick = null;
+      openBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.openTelegramLink();
+      };
       console.log(`🎉 [SUCCESS_MODAL] Telegram button listener attached`);
     } else {
       console.warn(`🎉 [SUCCESS_MODAL] Telegram button not found`);
@@ -4643,7 +4594,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     const totalFiles = this.mediaFiles.length;
     if (totalFiles === 0) return;
     
-    const statusCounts = {
+      const statusCounts = {
       completed: 0,
       processing: 0,
       error: 0,
@@ -4653,7 +4604,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     // Count statuses
     this.mediaFiles.forEach(file => {
       const status = file.status || 'pending';
-      if (statusCounts.hasOwnProperty(status)) {
+      if (Object.prototype.hasOwnProperty.call(statusCounts, status)) {
         statusCounts[status]++;
       }
     });
@@ -4709,37 +4660,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     return 'processing';  // Default to processing for active states
   }
   
-  updateStickerProgressDisplay(progress) {
-    // Update main progress display
-    const progressFill = document.getElementById('sticker-progress-fill');
-    const progressText = document.getElementById('sticker-progress-percentage');
-    const currentFileEl = document.getElementById('sticker-current-file');
-    const progressStatsEl = document.getElementById('sticker-progress-stats');
-    
-    if (progressFill) {
-      progressFill.style.width = `${progress.progress || 0}%`;
-    }
-    
-    if (progressText) {
-      progressText.textContent = `${Math.round(progress.progress || 0)}%`;
-    }
-    
-    if (currentFileEl) {
-      currentFileEl.textContent = progress.current_stage || progress.current_file || 'Processing...';
-    }
-    
-    if (progressStatsEl) {
-      const completed = progress.completed_files || 0;
-      const total = progress.total_files || this.mediaFiles.length;
-      progressStatsEl.textContent = `${completed} / ${total} stickers processed`;
-    }
-    
-    // Show progress section if hidden
-    const progressSection = document.getElementById('sticker-progress-section');
-    if (progressSection && progressSection.style.display === 'none') {
-      progressSection.style.display = 'block';
-    }
-  }
 
   async showMediaInfo(index) {
     const file = this.mediaFiles[index];
@@ -4855,19 +4775,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     this.showDetailedMessage("Media File Details", info);
   }
   
-  formatFileSize(bytes) {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-  }
-  
-  formatDuration(seconds) {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  }
 
   removeMediaFile(index) {
     if (index < 0 || index >= this.mediaFiles.length) return;
@@ -5158,12 +5065,12 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       
       if (response.success) {
         this.showToast(
-          "success",
-          "Creation Queued",
+          "info",
+          "Creation Started",
           "Sticker pack creation started in background"
         );
         
-        this.addStatusItem("✅ Sticker pack creation queued successfully", "completed");
+        this.addStatusItem("🚀 Starting sticker pack creation: \"" + packName + "\"", "processing");
         
         if (createBtn) {
           createBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating Pack...';
@@ -5218,6 +5125,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   }
 
   startStickerProgressMonitoring(processId) {
+    console.log(`[MONITORING] Starting monitoring for process: ${processId}`);
+    
     if (this.stickerProgressInterval) {
       clearInterval(this.stickerProgressInterval);
     }
@@ -5236,8 +5145,10 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     this.lastKnownProgress = null;
     
     let consecutiveErrors = 0;
+    let initialChecks = 0; // Track initial checks to avoid premature "Process not found" errors
     
-    this.stickerProgressInterval = setInterval(async () => {
+    // Monitoring function
+    const checkProgress = async () => {
       if (!this.currentStickerProcessId) {
         clearInterval(this.stickerProgressInterval);
         return;
@@ -5267,35 +5178,93 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
             return;
           }
           
-          // PRIORITY CHECK 2: Check for icon selection (before completed status)
+          // PRIORITY CHECK 2: Check for URL name retry - BUT ONLY if it's NOT an icon request
+          // We need to distinguish between:
+          // 1. Icon request (waiting_for_user + icon_request_message) = Show icon modal
+          // 2. URL conflict (waiting_for_user + url_name_taken) = Show URL retry modal
+          const isIconRequest = progress.waiting_for_user && !!(progress.icon_request_message || progress.icon_request);
+          let isUrlConflict = (progress.waiting_for_user || progress.status === "waiting_for_url_name") && !!progress.url_name_taken;
+          
+          // DEBUG LOGGING
+          console.log(`[MONITORING] Process ${processId}:`, {
+            status: progress.status,
+            waiting_for_user: progress.waiting_for_user,
+            icon_request_message: !!progress.icon_request_message,
+            url_name_taken: !!progress.url_name_taken,
+            isIconRequest,
+            isUrlConflict,
+            auto_skip_handled: progress.auto_skip_handled,
+            shareable_link: !!progress.shareable_link
+          });
+          
+          // CRITICAL FIX: Handle backend bug where both icon_request and url_name_taken are set
+          // Priority: Icon request comes FIRST, then URL conflict
+          if (isIconRequest && isUrlConflict) {
+            console.warn(`[MONITORING] Backend bug: Both icon_request and url_name_taken are set! Prioritizing icon request.`);
+            // Force isUrlConflict to false to handle icon first
+            isUrlConflict = false;
+          }
+          
+          // Handle URL conflict ONLY if it's not an icon request (for manual mode)
+          if (isUrlConflict && !isIconRequest && !this.urlPromptHandledProcesses.has(processId)) {
+            console.log(`[MONITORING] URL CONFLICT DETECTED! Showing retry modal...`);
+            
+            // Mark as handled to prevent duplicate processing
+            this.urlPromptHandledProcesses.add(processId);
+            
+            // Stop monitoring while user provides new URL name
+            this.stopStickerProgressMonitoring();
+            
+            // Show URL name modal with the original taken name
+            const takenName = progress.original_url_name || progress.pack_url_name || "retry";
+            const currentAttempt = progress.url_name_attempts || 1;
+            const maxAttempts = progress.max_url_attempts || 3;
+            
+            this.addStatusItem(`URL name '${takenName}' is taken. Showing retry options (${currentAttempt}/${maxAttempts})`, "warning");
+            
+            console.log(`[MONITORING] Calling showUrlNameModal with:`, { takenName, currentAttempt, maxAttempts, processId });
+            this.showUrlNameModal(takenName, currentAttempt, maxAttempts, processId);
+            
+            // Verify modal was shown
+            setTimeout(() => {
+              const modal = document.getElementById("url-name-modal");
+              console.log(`[MONITORING] URL modal shown? Modal display:`, modal?.style.display);
+            }, 100);
+            
+            return; // Exit early after handling URL name retry
+          }
+          
+          // PRIORITY CHECK 3: Check for icon selection
           if (progress.waiting_for_user && (progress.icon_request_message || progress.icon_request) && !this.iconHandledProcesses.has(processId)) {
+            console.log(`[MONITORING] Icon handling block entered`);
+            
             // Check if auto-skip was enabled for this process (from backend)
             const processAutoSkip = progress.auto_skip_icon !== undefined ? progress.auto_skip_icon : true; // Default to true
             // Check if auto-skip has already been handled by the backend
             const autoSkipHandled = progress.auto_skip_handled !== undefined ? progress.auto_skip_handled : false;
             
-            // ENHANCED: Also check if the process is already completed (backend auto-skip completed the entire process)
-            const isProcessCompleted = progress.status === "completed";
+            console.log(`[MONITORING] Icon handling - auto_skip: ${processAutoSkip}, auto_skip_handled: ${autoSkipHandled}`);
             
-            // If backend has already completed the process, handle completion directly
-            if (isProcessCompleted) {
-              // Process is already completed, handle completion directly
-              this.addStatusItem("✅ Sticker pack creation completed successfully!", "completed");
-              this.stopStickerProgressMonitoring();
-              this.onStickerProcessCompleted(true, progress);
-              return;
-            }
+            // REMOVED: Don't check for completion here - it's a backend bug setting status=completed while waiting_for_user=true
+            // The completion check should happen AFTER user input, not during icon request
             
-            // If backend has already handled auto-skip, don't show icon modal and continue monitoring
-            // BUT we still need to check for URL name conflicts even when auto-skip is handled
+            // If backend has already handled auto-skip, don't show icon modal
+            // BUT CRITICAL: Continue monitoring instead of returning - don't exit early!
+            // We MUST check for URL name conflicts and completion even when auto-skip is handled
             if (processAutoSkip && autoSkipHandled) {
-              // Backend is handling auto-skip, continue monitoring without showing modal
-              this.addStatusItem("Auto-skip enabled - backend handling icon selection automatically", "info");
+              console.log(`[MONITORING] Auto-skip handled by backend, marking icon as processed`);
               
-              // Continue monitoring - don't show icon modal
-              // BUT we still need to check for URL name conflicts immediately
-              // Check for URL name retry when backend has handled auto-skip and detected conflict
-              if ((progress.waiting_for_user || progress.status === "waiting_for_url_name") && progress.url_name_taken && !this.urlPromptHandledProcesses.has(processId)) {
+              // Backend is handling auto-skip, mark as handled but continue monitoring
+              this.iconHandledProcesses.add(processId);
+              
+              // CRITICAL: Now check if there's a URL conflict to handle
+              // Check the ORIGINAL url_name_taken flag, not isUrlConflict (which we may have modified)
+              const hasUrlConflict = !!progress.url_name_taken;
+              console.log(`[MONITORING] Checking for URL conflict - url_name_taken: ${progress.url_name_taken}, hasUrlConflict: ${hasUrlConflict}`);
+              
+              if (hasUrlConflict && !this.urlPromptHandledProcesses.has(processId)) {
+                console.log(`[MONITORING] Auto-skip done, now handling URL conflict...`);
+                
                 // Mark as handled to prevent duplicate processing
                 this.urlPromptHandledProcesses.add(processId);
                 
@@ -5308,50 +5277,88 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
                 const maxAttempts = progress.max_url_attempts || 3;
                 
                 this.addStatusItem(`URL name '${takenName}' is taken. Showing retry options (${currentAttempt}/${maxAttempts})`, "warning");
+                
+                console.log(`[MONITORING] Calling showUrlNameModal with:`, { takenName, currentAttempt, maxAttempts, processId });
                 this.showUrlNameModal(takenName, currentAttempt, maxAttempts, processId);
-                return; // Exit early after handling URL name retry
+                
+                // Verify modal was shown
+                setTimeout(() => {
+                  const modal = document.getElementById("url-name-modal");
+                  console.log(`[MONITORING] URL modal shown? Modal display:`, modal?.style.display);
+                }, 100);
+                
+                return; // Exit after showing URL retry modal
               }
               
-              return;
-            }
-            
-            // Manual mode: show icon selection modal and STOP monitoring
-            // Process will wait indefinitely for user action - no timeout
-            this.stopStickerProgressMonitoring(); // Stop monitoring - user controls when to continue
-            
-            // CRITICAL FIX: Store the process ID so we can restart monitoring after icon is sent
-            this.currentIconProcessId = processId;
-            
-            // CRITICAL FIX: Also store in urlPromptHandledProcesses to prevent duplicate handling
-            this.urlPromptHandledProcesses.add(processId);
-            
-            // If Telegram is already asking for short name, bypass icon modal and proceed to URL
-            const urlPrompt = (progress.icon_request_message && /short name|create a link|addstickers/i.test(progress.icon_request_message))
-                              || progress.waiting_for_url_name
-                              || false;
-            if (urlPrompt) {
-              try { this.hideIconModal(); } catch {}
+              // No URL conflict - continue monitoring
+              console.log(`[MONITORING] Auto-skip done, no URL conflict, continuing monitoring...`);
+              // DON'T return here - fall through to remaining checks
+            } else {
+              // Manual mode: show icon selection modal and STOP monitoring
+              // Process will wait indefinitely for user action - no timeout
+              this.stopStickerProgressMonitoring(); // Stop monitoring - user controls when to continue
               
-              // Check if auto-skip is enabled - if so, automatically submit the URL name
-              const autoSkipIcon = document.getElementById("auto-skip-icon");
-              const shouldAutoSkip = autoSkipIcon && autoSkipIcon.checked;
+              // CRITICAL FIX: Store the process ID so we can restart monitoring after icon is sent
+              this.currentIconProcessId = processId;
               
-              // Even if auto-skip is enabled, the backend should handle it, not the frontend
-              // But if for some reason we're here, we can still submit the URL name
-              if (shouldAutoSkip) {
-                // Auto-skip is enabled, automatically submit the URL name
-                this.addStatusItem("Auto-skip enabled, automatically submitting URL name...", "info");
-                try {
-                  const urlInput = document.getElementById("pack-url-name");
-                  const urlName = (urlInput && typeof urlInput.value === 'string') ? urlInput.value.trim() : '';
-                  if (urlName) {
+              // CRITICAL FIX: Also store in urlPromptHandledProcesses to prevent duplicate handling
+              this.urlPromptHandledProcesses.add(processId);
+              
+              // If Telegram is already asking for short name, bypass icon modal and proceed to URL
+              const urlPrompt = (progress.icon_request_message && /short name|create a link|addstickers/i.test(progress.icon_request_message))
+                                || progress.waiting_for_url_name
+                                || false;
+              if (urlPrompt) {
+                try { this.hideIconModal(); } catch {}
+                
+                // Check if auto-skip is enabled - if so, automatically submit the URL name
+                const autoSkipIcon = document.getElementById("auto-skip-icon");
+                const shouldAutoSkip = autoSkipIcon && autoSkipIcon.checked;
+                
+                // Even if auto-skip is enabled, the backend should handle it, not the frontend
+                // But if for some reason we're here, we can still submit the URL name
+                if (shouldAutoSkip) {
+                  // Auto-skip is enabled, automatically submit the URL name
+                  this.addStatusItem("Auto-skip enabled, automatically submitting URL name...", "info");
+                  try {
+                    const urlInput = document.getElementById("pack-url-name");
+                    const urlName = (urlInput && typeof urlInput.value === 'string') ? urlInput.value.trim() : '';
+                    if (urlName) {
+                      const submitRes = await this.apiRequest("POST", "/api/sticker/submit-url-name", {
+                        process_id: processId,
+                        new_url_name: urlName,
+                        current_attempt: 1,
+                        max_attempts: 3
+                      });
+
+                      if (submitRes && submitRes.success) {
+                        // Only add to urlPromptHandledProcesses when URL name is actually submitted
+                        this.urlPromptHandledProcesses.add(processId);
+                        this.startStickerProgressMonitoring(processId);
+                        return;
+                      } else if (submitRes && submitRes.url_name_taken) {
+                        // Only add to urlPromptHandledProcesses when URL name taken is handled
+                        this.urlPromptHandledProcesses.add(processId);
+                        this.showUrlNameModal(urlName, (submitRes.attempt || 1), (submitRes.max_attempts || 3), processId);
+                        return;
+                      }
+                    }
+                  } catch (e) {
+                    // If auto-submit fails, fall back to manual process
+                    this.addStatusItem(`Auto-submit failed: ${e.message}. Continuing with manual process.`, "warning");
+                  }
+                }
+                
+                const urlInput = document.getElementById("pack-url-name");
+                const urlName = (urlInput && typeof urlInput.value === 'string') ? urlInput.value.trim() : '';
+                if (urlName) {
+                  try {
                     const submitRes = await this.apiRequest("POST", "/api/sticker/submit-url-name", {
                       process_id: processId,
                       new_url_name: urlName,
                       current_attempt: 1,
                       max_attempts: 3
                     });
-
                     if (submitRes && submitRes.success) {
                       // Only add to urlPromptHandledProcesses when URL name is actually submitted
                       this.urlPromptHandledProcesses.add(processId);
@@ -5360,104 +5367,59 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
                     } else if (submitRes && submitRes.url_name_taken) {
                       // Only add to urlPromptHandledProcesses when URL name taken is handled
                       this.urlPromptHandledProcesses.add(processId);
-                      this.showUrlNameModal(processId, urlName, (submitRes.attempt || 1), (submitRes.max_attempts || 3));
+                      this.showUrlNameModal(urlName, (submitRes.attempt || 1), (submitRes.max_attempts || 3), processId);
                       return;
                     }
-                  }
-                } catch (e) {
-                  // If auto-submit fails, fall back to manual process
-                  this.addStatusItem(`Auto-submit failed: ${e.message}. Continuing with manual process.`, "warning");
+                  } catch {}
                 }
+                // Fallback: show URL modal to collect the name
+                // Only add to urlPromptHandledProcesses when URL modal is shown
+                this.urlPromptHandledProcesses.add(processId);
+                this.showUrlNameModal(progress.pack_url_name || "retry", 1, 3, processId);
+                return;
               }
               
-              const urlInput = document.getElementById("pack-url-name");
-              const urlName = (urlInput && typeof urlInput.value === 'string') ? urlInput.value.trim() : '';
-              if (urlName) {
-                try {
-                  const submitRes = await this.apiRequest("POST", "/api/sticker/submit-url-name", {
-                    process_id: processId,
-                    new_url_name: urlName,
-                    current_attempt: 1,
-                    max_attempts: 3
-                  });
-                  if (submitRes && submitRes.success) {
-                    // Only add to urlPromptHandledProcesses when URL name is actually submitted
-                    this.urlPromptHandledProcesses.add(processId);
-                    this.startStickerProgressMonitoring(processId);
-                    return;
-                  } else if (submitRes && submitRes.url_name_taken) {
-                    // Only add to urlPromptHandledProcesses when URL name taken is handled
-                    this.urlPromptHandledProcesses.add(processId);
-                    this.showUrlNameModal(processId, urlName, (submitRes.attempt || 1), (submitRes.max_attempts || 3));
-                    return;
-                  }
-                } catch {}
-              }
-              // Fallback: show URL modal to collect the name
-              // Only add to urlPromptHandledProcesses when URL modal is shown
-              this.urlPromptHandledProcesses.add(processId);
-              this.showUrlNameModal(processId, progress.pack_url_name || "retry", 1, 3);
-              return;
+              console.log(`[MONITORING] ICON REQUEST DETECTED! Showing icon modal...`);
+              console.log(`[MONITORING] Calling showIconModal with:`, { processId, message: progress.icon_request_message?.substring(0, 50) });
+              
+              this.showIconModal(processId, progress.icon_request_message);
+              this.iconHandledProcesses.add(processId);
+              
+              // Verify modal was shown
+              setTimeout(() => {
+                const modal = document.getElementById("icon-modal");
+                console.log(`[MONITORING] Icon modal shown? Modal display:`, modal?.style.display);
+              }, 100);
+              
+              // CRITICAL FIX: Don't add to urlPromptHandledProcesses here - only when URL prompt is actually handled
+              // this.urlPromptHandledProcesses.add(processId);
+              return; // CRITICAL: Exit early after handling icon selection
             }
-            
-            this.showIconModal(processId, progress.icon_request_message);
-            this.iconHandledProcesses.add(processId);
-            
-            // CRITICAL FIX: Don't add to urlPromptHandledProcesses here - only when URL prompt is actually handled
-            // this.urlPromptHandledProcesses.add(processId);
-            return; // CRITICAL: Exit early after handling icon selection
           }
           
-          // PRIORITY CHECK 3: Check for URL name retry after icon upload
-          // Also check for URL name retry when backend has handled auto-skip and detected conflict
-          if ((progress.waiting_for_user || progress.status === "waiting_for_url_name") && progress.url_name_taken && !this.urlPromptHandledProcesses.has(processId)) {
-            // Mark as handled to prevent duplicate processing
-            this.urlPromptHandledProcesses.add(processId);
-            
-            // Stop monitoring while user provides new URL name
-            this.stopStickerProgressMonitoring();
-            
-            // Show URL name modal with the original taken name
-            const takenName = progress.original_url_name || progress.pack_url_name || "retry";
-            const currentAttempt = progress.url_name_attempts || 1;
-            const maxAttempts = progress.max_url_attempts || 3;
-            
-            this.addStatusItem(`URL name '${takenName}' is taken. Showing retry options (${currentAttempt}/${maxAttempts})`, "warning");
-            this.showUrlNameModal(takenName, currentAttempt, maxAttempts, processId);
-            return; // Exit early after handling URL name retry
-          }
-          
-          // REMAINING STATUS CHECKS (after priority checks)
-          // Check for URL name retry even in general status checks
-          if ((progress.waiting_for_user || progress.status === "waiting_for_url_name") && progress.url_name_taken && !this.urlPromptHandledProcesses.has(processId)) {
-            // Mark as handled to prevent duplicate processing
-            this.urlPromptHandledProcesses.add(processId);
-            
-            // Stop monitoring while user provides new URL name
-            this.stopStickerProgressMonitoring();
-            
-            // Show URL name modal with the original taken name
-            const takenName = progress.original_url_name || progress.pack_url_name || "retry";
-            const currentAttempt = progress.url_name_attempts || 1;
-            const maxAttempts = progress.max_url_attempts || 3;
-            
-            this.addStatusItem(`URL name '${takenName}' is taken. Showing retry options (${currentAttempt}/${maxAttempts})`, "warning");
-            this.showUrlNameModal(takenName, currentAttempt, maxAttempts, processId);
-            return; // Exit early after handling URL name retry
-          }
-          
+          // PRIORITY CHECK 4: Check completion status
           if (progress.status === "completed") {
-            // CRITICAL FIX: Only show completion if workflow is actually finished
-            // ENHANCED: Also check if backend has completed the process (e.g., auto-skip scenario)
-            if (this.workflowState.packCompleted || (this.workflowState.iconUploaded && this.workflowState.urlNameSubmitted) || progress.auto_skip_handled) {
-              this.addStatusItem("✅ Sticker pack creation completed successfully!", "completed");
-              this.stopStickerProgressMonitoring();
-              this.onStickerProcessCompleted(true, progress);
-              return;
+            // CRITICAL FIX: Don't treat as completed if still waiting for user input
+            if (progress.waiting_for_user) {
+              console.warn(`[MONITORING] Backend marked as 'completed' but waiting_for_user=true. Ignoring completion.`);
+              // Continue monitoring - this is a backend bug
             } else {
-              // CRITICAL FIX: Don't show completion if workflow is not actually finished
-              this.addStatusItem("Process marked as completed but workflow not finished - continuing monitoring", "warning");
-              // Continue monitoring instead of stopping
+              // CRITICAL FIX: Check if we have a shareable_link, which means the process is ACTUALLY completed
+              // In auto-skip flow without URL conflicts, backend completes successfully and provides shareable_link
+              const hasShareableLink = !!(progress.shareable_link || progress.pack_link || progress.link);
+              
+              // ENHANCED: For auto-skip scenario without URL conflicts, backend completes successfully
+              // Check for shareable_link OR auto_skip_handled OR normal workflow completion
+              if (hasShareableLink || this.workflowState.packCompleted || (this.workflowState.iconUploaded && this.workflowState.urlNameSubmitted) || progress.auto_skip_handled) {
+                this.addStatusItem("✅ Sticker pack creation completed successfully!", "completed");
+                this.stopStickerProgressMonitoring();
+                this.onStickerProcessCompleted(true, progress);
+                return;
+              } else {
+                // CRITICAL FIX: Don't show completion if workflow is not actually finished
+                this.addStatusItem("Process marked as completed but workflow not finished - continuing monitoring", "warning");
+                // Continue monitoring instead of stopping
+              }
             }
           } else if (progress.status === "error" || progress.status === "failed") {
             this.addStatusItem(`❌ Sticker pack creation failed: ${progress.current_stage || 'Unknown error'}`, "error");
@@ -5533,7 +5495,15 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           this.addStatusItem(`❌ Monitoring error: ${error.message}`, "error");
         }
       }
-    }, 5000); // OPTIMIZED: Reduced to 5 seconds for better real-time monitoring
+      
+      initialChecks++;
+    };
+    
+    // Call immediately for first check
+    checkProgress();
+    
+    // Then set up interval for subsequent checks
+    this.stickerProgressInterval = setInterval(checkProgress, 2000); // Check every 2 seconds for faster response
   }
 
   stopStickerProgressMonitoring() {
@@ -6050,6 +6020,14 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     
     // Clear any previous input
     if (newUrlInput) newUrlInput.value = "";
+    
+    // CRITICAL FIX: Reset submit button state from previous submission
+    const submitBtn = document.getElementById("submit-new-url");
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.classList.remove('loading');
+      submitBtn.innerHTML = '<i class="fas fa-check"></i> Try This Name';
+    }
     
     // Ensure proper z-index for URL name modal
     modal.style.zIndex = "9000";
