@@ -837,7 +837,11 @@ class TelegramUtilities {
         // Update system info every 5 seconds while on settings tab
         break;
       case 'about':
-        // Specific actions for about tab
+        // Initialize about section only once
+        if (!this.aboutSectionInitialized) {
+          this.initializeAboutSection();
+          this.aboutSectionInitialized = true;
+        }
         break;
       default:
         // Unknown tab
@@ -8081,25 +8085,31 @@ This action cannot be undone. Are you sure?
       let url = '';
       switch(type) {
         case 'coffee':
-          url = 'https://buymeacoffee.com/'; // Replace with your actual link
+          url = 'https://buymeacoffee.com/JoonJelly'; // Updated with actual link
           break;
         case 'paypal':
           url = 'https://paypal.me/'; // Replace with your actual link
           break;
         case 'github':
-          url = 'https://github.com/JoonJelly'; // Your GitHub profile
+          url = 'https://github.com/RohitPoul'; // Updated with your actual GitHub profile
           break;
         case 'star':
-          url = 'https://github.com/JoonJelly?tab=repositories'; // Your repositories
+          url = 'https://github.com/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader'; // Updated with your actual repositories
           break;
       }
       
       if (url) {
-        window.open(url, '_blank');
+        // Use Electron's shell API to open external URLs
+        if (window.electronAPI && window.electronAPI.shell && window.electronAPI.shell.openExternal) {
+          window.electronAPI.shell.openExternal(url);
+        } else {
+          // Fallback to window.open if Electron API is not available
+          window.open(url, '_blank');
+        }
         this.showToast('success', 'Link Opened', 'Opening support page in your browser...');
       }
     });
-    
+
     // Close on outside click
     modal.addEventListener('click', (e) => {
       if (e.target === modal) closeModal();
