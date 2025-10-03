@@ -51,6 +51,7 @@
           <i class="fas fa-user"></i>
           <span>About Me</span>
         </button>
+
       </nav>
 
       <!-- Main Content -->
@@ -1495,9 +1496,27 @@
       </div>
     </div>
 
+    <!-- Tutorial System -->
+    <script src="tutorial-system.js"></script>
+    <script src="tutorial-definitions.js"></script>
+    
+    <!-- Existing Scripts -->
     <script src="modules/performance-turbo.js"></script>
     <script src="modules/performance-optimizations.js"></script>
     <script src="modules/component-optimizer.js"></script>
     <script src="script.js"></script>
+    
+    <!-- Initialize Tutorial Launcher -->
+    <script>
+      // Create tutorial launcher button after DOM loads
+      document.addEventListener('DOMContentLoaded', () => {
+        // Ensure launcher is created after a short delay
+        setTimeout(() => {
+          if (typeof tutorialSystem !== 'undefined' && tutorialSystem.createLauncher) {
+            tutorialSystem.createLauncher();
+          }
+        }, 500);
+      });
+    </script>
   </body>
 </html>
