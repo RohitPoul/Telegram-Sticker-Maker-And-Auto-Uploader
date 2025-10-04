@@ -2066,16 +2066,15 @@ class TelegramUtilities {
       return { valid: false, error: "URL name must be no more than 32 characters long" };
     }
 
+    // Starting character validation (must start with letter)
+    if (!/^[a-zA-Z]/.test(urlName)) {
+      return { valid: false, error: "URL name must start with a letter" };
+    }
+
     // Character validation (only letters, numbers, underscores)
     const validPattern = /^[a-zA-Z0-9_]+$/;
     if (!validPattern.test(urlName)) {
       return { valid: false, error: "URL name can only contain letters, numbers, and underscores" };
-    }
-
-    return { valid: true };
-    // Starting character validation (must start with letter)
-    if (!/^[a-zA-Z]/.test(urlName)) {
-      return { valid: false, error: "URL name must start with a letter" };
     }
 
     return { valid: true };
@@ -5006,10 +5005,10 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         .filter((f) => (stickerType === "video" ? f.type === "video" : f.type === "image"))
         .map((f) => ({
           file_path: String(f.file_path || "").replace(/[\x00-\x1f\x7f-\x9f]/g, '').trim(),
-          emoji: typeof f.emoji === "string" ? f.emoji.replace(/[\x00-\x1f\x7f-\x9f]/g, '').length > 0 ? Array.from(f.emoji.replace(/[\x00-\x1f\x7f-\x9f]/g, ''))[0] || this.defaultEmoji : this.defaultEmoji : this.defaultEmoji,
+          emoji: typeof f.emoji === "string" && f.emoji.replace(/[\x00-\x1f\x7f-\x9f]/g, '').length > 0 ? Array.from(f.emoji.replace(/[\x00-\x1f\x7f-\x9f]/g, ''))[0] : this.defaultEmoji,
           type: f.type === "video" ? "video" : "image",
         }))
-        .filter((m) => m.file_path && m.file_path.length > 0 && /^[^\0]+$/.test(m.file_path));
+        .filter((m) => m.file_path && m.file_path.length > 0 && !/[\x00-\x1f\x7f-\x9f]/.test(m.file_path));
 
       // Additional validation for file paths and emoji data
       for (const media of filteredMedia) {
