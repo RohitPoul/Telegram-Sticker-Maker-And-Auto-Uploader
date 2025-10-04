@@ -31,13 +31,13 @@ def validate_url_name(url_name):
     if len(url_name) > 32:
         return {'valid': False, 'error': 'URL name must be no more than 32 characters long'}
     
-    # Character validation (only letters, numbers, underscores)
-    if not re.match(r'^[a-zA-Z0-9_]+$', url_name):
-        return {'valid': False, 'error': 'URL name can only contain letters, numbers, and underscores'}
-    
     # Starting character validation (must start with letter)
     if not re.match(r'^[a-zA-Z]', url_name):
         return {'valid': False, 'error': 'URL name must start with a letter'}
+    
+    # Character validation (only letters, numbers, underscores)
+    if not re.match(r'^[a-zA-Z0-9_]+$', url_name):
+        return {'valid': False, 'error': 'URL name can only contain letters, numbers, and underscores'}
     
     return {'valid': True}
 
