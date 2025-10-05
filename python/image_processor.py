@@ -1,0 +1,322 @@
+import os
+import subprocess
+import logging
+import json
+from pathlib import Path
+from PIL import Image
+import io
+
+class ImageProcessor:
+    """
+    Image processor for Telegram sticker requirements using ImageMagick
+    Requirements:
+    - One side exactly 512 pixels, other side 512 or less
+    - PNG or WEBP format
+    - Maximum file size 512 KB
+    - Preserve transparency
+    - High quality output
+    """
+    
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+        self.MAX_FILE_SIZE_KB = 512
+        self.TARGET_DIMENSION = 512
+        self.SUPPORTED_INPUT_FORMATS = ['.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif', '.tiff', '.tif']
+        
+        # Check ImageMagick availability
+        self.imagemagick_available = self._check_imagemagick()
+        
+    def _check_imagemagick(self):
+        """Check if ImageMagick is installed and available"""
+        try:
+            result = subprocess.run(
+                ['magick', '-version'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                self.logger.info("[IMAGEMAGICK] ImageMagick is available")
+                return True
+            else:
+                self.logger.warning("[IMAGEMAGICK] ImageMagick found but version check failed")
+                return False
+        except FileNotFoundError:
+            # Try 'convert' command (older ImageMagick versions)
+            try:
+                result = subprocess.run(
+                    ['convert', '-version'],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if result.returncode == 0:
+                    self.logger.info("[IMAGEMAGICK] ImageMagick (convert) is available")
+                    return True
+            except:
+                pass
+            self.logger.error("[IMAGEMAGICK] ImageMagick not found. Please install ImageMagick.")
+            return False
+        except Exception as e:
+            self.logger.error(f"[IMAGEMAGICK] Error checking ImageMagick: {e}")
+            return False
+    
+    def get_image_metadata(self, image_path):
+        """Extract image metadata including dimensions, format, size, and transparency"""
+        try:
+            # Use PIL for reliable metadata extraction
+            with Image.open(image_path) as img:
+                width, height = img.size
+                format_name = img.format or 'Unknown'
+                mode = img.mode
+                has_transparency = mode in ('RGBA', 'LA', 'P') or 'transparency' in img.info
+                
+            file_size_kb = os.path.getsize(image_path) / 1024
+            
+            metadata = {
+                'width': width,
+                'height': height,
+                'format': format_name,
+                'mode': mode,
+                'has_transparency': has_transparency,
+                'file_size_kb': round(file_size_kb, 2),
+                'filename': os.path.basename(image_path)
+            }
+            
+            self.logger.info(f"[METADATA] {os.path.basename(image_path)}: {width}x{height} {format_name}, {file_size_kb:.2f}KB, Transparency: {has_transparency}")
+            return metadata
+            
+        except Exception as e:
+            self.logger.error(f"[METADATA] Error reading {image_path}: {e}")
+            return None
+    
+    def calculate_dimensions(self, original_width, original_height):
+        """
+        Calculate new dimensions following Telegram sticker rules:
+        - One side must be exactly 512 pixels
+        - Other side can be 512 or less
+        - Maintain aspect ratio
+        """
+        aspect_ratio = original_width / original_height
+        
+        if original_width >= original_height:
+            # Width is larger or equal - set width to 512
+            new_width = self.TARGET_DIMENSION
+            new_height = int(self.TARGET_DIMENSION / aspect_ratio)
+        else:
+            # Height is larger - set height to 512
+            new_height = self.TARGET_DIMENSION
+            new_width = int(self.TARGET_DIMENSION * aspect_ratio)
+        
+        # Ensure dimensions don't exceed 512
+        if new_width > self.TARGET_DIMENSION:
+            new_width = self.TARGET_DIMENSION
+        if new_height > self.TARGET_DIMENSION:
+            new_height = self.TARGET_DIMENSION
+            
+        # Ensure at least one dimension is exactly 512
+        if new_width != self.TARGET_DIMENSION and new_height != self.TARGET_DIMENSION:
+            if original_width >= original_height:
+                new_width = self.TARGET_DIMENSION
+            else:
+                new_height = self.TARGET_DIMENSION
+        
+        self.logger.info(f"[DIMENSIONS] Original: {original_width}x{original_height} -> Target: {new_width}x{new_height}")
+        return new_width, new_height
+    
+    def process_image(self, input_path, output_path, output_format='png', quality=95):
+        """
+        Process image to meet Telegram sticker requirements
+        
+        Args:
+            input_path: Path to input image
+            output_path: Path to save processed image
+            output_format: 'png' or 'webp'
+            quality: Quality level (1-100, higher is better)
+        
+        Returns:
+            dict: Processing result with metadata
+        """
+        try:
+            if not self.imagemagick_available:
+                return {
+                    'success': False,
+                    'error': 'ImageMagick is not available. Please install ImageMagick.'
+                }
+            
+            # Get original metadata
+            original_metadata = self.get_image_metadata(input_path)
+            if not original_metadata:
+                return {
+                    'success': False,
+                    'error': 'Failed to read image metadata'
+                }
+            
+            # Calculate target dimensions
+            new_width, new_height = self.calculate_dimensions(
+                original_metadata['width'],
+                original_metadata['height']
+            )
+            
+            # Determine output format
+            output_format = output_format.lower()
+            if output_format not in ['png', 'webp']:
+                output_format = 'png'
+            
+            # Ensure output path has correct extension
+            output_path = Path(output_path)
+            output_path = output_path.with_suffix(f'.{output_format}')
+            
+            # Build ImageMagick command
+            # Use 'magick' command (newer ImageMagick 7+) or fall back to 'convert'
+            try:
+                subprocess.run(['magick', '-version'], capture_output=True, timeout=1)
+                magick_cmd = 'magick'
+            except:
+                magick_cmd = 'convert'
+            
+            cmd = [
+                magick_cmd,
+                input_path,
+                '-resize', f'{new_width}x{new_height}!',  # Force exact dimensions
+                '-strip',  # Remove metadata to reduce size
+            ]
+            
+            # Format-specific options
+            if output_format == 'png':
+                cmd.extend([
+                    '-define', f'png:compression-level=9',  # Maximum compression
+                    '-define', 'png:compression-strategy=1',
+                    '-quality', str(quality),
+                ])
+            elif output_format == 'webp':
+                cmd.extend([
+                    '-quality', str(quality),
+                    '-define', 'webp:lossless=false',
+                    '-define', f'webp:method=6',  # Best compression
+                ])
+            
+            # Preserve transparency
+            if original_metadata['has_transparency']:
+                cmd.extend(['-background', 'none', '-alpha', 'set'])
+            
+            cmd.append(str(output_path))
+            
+            # Execute ImageMagick command
+            self.logger.info(f"[PROCESSING] Converting {os.path.basename(input_path)} to {output_format.upper()}")
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode != 0:
+                self.logger.error(f"[PROCESSING] ImageMagick error: {result.stderr}")
+                return {
+                    'success': False,
+                    'error': f'ImageMagick conversion failed: {result.stderr}'
+                }
+            
+            # Check if file was created and get final metadata
+            if not output_path.exists():
+                return {
+                    'success': False,
+                    'error': 'Output file was not created'
+                }
+            
+            final_metadata = self.get_image_metadata(str(output_path))
+            
+            # Check file size - if over 512KB, reduce quality
+            if final_metadata['file_size_kb'] > self.MAX_FILE_SIZE_KB:
+                self.logger.warning(f"[SIZE] Output size {final_metadata['file_size_kb']:.2f}KB exceeds {self.MAX_FILE_SIZE_KB}KB, reducing quality")
+                return self._reduce_quality(input_path, output_path, output_format, original_metadata, quality)
+            
+            self.logger.info(f"[SUCCESS] Processed {os.path.basename(input_path)} -> {final_metadata['file_size_kb']:.2f}KB")
+            
+            return {
+                'success': True,
+                'input_path': input_path,
+                'output_path': str(output_path),
+                'original_metadata': original_metadata,
+                'final_metadata': final_metadata,
+                'output_format': output_format
+            }
+            
+        except Exception as e:
+            self.logger.error(f"[ERROR] Processing failed for {input_path}: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+    
+    def _reduce_quality(self, input_path, output_path, output_format, original_metadata, initial_quality):
+        """Iteratively reduce quality to meet file size requirements"""
+        quality = initial_quality
+        attempt = 1
+        max_attempts = 10
+        
+        while quality >= 50 and attempt <= max_attempts:
+            quality -= 5
+            self.logger.info(f"[SIZE_REDUCTION] Attempt {attempt}: Trying quality {quality}")
+            
+            result = self.process_image(input_path, str(output_path), output_format, quality)
+            
+            if result['success'] and result['final_metadata']['file_size_kb'] <= self.MAX_FILE_SIZE_KB:
+                self.logger.info(f"[SIZE_REDUCTION] Success at quality {quality}: {result['final_metadata']['file_size_kb']:.2f}KB")
+                return result
+            
+            attempt += 1
+        
+        # If still too large, use more aggressive compression
+        if output_format == 'webp':
+            self.logger.warning("[SIZE_REDUCTION] Using aggressive WebP compression")
+            return self.process_image(input_path, str(output_path), 'webp', 50)
+        
+        return {
+            'success': False,
+            'error': f'Could not reduce file size below {self.MAX_FILE_SIZE_KB}KB after {max_attempts} attempts'
+        }
+    
+    def process_batch(self, input_files, output_dir, output_format='png', quality=95, progress_callback=None):
+        """
+        Process multiple images in batch
+        
+        Args:
+            input_files: List of input file paths
+            output_dir: Directory to save processed images
+            output_format: 'png' or 'webp'
+            quality: Quality level (1-100)
+            progress_callback: Optional callback function(current, total, result)
+        
+        Returns:
+            list: List of processing results
+        """
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        results = []
+        total = len(input_files)
+        
+        for idx, input_file in enumerate(input_files):
+            self.logger.info(f"[BATCH] Processing {idx + 1}/{total}: {os.path.basename(input_file)}")
+            
+            # Generate output filename
+            input_path = Path(input_file)
+            output_filename = f"{input_path.stem}_processed.{output_format}"
+            output_path = output_dir / output_filename
+            
+            # Process image
+            result = self.process_image(input_file, str(output_path), output_format, quality)
+            results.append(result)
+            
+            # Call progress callback if provided
+            if progress_callback:
+                progress_callback(idx + 1, total, result)
+        
+        self.logger.info(f"[BATCH] Completed: {sum(1 for r in results if r['success'])}/{total} successful")
+        return results
+
+
+# Global instance
+image_processor = ImageProcessor()
