@@ -96,6 +96,11 @@ class TelegramUtilities {
     this.init();
     this.initializeNavigation(); // Add this line to initialize navigation
     this.initializeTelegramForm(); // Add this to load saved Telegram credentials
+    
+    // Initialize Image Handler
+    if (typeof ImageHandler !== 'undefined') {
+      this.imageHandler = new ImageHandler(this);
+    }
   }
   
   // Add a debouncing utility function
@@ -2125,7 +2130,8 @@ class TelegramUtilities {
         ],
       });
       
-      if (!files || files.length === 0) {
+      // selectFiles returns an array directly
+      if (!Array.isArray(files) || files.length === 0) {
         return;
       }
       
@@ -4224,7 +4230,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         ],
       });
       
-      if (!files || files.length === 0) {
+      // selectFiles returns an array directly
+      if (!Array.isArray(files) || files.length === 0) {
         return;
       }
       
@@ -4322,7 +4329,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         ],
       });
       
-      if (!files || files.length === 0) {
+      // selectFiles returns an array directly
+      if (!Array.isArray(files) || files.length === 0) {
         return;
       }
       
