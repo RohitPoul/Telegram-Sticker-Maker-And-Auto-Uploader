@@ -2046,6 +2046,245 @@ def verify_telegram_password():
             "error": str(e)
         }), 500
 
+# ==================== IMAGE PROCESSING API ====================
+
+@app.route('/api/image/check-imagemagick', methods=['GET', 'OPTIONS'], strict_slashes=False)
+def check_imagemagick():
+    """Check if ImageMagick is installed and available"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    try:
+        from image_processor import image_processor
+        
+        return jsonify({
+            "success": True,
+            "available": image_processor.imagemagick_available,
+            "message": "ImageMagick is available" if image_processor.imagemagick_available else "ImageMagick not found. Please install ImageMagick."
+        })
+    except Exception as e:
+        logger.error(f"[IMAGE] Error checking ImageMagick: {e}")
+        return jsonify({
+            "success": False,
+            "available": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/image/metadata', methods=['POST', 'OPTIONS'], strict_slashes=False)
+def get_image_metadata():
+    """Get metadata for an image file"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    try:
+        data = request.get_json()
+        if not data or 'image_path' not in data:
+            return jsonify({"success": False, "error": "Image path is required"}), 400
+        
+        image_path = data['image_path']
+        
+        if not os.path.exists(image_path):
+            return jsonify({"success": False, "error": "Image file not found"}), 404
+        
+        from image_processor import image_processor
+        metadata = image_processor.get_image_metadata(image_path)
+        
+        if metadata:
+            return jsonify({
+                "success": True,
+                "metadata": metadata
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Failed to extract metadata"
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"[IMAGE] Error getting metadata: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/image/process', methods=['POST', 'OPTIONS'], strict_slashes=False)
+def process_single_image():
+    """Process a single image to meet Telegram sticker requirements"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
+        
+        input_path = data.get('input_path')
+        output_path = data.get('output_path')
+        output_format = data.get('output_format', 'png')
+        quality = data.get('quality', 95)
+        
+        if not input_path or not output_path:
+            return jsonify({
+                "success": False,
+                "error": "input_path and output_path are required"
+            }), 400
+        
+        if not os.path.exists(input_path):
+            return jsonify({"success": False, "error": "Input file not found"}), 404
+        
+        from image_processor import image_processor
+        result = image_processor.process_image(
+            input_path=input_path,
+            output_path=output_path,
+            output_format=output_format,
+            quality=quality
+        )
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"[IMAGE] Error processing image: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/image/process-batch', methods=['POST', 'OPTIONS'], strict_slashes=False)
+def process_batch_images():
+    """Process multiple images in batch to meet Telegram sticker requirements"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
+        
+        input_files = data.get('input_files', [])
+        output_dir = data.get('output_dir')
+        output_format = data.get('output_format', 'png')
+        quality = data.get('quality', 95)
+        process_id = data.get('process_id', str(uuid.uuid4()))
+        
+        if not input_files:
+            return jsonify({
+                "success": False,
+                "error": "input_files list is required"
+            }), 400
+        
+        if not output_dir:
+            return jsonify({
+                "success": False,
+                "error": "output_dir is required"
+            }), 400
+        
+        # Verify all input files exist
+        missing_files = [f for f in input_files if not os.path.exists(f)]
+        if missing_files:
+            return jsonify({
+                "success": False,
+                "error": f"Input files not found: {', '.join(missing_files)}"
+            }), 404
+        
+        # Create process tracking
+        add_process(process_id, {
+            "status": "processing",
+            "type": "image_batch",
+            "total_files": len(input_files),
+            "completed_files": 0,
+            "progress": 0,
+            "current_file": "",
+            "results": []
+        })
+        
+        # Process images in a separate thread
+        def process_batch_thread():
+            try:
+                from image_processor import image_processor
+                
+                def progress_callback(current, total, result):
+                    # Update process status
+                    progress = int((current / total) * 100)
+                    with process_lock:
+                        proc = get_process(process_id)
+                        if proc:
+                            proc["completed_files"] = current
+                            proc["progress"] = progress
+                            proc["current_file"] = result.get('input_path', '')
+                            proc["results"].append(result)
+                            update_process(process_id, proc)
+                
+                results = image_processor.process_batch(
+                    input_files=input_files,
+                    output_dir=output_dir,
+                    output_format=output_format,
+                    quality=quality,
+                    progress_callback=progress_callback
+                )
+                
+                # Update final status
+                success_count = sum(1 for r in results if r['success'])
+                with process_lock:
+                    update_process(process_id, {
+                        "status": "completed",
+                        "completed_files": len(input_files),
+                        "progress": 100,
+                        "results": results,
+                        "success_count": success_count,
+                        "failed_count": len(input_files) - success_count
+                    })
+                
+            except Exception as e:
+                logger.error(f"[IMAGE_BATCH] Error in batch processing: {e}")
+                with process_lock:
+                    update_process(process_id, {
+                        "status": "failed",
+                        "error": str(e)
+                    })
+        
+        # Start processing thread
+        thread = threading.Thread(target=process_batch_thread, daemon=True)
+        thread.start()
+        
+        return jsonify({
+            "success": True,
+            "process_id": process_id,
+            "message": "Batch processing started"
+        })
+        
+    except Exception as e:
+        logger.error(f"[IMAGE_BATCH] Error starting batch process: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/image/process-status/<process_id>', methods=['GET', 'OPTIONS'], strict_slashes=False)
+def get_image_process_status(process_id):
+    """Get status of an image processing operation"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    try:
+        proc = get_process(process_id)
+        if not proc:
+            return jsonify({
+                "success": False,
+                "error": "Process not found"
+            }), 404
+        
+        return jsonify({
+            "success": True,
+            "process": proc
+        })
+        
+    except Exception as e:
+        logger.error(f"[IMAGE] Error getting process status: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
 if __name__ == '__main__':
     # Check FFmpeg availability
     try:
