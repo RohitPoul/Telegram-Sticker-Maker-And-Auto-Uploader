@@ -39,6 +39,10 @@
           <i class="fas fa-video"></i>
           <span>Video Converter</span>
         </button>
+        <button class="nav-item" data-tab="image-converter">
+          <i class="fas fa-image"></i>
+          <span>Image Converter</span>
+        </button>
         <button class="nav-item" data-tab="sticker-bot">
           <i class="fas fa-robot"></i>
           <span>Sticker Bot</span>
@@ -152,6 +156,106 @@
                 <div id="conversion-status" class="conversion-status">
                   <span class="status-text">Ready</span>
                   <span class="progress-text"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Image Converter Tab -->
+        <div id="image-converter" class="tab-content">
+          <div class="section-header-compact">
+            <div>
+              <h2><i class="fas fa-image"></i> Image Converter</h2>
+              <p>Telegram Sticker Format: 512px, PNG/WEBP, max 512KB</p>
+            </div>
+            <div class="header-actions">
+              <button id="add-images" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Add Images
+              </button>
+              <button id="clear-images" class="btn btn-secondary">
+                <i class="fas fa-trash"></i> Clear
+              </button>
+            </div>
+          </div>
+
+          <!-- Ultra Compact Layout -->
+          <div class="image-ultra-compact-layout">
+            <!-- Left: Image Grid -->
+            <div class="image-grid-container">
+              <div class="grid-header">
+                <span><i class="fas fa-images"></i> Images (<span id="image-file-count">0</span>)</span>
+              </div>
+              <div id="image-file-list" class="image-grid-compact">
+                <div class="empty-state-mini">
+                  <i class="fas fa-image"></i>
+                  <p>No images</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Center: Preview -->
+            <div class="image-preview-container">
+              <div class="preview-header">
+                <i class="fas fa-eye"></i> Preview
+              </div>
+              <div id="image-details-container" class="preview-area">
+                <div class="empty-state-mini">
+                  <i class="fas fa-mouse-pointer"></i>
+                  <p>Select image</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Controls -->
+            <div class="image-controls-container">
+              <div class="controls-compact">
+                <div class="control-group-mini">
+                  <label>Format</label>
+                  <div class="format-toggle">
+                    <button class="format-toggle-btn active" data-format="png">
+                      <i class="fas fa-file-image"></i> PNG
+                    </button>
+                    <button class="format-toggle-btn" data-format="webp">
+                      <i class="fas fa-file-image"></i> WEBP
+                    </button>
+                  </div>
+                </div>
+
+                <div class="control-group-mini">
+                  <label>Quality <span class="quality-value" id="image-quality-value">95</span></label>
+                  <input type="range" id="image-quality" class="quality-slider-mini" 
+                         min="50" max="100" value="95" step="5">
+                </div>
+
+                <div class="control-group-mini">
+                  <label>Output</label>
+                  <div class="input-group-mini">
+                    <input type="text" id="image-output-dir" class="input-mini" 
+                           placeholder="Select folder" readonly>
+                    <button id="browse-image-output" class="btn-mini">
+                      <i class="fas fa-folder"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <button id="start-image-conversion" class="btn-convert">
+                  <i class="fas fa-magic"></i> Convert
+                </button>
+
+                <div id="image-conversion-status" class="status-mini">
+                  <div class="status-text">Ready</div>
+                  <div class="progress-text"></div>
+                </div>
+
+                <div id="image-results-card" class="results-mini" style="display: none;">
+                  <div class="results-header">
+                    <span><i class="fas fa-check"></i> Results</span>
+                    <button id="clear-image-results" class="btn-clear-mini">
+                      <i class="fas fa-times"></i>
+                    </button>
+                  </div>
+                  <div id="image-results-list" class="results-list-mini"></div>
                 </div>
               </div>
             </div>
@@ -1504,6 +1608,7 @@
     <script src="modules/performance-turbo.js"></script>
     <script src="modules/performance-optimizations.js"></script>
     <script src="modules/component-optimizer.js"></script>
+    <script src="image-handler.js"></script>
     <script src="script.js"></script>
     
     <!-- Initialize Tutorial Launcher -->
