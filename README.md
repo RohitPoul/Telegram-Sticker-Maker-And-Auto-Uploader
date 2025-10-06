@@ -1,31 +1,25 @@
-<div align="center">
+# Telegram Utilities
 
-# Complete Sticker
+**Advanced Video Converter, Image Processor & Telegram Sticker Pack Creator**
 
-**Professional Telegram Sticker Pack Creator & Manager**
-
-[![Version](https://img.shields.io/badge/version-1.4.7-blue.svg)](https://github.com/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader/releases)
+[![Version](https://img.shields.io/badge/version-1.5.0-blue.svg)](https://github.com/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.12+-blue.svg)](https://python.org)
 [![Electron](https://img.shields.io/badge/electron-latest-lightgrey.svg)](https://electronjs.org)
 [![Platform](https://img.shields.io/badge/platform-windows%20%7C%20macos%20%7C%20linux-lightgrey.svg)](#installation)
 
-[Features](#features) • [Installation](#installation) • [Usage](#usage) • [API Documentation](#api-documentation) • [Contributing](#contributing) • [Support](#support)
-
-</div>
-
----
+[Features](#features) • [Installation](#installation) • [Usage](#usage) • [Contributing](#contributing) • [Support](#support)
 
 ## Overview
 
-Complete Sticker is a cross-platform desktop application that streamlines the creation and management of Telegram sticker packs. Built with modern web technologies and robust backend processing, it provides an intuitive interface for converting media files to Telegram's sticker format and automating the upload process.
+Telegram Utilities is a cross-platform desktop application that provides a complete suite of tools for working with Telegram media. Built with modern web technologies and robust backend processing, it offers intuitive interfaces for converting media files to Telegram's specifications and automating the sticker pack creation process.
 
 ### Key Capabilities
-- **Automated Media Conversion**: Converts images and videos to Telegram sticker specifications
-- **Batch Processing**: Handle multiple files simultaneously with progress tracking
-- **Telegram Integration**: Direct API integration for seamless sticker pack creation
+- **Video Conversion**: Convert videos to Telegram's WebM format with optimized settings
+- **Image Processing**: Process images to Telegram sticker specifications (512×512)
+- **Sticker Pack Creation**: Automated creation and management of Telegram sticker packs
 - **Cross-Platform Support**: Works on Windows, macOS, and Linux
-- **GPU Acceleration**: Leverages hardware acceleration for faster processing
+- **Session Persistence**: Secure storage of Telegram credentials and sessions
 
 ## Features
 
@@ -33,29 +27,32 @@ Complete Sticker is a cross-platform desktop application that streamlines the cr
 <tr>
 <td width="50%">
 
-### 🎨 Media Processing
-- **Format Support**: Images (PNG, JPG, GIF) and Videos (MP4, MOV, AVI)
-- **Automatic Conversion**: WebM (VP9) output with 512×512 resolution
-- **GPU Acceleration**: NVIDIA CUDA, AMD AMF, Intel QSV support
-- **Batch Processing**: Process multiple files with progress tracking
-- **Quality Optimization**: Maintains quality while meeting Telegram limits
+### 🎥 Video Converter
+- **Format Support**: MP4, MOV, AVI, MKV, FLV, WebM
+- **Telegram Optimization**: Automatic conversion to WebM (VP9) with 512×512 resolution
+- **Batch Processing**: Handle multiple files simultaneously with progress tracking
+- **Hardware Acceleration**: CPU-optimized processing for reliable performance
+- **Quality Control**: Maintains quality while meeting Telegram's file size limits
 - **Format Detection**: Automatic input format recognition
 
-### 🔧 Advanced Processing
-- **Smart Resizing**: Maintains aspect ratio with intelligent padding
-- **Compression**: Optimized file size under Telegram's limits
-- **Fallback Support**: CPU processing when GPU unavailable
+### 🖼️ Image Converter
+- **Format Support**: PNG, JPG, JPEG, GIF, WEBP, BMP, TIFF
+- **Telegram Sticker Format**: Automatic resizing to 512×512 with transparency support
+- **Multiple Output Formats**: PNG or WebP output with quality control
+- **Size Optimization**: Automatic compression to meet Telegram's 512KB limit
+- **Batch Processing**: Process multiple images with progress tracking
 
 </td>
 <td width="50%">
 
-### 🤖 Telegram Integration
+### 🤖 Telegram Sticker Bot
 - **Secure Authentication**: Phone + SMS + 2FA support
 - **Session Management**: Persistent login with automatic reconnection
 - **Pack Creation**: Automated sticker pack setup and publishing
 - **Emoji Assignment**: Smart emoji mapping for stickers
 - **URL Generation**: Custom pack URL name validation
 - **Auto-Skip Options**: Configurable icon selection automation
+- **Multi-Format Support**: Create both image and video sticker packs
 
 ### 🖥️ User Experience
 - **Modern Interface**: Clean, responsive Electron-based UI
@@ -63,6 +60,7 @@ Complete Sticker is a cross-platform desktop application that streamlines the cr
 - **Real-time Feedback**: Live progress and status updates
 - **Dark Theme**: Eye-friendly interface design
 - **Cross-Platform**: Consistent experience across operating systems
+- **Tab-Based Navigation**: Easy access to all features
 
 </td>
 </tr>
@@ -76,7 +74,8 @@ Complete Sticker is a cross-platform desktop application that streamlines the cr
 |-----------|------------|----------|
 | **Frontend** | Electron + JavaScript (ES2023) | Cross-platform desktop interface |
 | **Backend** | Python 3.12+ + Flask | API server and core processing |
-| **Media Processing** | FFmpeg with GPU acceleration | Video/image conversion pipeline |
+| **Video Processing** | FFmpeg | Video conversion pipeline |
+| **Image Processing** | Pillow + ImageMagick | Image processing and optimization |
 | **Telegram Client** | Telethon (AsyncIO) | Telegram API integration |
 | **Session Management** | Encrypted local storage | Secure credential persistence |
 | **System Monitoring** | psutil | Resource monitoring and optimization |
@@ -90,9 +89,43 @@ Complete Sticker is a cross-platform desktop application that streamlines the cr
 | **Storage** | 2GB free space | 5GB+ |
 | **Python** | 3.12+ | Latest stable |
 | **Node.js** | 18+ | Latest LTS |
-| **GPU** | Optional | NVIDIA/AMD/Intel for acceleration |
 
 ## Installation
+
+### Prerequisites
+
+Before installing Telegram Utilities, ensure you have the following dependencies installed:
+
+1. **Python 3.12+**
+2. **Node.js 18+**
+3. **FFmpeg** (for video conversion)
+4. **ImageMagick** (for image processing)
+
+### Installing Dependencies
+
+#### FFmpeg Installation
+```bash
+# Windows (using Chocolatey)
+choco install ffmpeg
+
+# macOS (using Homebrew)
+brew install ffmpeg
+
+# Linux (Ubuntu/Debian)
+sudo apt install ffmpeg
+```
+
+#### ImageMagick Installation
+```bash
+# Windows (using Chocolatey)
+choco install imagemagick
+
+# macOS (using Homebrew)
+brew install imagemagick
+
+# Linux (Ubuntu/Debian)
+sudo apt install imagemagick
+```
 
 ### Quick Start
 
@@ -150,35 +183,6 @@ yarn install
 
 </details>
 
-<details>
-<summary><strong>⚡ GPU Acceleration (Optional)</strong></summary>
-
-#### NVIDIA CUDA
-```bash
-# Windows (using Chocolatey)
-choco install cuda
-
-# Linux (Ubuntu/Debian)
-sudo apt install nvidia-cuda-toolkit
-
-# Verify installation
-nvidia-smi
-```
-
-#### AMD AMF
-```bash
-# Install AMD drivers with AMF support
-# Download from: https://www.amd.com/support
-```
-
-#### Intel QSV
-```bash
-# Install Intel Graphics drivers
-# Download from: https://www.intel.com/content/www/us/en/support/
-```
-
-</details>
-
 ## Usage
 
 ### Getting Started
@@ -199,23 +203,33 @@ npm start
 
 #### 3. 📁 Add Media Files
 
-**Supported Formats:**
-- **Images**: PNG, JPG, JPEG, GIF, WEBP
-- **Videos**: MP4, MOV, AVI, MKV, WEBM
+**Video Converter Supported Formats:**
+- **Videos**: MP4, MOV, AVI, MKV, FLV, WebM
+
+**Image Converter Supported Formats:**
+- **Images**: PNG, JPG, JPEG, GIF, WEBP, BMP, TIFF
 
 **Methods to Add Files:**
 - **Drag & Drop**: Simply drag files into the application window
 - **File Browser**: Click "Add Files" to browse and select
 - **Batch Import**: Select multiple files at once
 
-#### 4. ⚙️ Configure Sticker Pack
+#### 4. ⚙️ Configure Settings
 
-| Setting | Requirements | Description |
-|---------|--------------|-------------|
-| **Pack Name** | 1-64 characters | Display name for your sticker pack |
-| **URL Name** | 5-32 characters, alphanumeric + underscores | Unique identifier (e.g., `my_awesome_stickers`) |
-| **Sticker Type** | Image or Video | Format type for the pack |
-| **Auto-Skip Icon** | Toggle | Automatically skip icon selection |
+**Video Converter Settings:**
+- **Output Directory**: Select where converted videos will be saved
+- **Quality Settings**: Adjust quality parameters for output files
+
+**Image Converter Settings:**
+- **Output Format**: Choose between PNG or WebP
+- **Quality Level**: Adjust compression quality (50-100)
+- **Output Directory**: Select where processed images will be saved
+
+**Sticker Pack Settings:**
+- **Pack Name**: Display name for your sticker pack (1-64 characters)
+- **URL Name**: Unique identifier (5-32 characters, alphanumeric + underscores)
+- **Sticker Type**: Choose between Image or Video stickers
+- **Auto-Skip Icon**: Toggle to automatically skip icon selection
 
 #### 5. 🎨 Emoji Assignment
 - **Auto-Assignment**: Intelligent emoji suggestions
@@ -235,158 +249,15 @@ npm start
 Create a `.env` file in the project root:
 
 ```bash
-# Performance Settings
-STICKER_CACHE_SIZE=1024           # Cache size in MB (default: 512)
-STICKER_MAX_CONCURRENT=4          # Max concurrent conversions (default: 2)
-STICKER_WORKER_THREADS=4          # Number of worker threads (default: 2)
-
 # Logging Configuration
-STICKER_LOG_LEVEL=INFO            # Logging level (DEBUG, INFO, WARNING, ERROR)
-STICKER_LOG_FILE=logs/app.log     # Log file path
-
-# Media Processing
-STICKER_QUALITY=high              # Conversion quality (low, medium, high)
-STICKER_GPU_ACCELERATION=auto     # GPU acceleration (auto, nvidia, amd, intel, disabled)
-STICKER_FALLBACK_CPU=true         # CPU fallback when GPU unavailable
+BACKEND_LOG_LEVEL=INFO            # Logging level (DEBUG, INFO, WARNING, ERROR)
+BACKEND_LOG_TO_STDOUT=0           # Log to stdout (0 or 1)
 
 # Telegram Settings
-STICKER_SESSION_TIMEOUT=3600      # Session timeout in seconds
-STICKER_RETRY_ATTEMPTS=3          # Number of retry attempts
-STICKER_REQUEST_DELAY=1           # Delay between requests in seconds
+TELEGRAM_SESSION_TIMEOUT=3600     # Session timeout in seconds
+TELEGRAM_RETRY_ATTEMPTS=3         # Number of retry attempts
+TELEGRAM_REQUEST_DELAY=1          # Delay between requests in seconds
 ```
-
-### Application Settings
-
-```json
-{
-  "conversion": {
-    "quality": "high",
-    "format": "webm",
-    "resolution": "512x512",
-    "fps": 30,
-    "duration_limit": 3
-  },
-  "ui": {
-    "theme": "dark",
-    "auto_save": true,
-    "notifications": true,
-    "sound_effects": false
-  },
-  "advanced": {
-    "gpu_acceleration": true,
-    "memory_optimization": true,
-    "parallel_processing": true
-  }
-}
-```
-
-## API Documentation
-
-### REST API Endpoints
-
-#### Authentication
-```http
-POST /api/auth/login
-Content-Type: application/json
-
-{
-  "api_id": "your_api_id",
-  "api_hash": "your_api_hash",
-  "phone": "+1234567890"
-}
-```
-
-#### File Upload
-```http
-POST /api/upload
-Content-Type: multipart/form-data
-
-files: [File objects]
-```
-
-#### Sticker Pack Creation
-```http
-POST /api/sticker-pack/create
-Content-Type: application/json
-
-{
-  "name": "My Sticker Pack",
-  "url_name": "my_sticker_pack",
-  "type": "image",
-  "files": ["file_ids"],
-  "emojis": ["😀", "😂", "😍"]
-}
-```
-
-### WebSocket Events
-
-#### Progress Updates
-```javascript
-// Listen for conversion progress
-socket.on('conversion_progress', (data) => {
-  console.log(`Progress: ${data.progress}%`);
-  console.log(`File: ${data.filename}`);
-});
-
-// Listen for pack creation status
-socket.on('pack_status', (data) => {
-  console.log(`Status: ${data.status}`);
-  console.log(`URL: ${data.pack_url}`);
-});
-```
-
-## Changelog
-
-### v1.4.7 (2024-09-24) - Latest
-#### 🐛 Bug Fixes
-- Fixed modal display issues preventing success notifications
-- Enhanced process ID coordination between modules
-- Resolved UI responsiveness problems during heavy processing
-
-#### 📖 Documentation
-- Complete README overhaul with professional formatting
-- Added comprehensive API documentation
-- Improved installation instructions with troubleshooting
-
-### v1.4.6 (2024-09-23)
-#### 🔧 Improvements
-- Fixed URL modal "Try This Name" button functionality
-- Added missing `updatePackActions()` method
-- Improved modal themes from error-red to choice-blue
-- Code cleanup: removed 200+ lines of duplicate CSS
-
-### v1.4.5 (2024-09-22)
-#### 🎨 UI/UX
-- Resolved modal display stability issues
-- Updated UI theme to modern light pink design
-- Enhanced suggestion layout with responsive design
-- Added keyboard shortcuts (Ctrl+C for copy, Enter for confirm)
-
-<details>
-<summary><strong>View Complete Changelog</strong></summary>
-
-### v1.4.0 (2024-09-19)
-#### ⚡ Performance
-- Major performance optimization eliminating UI lag
-- Implemented efficient dark theme with CSS variables
-- Fixed horizontal scrolling issues in emoji selection
-- Optimized modal width from 700px to 900px
-
-### v1.3.0 (2024-09-18)
-#### 🚀 Features
-- Added GPU acceleration support (CUDA, AMF, QSV)
-- Complete URL retry modal redesign
-- Enhanced performance monitoring
-- Improved keyboard support for modals
-
-### v1.2.0 (2024-09-13)
-#### 🔄 Session Management
-- Fixed auto-skip logic preventing app hang
-- Implemented smart session reuse
-- Enhanced resource cleanup
-- Improved backend optimization
-
-</details>
 
 ## Development
 
@@ -427,34 +298,11 @@ npm run lint
 npm run lint:fix
 ```
 
-### Testing Checklist
-
-#### 🧪 Core Functionality
-- [ ] **Authentication**: Phone number, SMS code, 2FA login
-- [ ] **File Upload**: Drag & drop, file browser, batch upload
-- [ ] **Media Conversion**: Image/video processing with different formats
-- [ ] **Sticker Pack Creation**: End-to-end pack creation workflow
-- [ ] **Session Persistence**: Login state across app restarts
-
-#### ⚡ Performance Tests
-- [ ] **Large File Handling**: Process files up to 50MB
-- [ ] **Batch Processing**: Handle 100+ files simultaneously
-- [ ] **Memory Usage**: Monitor RAM consumption during processing
-- [ ] **GPU Acceleration**: Test CUDA/AMF/QSV acceleration
-- [ ] **Error Recovery**: Network interruption and API limit handling
-
-#### 🖥️ UI/UX Tests
-- [ ] **Responsive Design**: Test different window sizes
-- [ ] **Dark Theme**: Verify theme consistency
-- [ ] **Modal Functionality**: Success/error modal display
-- [ ] **Progress Tracking**: Real-time progress updates
-- [ ] **Keyboard Shortcuts**: Test all keyboard interactions
-
 ### Debugging
 
 ```bash
 # Enable debug mode
-STICKER_LOG_LEVEL=DEBUG npm start
+BACKEND_LOG_LEVEL=DEBUG npm start
 
 # Generate debug report
 npm run debug:report
@@ -615,6 +463,18 @@ brew install ffmpeg
 sudo apt install ffmpeg
 ```
 
+**Problem**: "ImageMagick not found"
+```bash
+# Windows (using Chocolatey)
+choco install imagemagick
+
+# macOS (using Homebrew)
+brew install imagemagick
+
+# Linux (Ubuntu/Debian)
+sudo apt install imagemagick
+```
+
 **Problem**: "Conversion failed"
 ```bash
 # Check file format support
@@ -678,6 +538,7 @@ SOFTWARE.
 
 - **[Telegram](https://telegram.org/)** for providing the Bot API and platform
 - **[FFmpeg](https://ffmpeg.org/)** for powerful media processing capabilities
+- **[ImageMagick](https://imagemagick.org/)** for image processing capabilities
 - **[Electron](https://electronjs.org/)** for cross-platform desktop framework
 - **[Telethon](https://docs.telethon.dev/)** for excellent Python Telegram client
 - **[Flask](https://flask.palletsprojects.com/)** for lightweight web framework
