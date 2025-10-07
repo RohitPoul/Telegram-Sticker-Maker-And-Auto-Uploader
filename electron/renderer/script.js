@@ -262,8 +262,14 @@ class TelegramUtilities {
     const url = `http://127.0.0.1:5000${sanitizedPath}`;
     
     // OPTIMIZED: Add timeout to prevent hanging requests
+    // Use longer timeout for batch operations and status checks
+    let timeoutDuration = 30000; // Default 30 seconds
+    if (sanitizedPath.includes('/process-batch') || sanitizedPath.includes('/process-status')) {
+      timeoutDuration = 120000; // 2 minutes for batch operations
+    }
+    
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout for skip operations
+    const timeoutId = setTimeout(() => controller.abort(), timeoutDuration);
     
     try {
       // ENHANCED: Validate and sanitize request body before sending
@@ -534,11 +540,35 @@ class TelegramUtilities {
         } else if (this.selectedMediaType === "video") {
           this.addStickerVideos();
         } else {
-          this.showToast("warning", "Select Type", "Please select media type first");
+          // Show a more helpful message and highlight the media type selection
+          this.showToast("warning", "Select Media Type", "Please select 'Images' or 'Videos' first");
+          
+          // Highlight the media type buttons to make them more visible
+          const selectImageBtn = document.getElementById("select-image-type");
+          const selectVideoBtn = document.getElementById("select-video-type");
+          
+          if (selectImageBtn) {
+            selectImageBtn.classList.add("pulse-highlight");
+            setTimeout(() => {
+              selectImageBtn.classList.remove("pulse-highlight");
+            }, 2000);
+          }
+          
+          if (selectVideoBtn) {
+            selectVideoBtn.classList.add("pulse-highlight");
+            setTimeout(() => {
+              selectVideoBtn.classList.remove("pulse-highlight");
+            }, 2000);
+          }
+          
+          // Also show the media controls section if it's hidden
+          const mediaControls = document.getElementById("media-controls");
+          if (mediaControls) {
+            mediaControls.style.display = "flex";
+          }
         }
       });
     }
-    
 
     
     // Sort functionality
