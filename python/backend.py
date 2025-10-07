@@ -104,6 +104,27 @@ from shared_state import (
     set_sticker_bot, get_sticker_bot, set_telegram_handler, get_telegram_handler
 )
 
+def cleanup_processes():
+    """Clean up all active processes"""
+    global active_processes, conversion_threads
+    logger.info("[CLEANUP] Starting process cleanup...")
+    
+    with process_lock:
+        # Stop all conversion threads
+        for process_id, thread_info in conversion_threads.items():
+            if thread_info.get('thread') and thread_info['thread'].is_alive():
+                logger.info(f"[CLEANUP] Stopping thread for process {process_id}")
+                # Mark process as stopped
+                if process_id in active_processes:
+                    active_processes[process_id]["status"] = "stopped"
+                    active_processes[process_id]["current_stage"] = "Process stopped"
+        
+        # Clear all processes
+        active_processes.clear()
+        conversion_threads.clear()
+    
+    logger.info("[CLEANUP] Process cleanup completed")
+
 # Inject dependencies into video converter after global variables are declared
 if VIDEO_CONVERTER_AVAILABLE and video_converter:
     video_converter.active_processes = active_processes
@@ -143,27 +164,6 @@ class Config:
     def ensure_temp_dir(cls):
         os.makedirs(cls.TEMP_DIR, exist_ok=True)
         return cls.TEMP_DIR
-
-def cleanup_processes():
-    """Clean up all active processes"""
-    global active_processes, conversion_threads
-    logger.info("[CLEANUP] Starting process cleanup...")
-    
-    with process_lock:
-        # Stop all conversion threads
-        for process_id, thread_info in conversion_threads.items():
-            if thread_info.get('thread') and thread_info['thread'].is_alive():
-                logger.info(f"[CLEANUP] Stopping thread for process {process_id}")
-                # Mark process as stopped
-                if process_id in active_processes:
-                    active_processes[process_id]["status"] = "stopped"
-                    active_processes[process_id]["current_stage"] = "Process stopped"
-        
-        # Clear all processes
-        active_processes.clear()
-        conversion_threads.clear()
-    
-    logger.info("[CLEANUP] Process cleanup completed")
 
 def cleanup_telegram_and_sessions():
     """Ensure Telegram disconnect and session files are released on exit."""
@@ -2151,7 +2151,7 @@ def process_single_image():
 
 @app.route('/api/image/process-batch', methods=['POST', 'OPTIONS'], strict_slashes=False)
 def process_batch_images():
-    """Process multiple images in batch to meet Telegram sticker requirements"""
+    """Process multiple images in batch to meet Telegram sticker requirements - Simplified version"""
     if request.method == 'OPTIONS':
         return '', 200
     
@@ -2187,7 +2187,7 @@ def process_batch_images():
             }), 404
         
         # Create process tracking
-        add_process(process_id, {
+        process_data = {
             "status": "processing",
             "type": "image_batch",
             "total_files": len(input_files),
@@ -2195,65 +2195,133 @@ def process_batch_images():
             "progress": 0,
             "current_file": "",
             "results": []
-        })
+        }
+        add_process(process_id, process_data)
         
-        # Process images in a separate thread
-        def process_batch_thread():
-            try:
-                from image_processor import image_processor
+        # Process images synchronously in the request thread with detailed logging
+        try:
+            logger.info(f"[IMAGE_BATCH] ========== SYNCHRONOUS PROCESSING STARTED ==========")
+            logger.info(f"[IMAGE_BATCH] Process ID: {process_id}")
+            logger.info(f"[IMAGE_BATCH] Total files: {len(input_files)}")
+            logger.info(f"[IMAGE_BATCH] Output dir: {output_dir}")
+            logger.info(f"[IMAGE_BATCH] Format: {output_format}, Quality: {quality}")
+            
+            # Import image processor
+            from image_processor import image_processor
+            
+            # Ensure output directory exists
+            os.makedirs(output_dir, exist_ok=True)
+            
+            results = []
+            total_files = len(input_files)
+            
+            logger.info(f"[IMAGE_BATCH] Starting synchronous processing loop with {total_files} files")
+            
+            # Process each file one by one synchronously
+            for idx, input_file in enumerate(input_files):
+                try:
+                    logger.info(f"[IMAGE_BATCH] Processing {idx + 1}/{total_files}: {os.path.basename(input_file)}")
+                    logger.info(f"[IMAGE_BATCH] Full input path: {input_file}")
+                    logger.info(f"[IMAGE_BATCH] Input file exists: {os.path.exists(input_file)}")
+                    
+                    # Update current file in process tracking
+                    logger.info(f"[IMAGE_BATCH] Updating process tracking...")
+                    proc = get_process(process_id)
+                    if proc:
+                        proc["current_file"] = input_file
+                        update_process(process_id, proc)
+                        logger.info(f"[IMAGE_BATCH] Updated current file in tracking")
+                    
+                    # Generate output filename
+                    logger.info(f"[IMAGE_BATCH] Generating output filename...")
+                    input_path = Path(input_file)
+                    output_filename = f"{input_path.stem}_processed.{output_format}"
+                    output_path = Path(output_dir) / output_filename
+                    
+                    logger.info(f"[IMAGE_BATCH] Generated output path: {output_path}")
+                    logger.info(f"[IMAGE_BATCH] Output directory exists: {os.path.exists(output_dir)}")
+                    
+                    # Process single image using existing logic
+                    logger.info(f"[IMAGE_BATCH] Calling image_processor.process_image...")
+                    result = image_processor.process_image(
+                        input_path=input_file,
+                        output_path=str(output_path),
+                        output_format=output_format,
+                        quality=quality
+                    )
+                    
+                    logger.info(f"[IMAGE_BATCH] Image processor returned: {result.get('success', False)}")
+                    
+                    results.append(result)
+                    logger.info(f"[IMAGE_BATCH] Image processing result: {result.get('success', False)}")
+                    
+                    # Update process tracking
+                    logger.info(f"[IMAGE_BATCH] Updating process tracking with results...")
+                    proc = get_process(process_id)
+                    if proc:
+                        proc["completed_files"] = idx + 1
+                        proc["progress"] = int(((idx + 1) / total_files) * 100)
+                        proc["results"] = results.copy()
+                        update_process(process_id, proc)
+                        logger.info(f"[IMAGE_BATCH] Updated process: {idx + 1}/{total_files} - Success: {result.get('success', False)}")
+                            
+                except Exception as e:
+                    logger.error(f"[IMAGE_BATCH] Error processing file {input_file}: {e}", exc_info=True)
+                    # Continue with next file even if one fails
+                    error_result = {
+                        'success': False,
+                        'error': str(e),
+                        'input_path': input_file
+                    }
+                    results.append(error_result)
+                    
+                    # Update process tracking with error
+                    proc = get_process(process_id)
+                    if proc:
+                        proc["completed_files"] = idx + 1
+                        proc["progress"] = int(((idx + 1) / total_files) * 100)
+                        proc["results"] = results.copy()
+                        update_process(process_id, proc)
+                        logger.info(f"[IMAGE_BATCH] Updated process with error: {idx + 1}/{total_files}")
+            
+            # Final status update
+            success_count = sum(1 for r in results if r.get('success', False))
+            logger.info(f"[IMAGE_BATCH] Batch processing completed! Success: {success_count}/{total_files}")
+            
+            with process_lock:
+                update_process(process_id, {
+                    "status": "completed" if success_count > 0 else "failed",
+                    "completed_files": total_files,
+                    "progress": 100,
+                    "results": results,
+                    "success_count": success_count,
+                    "failed_count": total_files - success_count
+                })
+                logger.info(f"[IMAGE_BATCH] Final status updated for process {process_id}")
                 
-                def progress_callback(current, total, result):
-                    # Update process status
-                    progress = int((current / total) * 100)
-                    with process_lock:
-                        proc = get_process(process_id)
-                        if proc:
-                            proc["completed_files"] = current
-                            proc["progress"] = progress
-                            proc["current_file"] = result.get('input_path', '')
-                            proc["results"].append(result)
-                            update_process(process_id, proc)
-                
-                results = image_processor.process_batch(
-                    input_files=input_files,
-                    output_dir=output_dir,
-                    output_format=output_format,
-                    quality=quality,
-                    progress_callback=progress_callback
-                )
-                
-                # Update final status
-                success_count = sum(1 for r in results if r['success'])
-                with process_lock:
-                    update_process(process_id, {
-                        "status": "completed",
-                        "completed_files": len(input_files),
-                        "progress": 100,
-                        "results": results,
-                        "success_count": success_count,
-                        "failed_count": len(input_files) - success_count
-                    })
-                
-            except Exception as e:
-                logger.error(f"[IMAGE_BATCH] Error in batch processing: {e}")
-                with process_lock:
-                    update_process(process_id, {
-                        "status": "failed",
-                        "error": str(e)
-                    })
-        
-        # Start processing thread
-        thread = threading.Thread(target=process_batch_thread, daemon=True)
-        thread.start()
-        
-        return jsonify({
-            "success": True,
-            "process_id": process_id,
-            "message": "Batch processing started"
-        })
+            logger.info(f"[IMAGE_BATCH] Returning success response")
+            return jsonify({
+                "success": True,
+                "process_id": process_id,
+                "message": "Batch processing completed"
+            })
+            
+        except Exception as e:
+            logger.error(f"[IMAGE_BATCH] CRITICAL ERROR in batch processing: {e}", exc_info=True)
+            with process_lock:
+                update_process(process_id, {
+                    "status": "failed",
+                    "error": str(e)
+                })
+                logger.error(f"[IMAGE_BATCH] Process {process_id} marked as failed")
+            
+            return jsonify({
+                "success": False,
+                "error": str(e)
+            }), 500
         
     except Exception as e:
-        logger.error(f"[IMAGE_BATCH] Error starting batch process: {e}")
+        logger.error(f"[IMAGE_BATCH] Error starting batch process: {e}", exc_info=True)
         return jsonify({
             "success": False,
             "error": str(e)
@@ -2280,6 +2348,65 @@ def get_image_process_status(process_id):
         
     except Exception as e:
         logger.error(f"[IMAGE] Error getting process status: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/image/convert-single', methods=['POST', 'OPTIONS'], strict_slashes=False)
+def convert_single_image():
+    """Convert a single image and optionally return as data URL for real-time preview"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    try:
+        import base64
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
+        
+        input_path = data.get('input_path')
+        output_format = data.get('output_format', 'png')
+        quality = data.get('quality', 95)
+        return_data_url = data.get('return_data_url', False)
+        
+        if not input_path:
+            return jsonify({"success": False, "error": "input_path is required"}), 400
+        
+        if not os.path.exists(input_path):
+            return jsonify({"success": False, "error": "Input file not found"}), 404
+        
+        # Create temporary output path
+        temp_dir = Config.ensure_temp_dir()
+        output_filename = f"converted_{uuid.uuid4()}.{output_format}"
+        output_path = os.path.join(temp_dir, output_filename)
+        
+        from image_processor import image_processor
+        result = image_processor.process_image(
+            input_path=input_path,
+            output_path=output_path,
+            output_format=output_format,
+            quality=quality
+        )
+        
+        if result['success'] and return_data_url:
+            # Read the output file and convert to base64 data URL
+            try:
+                with open(output_path, 'rb') as f:
+                    image_data = f.read()
+                    base64_data = base64.b64encode(image_data).decode('utf-8')
+                    mime_type = 'image/png' if output_format == 'png' else 'image/webp'
+                    result['data_url'] = f"data:{mime_type};base64,{base64_data}"
+            except Exception as e:
+                logger.warning(f"[IMAGE] Could not create data URL: {e}")
+        
+        return jsonify({
+            "success": True,
+            "result": result
+        })
+        
+    except Exception as e:
+        logger.error(f"[IMAGE] Error converting single image: {e}")
         return jsonify({
             "success": False,
             "error": str(e)
