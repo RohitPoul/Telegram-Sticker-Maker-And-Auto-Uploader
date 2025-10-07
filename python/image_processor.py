@@ -126,7 +126,8 @@ class ImageProcessor:
     
     def process_image(self, input_path, output_path, output_format='png', quality=95):
         """
-        Process image to meet Telegram sticker requirements
+        Process image to meet Telegram sticker requirements using PIL/Pillow
+        This avoids subprocess issues by using pure Python image processing
         
         Args:
             input_path: Path to input image
@@ -138,12 +139,6 @@ class ImageProcessor:
             dict: Processing result with metadata
         """
         try:
-            if not self.imagemagick_available:
-                return {
-                    'success': False,
-                    'error': 'ImageMagick is not available. Please install ImageMagick.'
-                }
-            
             # Get original metadata
             original_metadata = self.get_image_metadata(input_path)
             if not original_metadata:
@@ -167,70 +162,92 @@ class ImageProcessor:
             output_path = Path(output_path)
             output_path = output_path.with_suffix(f'.{output_format}')
             
-            # Build ImageMagick command
-            # Use 'magick' command (newer ImageMagick 7+) or fall back to 'convert'
-            try:
-                subprocess.run(['magick', '-version'], capture_output=True, timeout=1)
-                magick_cmd = 'magick'
-            except:
-                magick_cmd = 'convert'
+            # Process image using PIL/Pillow
+            self.logger.info(f"[PROCESSING] Converting {os.path.basename(input_path)} to {output_format.upper()} using PIL")
+            self.logger.info(f"[PROCESSING] Target dimensions: {new_width}x{new_height}")
             
-            cmd = [
-                magick_cmd,
-                input_path,
-                '-resize', f'{new_width}x{new_height}!',  # Force exact dimensions
-                '-strip',  # Remove metadata to reduce size
-            ]
+            from PIL import Image
             
-            # Format-specific options
-            if output_format == 'png':
-                cmd.extend([
-                    '-define', f'png:compression-level=9',  # Maximum compression
-                    '-define', 'png:compression-strategy=1',
-                    '-quality', str(quality),
-                ])
-            elif output_format == 'webp':
-                cmd.extend([
-                    '-quality', str(quality),
-                    '-define', 'webp:lossless=false',
-                    '-define', f'webp:method=6',  # Best compression
-                ])
-            
-            # Preserve transparency
-            if original_metadata['has_transparency']:
-                cmd.extend(['-background', 'none', '-alpha', 'set'])
-            
-            cmd.append(str(output_path))
-            
-            # Execute ImageMagick command
-            self.logger.info(f"[PROCESSING] Converting {os.path.basename(input_path)} to {output_format.upper()}")
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-            
-            if result.returncode != 0:
-                self.logger.error(f"[PROCESSING] ImageMagick error: {result.stderr}")
-                return {
-                    'success': False,
-                    'error': f'ImageMagick conversion failed: {result.stderr}'
-                }
+            # Open and resize image
+            with Image.open(input_path) as img:
+                # Resize image
+                resized_img = img.resize((new_width, new_height), Image.LANCZOS)
+                
+                # Handle transparency
+                if resized_img.mode in ('RGBA', 'LA') or (resized_img.mode == 'P' and 'transparency' in resized_img.info):
+                    # Ensure we have an alpha channel
+                    if resized_img.mode != 'RGBA':
+                        resized_img = resized_img.convert('RGBA')
+                else:
+                    # Convert to RGB if no transparency
+                    resized_img = resized_img.convert('RGB')
+                
+                # Save image with appropriate settings
+                save_kwargs = {}
+                if output_format == 'png':
+                    save_kwargs.update({
+                        'optimize': True,
+                        'compress_level': 9
+                    })
+                elif output_format == 'webp':
+                    save_kwargs.update({
+                        'quality': quality,
+                        'method': 6,
+                        'lossless': False
+                    })
+                
+                # Save the image
+                resized_img.save(str(output_path), format=output_format.upper(), **save_kwargs)
             
             # Check if file was created and get final metadata
+            self.logger.info(f"[PROCESSING] Checking if output file was created: {output_path}")
+            self.logger.info(f"[PROCESSING] Output file exists: {os.path.exists(output_path)}")
+            
             if not output_path.exists():
+                self.logger.error(f"[PROCESSING] Output file was not created: {output_path}")
                 return {
                     'success': False,
-                    'error': 'Output file was not created'
+                    'error': f'Output file was not created: {output_path}'
                 }
             
             final_metadata = self.get_image_metadata(str(output_path))
             
-            # Check file size - if over 512KB, reduce quality
-            if final_metadata['file_size_kb'] > self.MAX_FILE_SIZE_KB:
-                self.logger.warning(f"[SIZE] Output size {final_metadata['file_size_kb']:.2f}KB exceeds {self.MAX_FILE_SIZE_KB}KB, reducing quality")
-                return self._reduce_quality(input_path, output_path, output_format, original_metadata, quality)
+            # Check file size - if over 512KB, reduce quality (for WebP only)
+            if final_metadata and final_metadata['file_size_kb'] > self.MAX_FILE_SIZE_KB:
+                if output_format == 'webp':
+                    self.logger.warning(f"[SIZE] Output size {final_metadata['file_size_kb']:.2f}KB exceeds {self.MAX_FILE_SIZE_KB}KB, reducing quality")
+                    # Try with lower quality
+                    with Image.open(input_path) as img:
+                        resized_img = img.resize((new_width, new_height), Image.LANCZOS)
+                        if resized_img.mode in ('RGBA', 'LA') or (resized_img.mode == 'P' and 'transparency' in resized_img.info):
+                            if resized_img.mode != 'RGBA':
+                                resized_img = resized_img.convert('RGBA')
+                        else:
+                            resized_img = resized_img.convert('RGB')
+                        
+                        # Save with lower quality
+                        resized_img.save(str(output_path), format='WEBP', quality=50, method=6, lossless=False)
+                    
+                    final_metadata = self.get_image_metadata(str(output_path))
+                    
+                    if final_metadata and final_metadata['file_size_kb'] > self.MAX_FILE_SIZE_KB:
+                        # If still too large, convert to PNG
+                        self.logger.warning(f"[SIZE] WebP still too large, converting to PNG")
+                        with Image.open(input_path) as img:
+                            resized_img = img.resize((new_width, new_height), Image.LANCZOS)
+                            if resized_img.mode in ('RGBA', 'LA') or (resized_img.mode == 'P' and 'transparency' in resized_img.info):
+                                if resized_img.mode != 'RGBA':
+                                    resized_img = resized_img.convert('RGBA')
+                            else:
+                                resized_img = resized_img.convert('RGB')
+                            
+                            output_path = output_path.with_suffix('.png')
+                            resized_img.save(str(output_path), format='PNG', optimize=True, compress_level=9)
+                        
+                        final_metadata = self.get_image_metadata(str(output_path))
+                else:
+                    # For PNG, we've already used maximum compression
+                    self.logger.warning(f"[SIZE] PNG output size {final_metadata['file_size_kb']:.2f}KB exceeds {self.MAX_FILE_SIZE_KB}KB but cannot reduce further")
             
             self.logger.info(f"[SUCCESS] Processed {os.path.basename(input_path)} -> {final_metadata['file_size_kb']:.2f}KB")
             
@@ -245,38 +262,12 @@ class ImageProcessor:
             
         except Exception as e:
             self.logger.error(f"[ERROR] Processing failed for {input_path}: {e}")
+            import traceback
+            self.logger.error(f"[ERROR] Traceback: {traceback.format_exc()}")
             return {
                 'success': False,
                 'error': str(e)
             }
-    
-    def _reduce_quality(self, input_path, output_path, output_format, original_metadata, initial_quality):
-        """Iteratively reduce quality to meet file size requirements"""
-        quality = initial_quality
-        attempt = 1
-        max_attempts = 10
-        
-        while quality >= 50 and attempt <= max_attempts:
-            quality -= 5
-            self.logger.info(f"[SIZE_REDUCTION] Attempt {attempt}: Trying quality {quality}")
-            
-            result = self.process_image(input_path, str(output_path), output_format, quality)
-            
-            if result['success'] and result['final_metadata']['file_size_kb'] <= self.MAX_FILE_SIZE_KB:
-                self.logger.info(f"[SIZE_REDUCTION] Success at quality {quality}: {result['final_metadata']['file_size_kb']:.2f}KB")
-                return result
-            
-            attempt += 1
-        
-        # If still too large, use more aggressive compression
-        if output_format == 'webp':
-            self.logger.warning("[SIZE_REDUCTION] Using aggressive WebP compression")
-            return self.process_image(input_path, str(output_path), 'webp', 50)
-        
-        return {
-            'success': False,
-            'error': f'Could not reduce file size below {self.MAX_FILE_SIZE_KB}KB after {max_attempts} attempts'
-        }
     
     def process_batch(self, input_files, output_dir, output_format='png', quality=95, progress_callback=None):
         """
