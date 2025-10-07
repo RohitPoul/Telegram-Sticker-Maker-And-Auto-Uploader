@@ -39,16 +39,7 @@ def get_next_process_id():
 def add_process(process_id, process_data):
     """Add a process to active_processes"""
     with process_lock:
-        print(f"🔧 [SHARED_STATE] Adding process {process_id} to active_processes")
-        print(f"🔧 [SHARED_STATE] Before add - active_processes keys: {list(active_processes.keys())}")
-        print(f"🔧 [SHARED_STATE] Before add - active_processes id: {id(active_processes)}")
-        
         active_processes[process_id] = process_data
-        
-        print(f"🔧 [SHARED_STATE] After add - active_processes keys: {list(active_processes.keys())}")
-        print(f"🔧 [SHARED_STATE] After add - active_processes id: {id(active_processes)}")
-        print(f"🔧 [SHARED_STATE] Process {process_id} exists: {process_id in active_processes}")
-        
         shared_logger.info(f"Added process {process_id} to active_processes")
         shared_logger.info(f"Current processes: {list(active_processes.keys())}")
 
