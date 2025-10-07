@@ -59,8 +59,11 @@ class TelegramUtilities {
       packCompleted: false,
       currentStep: 'initial' // initial, icon_upload, url_name, completed
     };
+    this.imageFiles = []; // Array to store image files for the image converter
+    this.currentImageOutput = ""; // Current output directory for image conversion
     this.progressInterval = null;
     this.stickerProgressInterval = null;
+    this.imageProgressInterval = null; // Progress interval for image conversion
     this.currentOperation = null; // 'converting', 'hexediting', null
     this.isPaused = false;
     this.startTime = new Date();
@@ -360,6 +363,28 @@ class TelegramUtilities {
     
     if (startHexEditBtn) {
       startHexEditBtn.addEventListener("click", () => this.startHexEdit());
+    }
+      
+    // Image Converter Events
+    const addImagesBtn = document.getElementById("add-images");
+    const clearImagesBtn = document.getElementById("clear-images");
+    const browseImageOutputBtn = document.getElementById("browse-image-output");
+    const startImageConversionBtn = document.getElementById("start-image-conversion");
+    
+    if (addImagesBtn) {
+      addImagesBtn.addEventListener("click", () => this.addImageFiles());
+    }
+    
+    if (clearImagesBtn) {
+      clearImagesBtn.addEventListener("click", () => this.clearImageFiles());
+    }
+    
+    if (browseImageOutputBtn) {
+      browseImageOutputBtn.addEventListener("click", () => this.browseImageOutput());
+    }
+    
+    if (startImageConversionBtn) {
+      startImageConversionBtn.addEventListener("click", () => this.startImageConversion());
     }
       
     // Add pause/resume event listeners
@@ -1245,6 +1270,13 @@ class TelegramUtilities {
       if (outputDirInput) outputDirInput.value = savedOutputDir;
       this.currentVideoOutput = savedOutputDir;
     }
+    
+    const savedImageOutputDir = localStorage.getItem("image_output_dir");
+    if (savedImageOutputDir) {
+      const imageOutputDirInput = document.getElementById("image-output-dir");
+      if (imageOutputDirInput) imageOutputDirInput.value = savedImageOutputDir;
+      this.currentImageOutput = savedImageOutputDir;
+    }
     if (savedTheme) {
       this.applyTheme(savedTheme);
     }
@@ -1269,6 +1301,9 @@ class TelegramUtilities {
     if (autoSkipIconCheckbox) localStorage.setItem("auto_skip_icon", autoSkipIconCheckbox.checked.toString());
     if (this.currentVideoOutput) {
       localStorage.setItem("video_output_dir", this.currentVideoOutput);
+    }
+    if (this.currentImageOutput) {
+      localStorage.setItem("image_output_dir", this.currentImageOutput);
     }
   }
 
@@ -3381,6 +3416,399 @@ class TelegramUtilities {
       this.resetOperationState();
       this.showToast("error", "Persistent Error", "Unable to track operation progress");
     }
+  }
+
+  // =============================================
+  // IMAGE CONVERTER METHODS
+  // =============================================
+  
+  async addImageFiles() {
+    try {
+      const files = await window.electronAPI.selectFiles({
+        filters: [
+          { name: "Image Files", extensions: ["png", "jpg", "jpeg", "webp"] },
+          { name: "All Files", extensions: ["*"] },
+        ],
+      });
+      
+      // selectFiles returns an array directly
+      if (!Array.isArray(files) || files.length === 0) {
+        return;
+      }
+      
+      // Validate files before processing
+      const validFiles = files.filter(file => {
+        if (!file || typeof file !== 'string') {
+          console.warn('Invalid file path:', file);
+          return false;
+        }
+        return true;
+      });
+      
+      if (validFiles.length === 0) {
+        this.showToast("warning", "No Valid Files", "No valid image files were selected");
+        return;
+      }
+      
+      let addedCount = 0;
+      let skippedCount = 0;
+      
+      files.forEach((file) => {
+        if (this.imageFiles.length >= 120) {
+          skippedCount++;
+          return;
+        }
+        
+        if (!this.imageFiles.some((f) => f.path === file)) {
+          // Get file metadata first
+          const metadata = {
+            name: file.split(/[\\/]/).pop(),
+            path: file,
+            status: "pending",
+            progress: 0,
+            stage: "Ready to convert"
+          };
+          
+          this.imageFiles.push(metadata);
+          addedCount++;
+          
+          // IMMEDIATE UI UPDATE - Update file count instantly
+          const counter = document.getElementById("image-file-count");
+          if (counter) {
+            counter.textContent = this.imageFiles.length;
+          }
+        } else {
+          skippedCount++;
+        }
+      });
+      
+      this.updateImageFileList();
+      
+      if (addedCount > 0) {
+        this.showToast(
+          "success",
+          "Images Added",
+          `Added ${addedCount} image files`
+        );
+      }
+      
+      if (skippedCount > 0) {
+        this.showToast(
+          "warning",
+          "Some Files Skipped",
+          `${skippedCount} files were skipped (duplicates or limit reached)`
+        );
+      }
+    } catch (error) {
+      if (RENDERER_DEBUG) console.error("Error adding images:", error);
+      
+      // Handle specific Windows file system errors
+      if (error.message && error.message.includes('Errno 22')) {
+        this.showToast(
+          "error",
+          "File Selection Error",
+          "Invalid file path or file access denied. Please check file names and try again."
+        );
+      } else {
+        this.showToast(
+          "error",
+          "Error",
+          "Failed to add image files: " + error.message
+        );
+      }
+    }
+  }
+
+  clearImageFiles() {
+    if (this.imageFiles.length === 0) {
+      this.showToast("info", "Already Empty", "No image files to clear");
+      return;
+    }
+    
+    const count = this.imageFiles.length;
+    this.imageFiles = [];
+    
+    // IMMEDIATE UI UPDATE - Update file count instantly
+    const counter = document.getElementById("image-file-count");
+    if (counter) {
+      counter.textContent = this.imageFiles.length;
+    }
+    
+    this.updateImageFileList();
+    this.showToast("info", "Cleared", `Removed ${count} image files`);
+  }
+
+  async browseImageOutput() {
+    try {
+      // Check if Electron API is available
+      if (!window.electronAPI || !window.electronAPI.selectDirectory) {
+        throw new Error("Electron directory selection API not available");
+      }
+      
+      const directory = await window.electronAPI.selectDirectory();
+      
+      if (directory) {
+        this.currentImageOutput = directory;
+        const outputInput = document.getElementById("image-output-dir");
+        if (outputInput) outputInput.value = directory;
+        this.saveSettings();
+        this.showToast(
+          "success",
+          "Directory Selected",
+          "Output directory updated"
+        );
+      }
+    } catch (error) {
+      this.showToast(
+        "error",
+        "Directory Selection Error",
+        `Failed to select directory: ${error.message}\nCheck console for details`
+      );
+    }
+  }
+
+  async startImageConversion() {
+    // Basic validation
+    if (this.imageFiles.length === 0) {
+      this.showToast("warning", "No Files", "Please add images to convert.");
+      return;
+    }
+    
+    if (!this.currentImageOutput) {
+      this.showToast("error", "No Output Folder", "Please select an output directory.");
+      await this.browseImageOutput();
+      if (!this.currentImageOutput) {
+        return;
+      }
+    }
+    
+    // Check backend connectivity
+    try {
+      const healthCheck = await this.apiRequest("GET", "/api/health");
+      
+      if (!healthCheck.success) {
+        this.showToast("error", "Backend Error", "Backend server is not responding");
+        return;
+      }
+    } catch (error) {
+      console.error("Backend health check error:", error);
+      this.showToast("error", "Connection Error", "Cannot connect to backend server");
+      return;
+    }
+    
+    // Prepare conversion data
+    const filesToConvert = this.imageFiles.map(f => f.path);
+    
+    // Check if any file paths are invalid
+    const invalidFiles = filesToConvert.filter(path => !path || path === 'undefined');
+    if (invalidFiles.length > 0) {
+      console.error("Invalid file paths found:", invalidFiles);
+      this.showToast("error", "Invalid Files", "Some files have invalid paths. Please re-add them.");
+      return;
+    }
+    
+    try {
+      // Get selected format (png or webp)
+      const activeFormatBtn = document.querySelector('.format-toggle-btn.active');
+      const format = activeFormatBtn ? activeFormatBtn.getAttribute('data-format') : 'png';
+      
+      // Get quality value
+      const qualityInput = document.getElementById('image-quality');
+      const quality = qualityInput ? parseInt(qualityInput.value) : 95;
+      
+      const requestData = {
+        files: filesToConvert,
+        output_dir: this.currentImageOutput,
+        format: format,
+        quality: quality
+      };
+      
+      const response = await this.apiRequest("POST", "/api/convert-images", requestData);
+      
+      if (response.success) {
+        this.showToast("success", "Conversion Started", `Conversion of ${filesToConvert.length} files started!`);
+        
+        // Update UI to show processing state
+        this.imageFiles.forEach(file => {
+          file.status = "processing";
+          file.progress = 0;
+          file.stage = "Converting...";
+        });
+        
+        this.updateImageFileList();
+        
+        // Start monitoring progress if process_id is provided
+        if (response.data && response.data.process_id) {
+          this.monitorImageConversion(response.data.process_id);
+        }
+      } else {
+        throw new Error(response.error || "Failed to start conversion process");
+      }
+      
+    } catch (error) {
+      console.error("Conversion start error:", error);
+      this.showToast("error", "Conversion Error", error.message);
+    }
+  }
+
+  async monitorImageConversion(processId) {
+    const MAX_CONSECUTIVE_ERRORS = 5;
+    const POLLING_INTERVAL = 1000;
+    let consecutiveErrors = 0;
+    
+    // Clear any existing intervals
+    if (this.imageProgressInterval) {
+      clearInterval(this.imageProgressInterval);
+    }
+    
+    this.imageProgressInterval = setInterval(async () => {
+      try {
+        const response = await this.apiRequest("GET", `/api/conversion-progress/${processId}`);
+        
+        if (!response.success) {
+          consecutiveErrors++;
+          if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+            throw new Error("Too many consecutive errors");
+          }
+          return;
+        }
+        
+        // Reset error counter on success
+        consecutiveErrors = 0;
+        
+        const progressData = response.data;
+        
+        // Update file statuses
+        if (progressData.file_statuses) {
+          Object.entries(progressData.file_statuses).forEach(([index, fileStatus]) => {
+            const file = this.imageFiles[parseInt(index)];
+            if (file) {
+              file.status = fileStatus.status;
+              file.progress = fileStatus.progress || 0;
+              file.stage = fileStatus.stage || 'Processing';
+            }
+          });
+          
+          this.updateImageFileList();
+        }
+        
+        // Check if process is complete
+        if (progressData.status === 'completed' || progressData.status === 'error') {
+          clearInterval(this.imageProgressInterval);
+          this.imageProgressInterval = null;
+          
+          // Update UI with final status
+          this.imageFiles.forEach(file => {
+            if (file.status === "processing") {
+              file.status = progressData.status;
+              file.progress = progressData.status === 'completed' ? 100 : 0;
+              file.stage = progressData.status === 'completed' ? 'Conversion completed' : 'Conversion failed';
+            }
+          });
+          
+          this.updateImageFileList();
+          
+          if (progressData.status === 'completed') {
+            this.showToast("success", "Conversion Complete", `Successfully converted ${progressData.completed_files}/${progressData.total_files} files`);
+          } else {
+            this.showToast("error", "Conversion Failed", progressData.current_stage || 'Conversion failed');
+          }
+        }
+        
+      } catch (error) {
+        if (RENDERER_DEBUG) console.error("Progress monitoring error:", error);
+        consecutiveErrors++;
+        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+          clearInterval(this.imageProgressInterval);
+          this.imageProgressInterval = null;
+          this.showToast("error", "Monitoring Failed", "Unable to track progress");
+        }
+      }
+    }, POLLING_INTERVAL);
+  }
+
+  updateImageFileList() {
+    const container = document.getElementById("image-file-list");
+    if (!container) {
+      // Try again after a short delay in case DOM is still loading
+      setTimeout(() => {
+        const retryContainer = document.getElementById("image-file-list");
+        if (retryContainer && this.imageFiles.length > 0) {
+          this.updateImageFileList();
+        }
+      }, 100);
+      return;
+    }
+    
+    // Update image file list
+    const fileCount = this.imageFiles.length;
+    
+    // IMMEDIATE FILE COUNT UPDATE - Do this first for instant feedback
+    const counter = document.getElementById("image-file-count");
+    if (counter) {
+      counter.textContent = this.imageFiles.length;
+    }
+    
+    if (this.imageFiles.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state-mini">
+          <i class="fas fa-image"></i>
+          <p>No images</p>
+        </div>
+      `;
+      return;
+    }
+    
+    // Create grid of image files
+    container.innerHTML = '';
+    
+    this.imageFiles.forEach((file, index) => {
+      const statusClass = file.status || "pending";
+      const progressWidth = file.progress || 0;
+      
+      const fileElement = document.createElement('div');
+      fileElement.className = `image-item ${statusClass}`;
+      fileElement.setAttribute('data-index', index);
+      
+      const progressText = progressWidth === 100 ? '✔' : `${progressWidth}%`;
+      const statusText = file.stage || "Ready to convert";
+      
+      fileElement.innerHTML = `
+        <div class="image-preview">
+          <div class="image-thumb" style="background-image: url('${file.path}');"></div>
+        </div>
+        <div class="image-info">
+          <div class="image-name" title="${file.path}">${file.name}</div>
+          <div class="image-status">${statusText}</div>
+          <div class="image-progress-container">
+            <div class="image-progress-bar">
+              <div class="image-progress-fill" style="width: ${progressWidth}%"></div>
+            </div>
+            <div class="image-progress-text">${progressText}</div>
+          </div>
+          <button class="btn btn-sm btn-danger remove-image" onclick="app.removeImageFile(${index})" title="Remove File">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      `;
+      
+      container.appendChild(fileElement);
+    });
+  }
+
+  removeImageFile(index) {
+    if (index < 0 || index >= this.imageFiles.length) return;
+    
+    const removed = this.imageFiles.splice(index, 1)[0];
+    
+    // IMMEDIATE UI UPDATE - Update file count instantly
+    const counter = document.getElementById("image-file-count");
+    if (counter) {
+      counter.textContent = this.imageFiles.length;
+    }
+    
+    this.updateImageFileList();
+    this.showToast("info", "Removed", `Removed ${removed.name}`);
   }
 
   async handleConversionComplete(progress) {
