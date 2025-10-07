@@ -536,7 +536,10 @@ class ImageHandler {
         startBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Converting...';
       }
       if (statusEl) {
-        statusEl.querySelector('.status-text').textContent = 'Processing...';
+        const statusText = statusEl.querySelector('.status-text');
+        const progressText = statusEl.querySelector('.progress-text');
+        if (statusText) statusText.textContent = 'Processing...';
+        if (progressText) progressText.textContent = '0 / 0 images (0%)';
       }
       
       const processId = `img_${Date.now()}`;
@@ -580,7 +583,7 @@ class ImageHandler {
       const startBtn = document.getElementById('start-image-conversion');
       if (startBtn) {
         startBtn.disabled = false;
-        this.updateSelectionCount(); // Restore proper button text
+        startBtn.innerHTML = '<i class="fas fa-magic"></i> Convert';
       }
       
       // Reset image statuses
@@ -617,7 +620,12 @@ class ImageHandler {
           
           // Update status display
           if (statusEl) {
+            const statusText = statusEl.querySelector('.status-text');
             const progressText = statusEl.querySelector('.progress-text');
+            if (statusText) {
+              statusText.textContent = proc.status === 'completed' ? 'Completed' : 
+                                     proc.status === 'failed' ? 'Failed' : 'Processing';
+            }
             if (progressText) {
               progressText.textContent = `${proc.completed_files || 0} / ${proc.total_files || 0} images (${proc.progress || 0}%)`;
             }
@@ -625,33 +633,35 @@ class ImageHandler {
           
           // REAL-TIME UPDATE: Update list as each image completes
           if (proc.results && proc.results.length > 0) {
+            let updated = false;
             proc.results.forEach(result => {
               const img = this.imageFiles.find(img => img.path === result.input_path);
-              if (img && !img.converted) { // Only update if not already updated
-                if (result.success) {
-                  img.converted = `file://${result.output_path}`;
-                  img.convertedPath = result.output_path;
-                  img.convertedMetadata = result.final_metadata;
-                  img.status = result.final_metadata.file_size_kb <= 512 ? 'success' : 'warning';
-                } else {
-                  img.status = 'error';
-                }
+              if (img && result.success && !img.converted) { // Only update if not already updated
+                img.converted = `file://${result.output_path}`;
+                img.convertedPath = result.output_path;
+                img.convertedMetadata = result.final_metadata;
+                img.status = result.final_metadata && result.final_metadata.file_size_kb <= 512 ? 'success' : 'warning';
+                updated = true;
+              } else if (img && !result.success && img.status === 'processing') {
+                img.status = 'error';
+                updated = true;
               }
             });
-            // Update the list view in real-time
-            this.updateImageList();
+            // Update the list view in real-time if we made changes
+            if (updated) {
+              this.updateImageList();
+            }
           }
           
           // Check if completed or failed
           if (proc.status === 'completed') {
             this.handleConversionComplete(proc);
-            if (startBtn) startBtn.disabled = false;
             return;
           } else if (proc.status === 'failed') {
             this.app.showToast('error', 'Conversion Failed', proc.error || 'Unknown error');
-            if (startBtn) startBtn.disabled = false;
             if (statusEl) {
-              statusEl.querySelector('.status-text').textContent = 'Failed';
+              const statusText = statusEl.querySelector('.status-text');
+              if (statusText) statusText.textContent = 'Failed';
             }
             // Still update what we have
             if (proc.results && proc.results.length > 0) {
@@ -662,13 +672,18 @@ class ImageHandler {
                     img.converted = `file://${result.output_path}`;
                     img.convertedPath = result.output_path;
                     img.convertedMetadata = result.final_metadata;
-                    img.status = result.final_metadata.file_size_kb <= 512 ? 'success' : 'warning';
+                    img.status = result.final_metadata && result.final_metadata.file_size_kb <= 512 ? 'success' : 'warning';
                   } else {
                     img.status = 'error';
                   }
                 }
               });
               this.updateImageList();
+            }
+            // Reset button
+            if (startBtn) {
+              startBtn.disabled = false;
+              startBtn.innerHTML = '<i class="fas fa-magic"></i> Convert';
             }
             return;
           }
@@ -678,7 +693,10 @@ class ImageHandler {
         }
       } catch (error) {
         console.error('Error checking progress:', error);
-        if (startBtn) startBtn.disabled = false;
+        if (startBtn) {
+          startBtn.disabled = false;
+          startBtn.innerHTML = '<i class="fas fa-magic"></i> Convert';
+        }
       }
     };
     
@@ -687,9 +705,20 @@ class ImageHandler {
   
   handleConversionComplete(proc) {
     const statusEl = document.getElementById('image-conversion-status');
+    const startBtn = document.getElementById('start-image-conversion');
+    
     if (statusEl) {
       statusEl.querySelector('.status-text').textContent = 'Completed';
-      statusEl.querySelector('.progress-text').textContent = `${proc.success_count || 0} successful, ${proc.failed_count || 0} failed`;
+      const progressText = statusEl.querySelector('.progress-text');
+      if (progressText) {
+        progressText.textContent = `${proc.success_count || 0} successful, ${proc.failed_count || 0} failed`;
+      }
+    }
+    
+    // Reset the convert button
+    if (startBtn) {
+      startBtn.disabled = false;
+      startBtn.innerHTML = '<i class="fas fa-magic"></i> Convert';
     }
     
     this.app.showToast('success', 'Conversion Complete', 
@@ -704,7 +733,7 @@ class ImageHandler {
             img.converted = `file://${result.output_path}`;
             img.convertedPath = result.output_path;
             img.convertedMetadata = result.final_metadata;
-            img.status = result.final_metadata.file_size_kb <= 512 ? 'success' : 'warning';
+            img.status = result.final_metadata && result.final_metadata.file_size_kb <= 512 ? 'success' : 'warning';
           } else {
             img.status = 'error';
           }
@@ -721,6 +750,13 @@ class ImageHandler {
     
     // Display results
     this.displayResults(proc.results || []);
+    
+    // Reset image selection statuses
+    this.imageFiles.forEach(img => {
+      if (img.status === 'processing') {
+        img.status = null;
+      }
+    });
   }
   
   displayResults(results) {
