@@ -539,7 +539,7 @@ class ImageHandler {
         const statusText = statusEl.querySelector('.status-text');
         const progressText = statusEl.querySelector('.progress-text');
         if (statusText) statusText.textContent = 'Processing...';
-        if (progressText) progressText.textContent = '0 / 0 images (0%)';
+        if (progressText) progressText.textContent = `0 / ${selectedImages.length} images (0%)`;
       }
       
       const processId = `img_${Date.now()}`;
@@ -627,7 +627,10 @@ class ImageHandler {
                                      proc.status === 'failed' ? 'Failed' : 'Processing';
             }
             if (progressText) {
-              progressText.textContent = `${proc.completed_files || 0} / ${proc.total_files || 0} images (${proc.progress || 0}%)`;
+              const totalFiles = proc.total_files || 0;
+              const completedFiles = proc.completed_files || 0;
+              const progressPercent = proc.progress || 0;
+              progressText.textContent = `${completedFiles} / ${totalFiles} images (${progressPercent}%)`;
             }
           }
           
@@ -690,6 +693,13 @@ class ImageHandler {
           
           // Continue monitoring
           setTimeout(checkProgress, 300); // Faster polling for better responsiveness
+        } else {
+          // Handle case where process is not found or response is invalid
+          console.warn('[MONITOR] Invalid response or process not found');
+          if (startBtn) {
+            startBtn.disabled = false;
+            startBtn.innerHTML = '<i class="fas fa-magic"></i> Convert';
+          }
         }
       } catch (error) {
         console.error('Error checking progress:', error);
@@ -708,10 +718,13 @@ class ImageHandler {
     const startBtn = document.getElementById('start-image-conversion');
     
     if (statusEl) {
-      statusEl.querySelector('.status-text').textContent = 'Completed';
+      const statusText = statusEl.querySelector('.status-text');
       const progressText = statusEl.querySelector('.progress-text');
+      if (statusText) statusText.textContent = 'Completed';
       if (progressText) {
-        progressText.textContent = `${proc.success_count || 0} successful, ${proc.failed_count || 0} failed`;
+        const successCount = proc.success_count || 0;
+        const totalCount = proc.total_files || 0;
+        progressText.textContent = `${successCount} successful, ${proc.failed_count || 0} failed`;
       }
     }
     
@@ -757,6 +770,9 @@ class ImageHandler {
         img.status = null;
       }
     });
+    
+    // Update selection count to reflect current state
+    this.updateSelectionCount();
   }
   
   displayResults(results) {
