@@ -268,45 +268,6 @@ class ImageProcessor:
                 'success': False,
                 'error': str(e)
             }
-    
-    def process_batch(self, input_files, output_dir, output_format='png', quality=95, progress_callback=None):
-        """
-        Process multiple images in batch
-        
-        Args:
-            input_files: List of input file paths
-            output_dir: Directory to save processed images
-            output_format: 'png' or 'webp'
-            quality: Quality level (1-100)
-            progress_callback: Optional callback function(current, total, result)
-        
-        Returns:
-            list: List of processing results
-        """
-        output_dir = Path(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        
-        results = []
-        total = len(input_files)
-        
-        for idx, input_file in enumerate(input_files):
-            self.logger.info(f"[BATCH] Processing {idx + 1}/{total}: {os.path.basename(input_file)}")
-            
-            # Generate output filename
-            input_path = Path(input_file)
-            output_filename = f"{input_path.stem}_processed.{output_format}"
-            output_path = output_dir / output_filename
-            
-            # Process image
-            result = self.process_image(input_file, str(output_path), output_format, quality)
-            results.append(result)
-            
-            # Call progress callback if provided
-            if progress_callback:
-                progress_callback(idx + 1, total, result)
-        
-        self.logger.info(f"[BATCH] Completed: {sum(1 for r in results if r['success'])}/{total} successful")
-        return results
 
 
 # Global instance
