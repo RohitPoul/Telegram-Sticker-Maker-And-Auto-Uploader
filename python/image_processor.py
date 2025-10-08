@@ -8,13 +8,14 @@ import io
 
 class ImageProcessor:
     """
-    Image processor for Telegram sticker requirements using ImageMagick
+    Image processor for Telegram sticker requirements using ImageMagick ONLY
     Requirements:
     - One side exactly 512 pixels, other side 512 or less
     - PNG or WEBP format
     - Maximum file size 512 KB
     - Preserve transparency
     - High quality output
+    - ImageMagick is REQUIRED - no fallbacks
     """
     
     def __init__(self):
@@ -126,8 +127,7 @@ class ImageProcessor:
     
     def process_image(self, input_path, output_path, output_format='png', quality=95):
         """
-        Process image to meet Telegram sticker requirements using PIL/Pillow
-        This avoids subprocess issues by using pure Python image processing
+        Process image to meet Telegram sticker requirements using ImageMagick
         
         Args:
             input_path: Path to input image
@@ -162,47 +162,20 @@ class ImageProcessor:
             output_path = Path(output_path)
             output_path = output_path.with_suffix(f'.{output_format}')
             
-            # Process image using PIL/Pillow
-            self.logger.info(f"[PROCESSING] Converting {os.path.basename(input_path)} to {output_format.upper()} using PIL")
-            self.logger.info(f"[PROCESSING] Target dimensions: {new_width}x{new_height}")
+            # Use ImageMagick - no fallback, no compromise
+            if not self.imagemagick_available:
+                return {
+                    'success': False,
+                    'error': 'ImageMagick is required but not available. Please install ImageMagick.'
+                }
             
-            from PIL import Image
+            self.logger.info(f"[PROCESSING] Converting {os.path.basename(input_path)} to {output_format.upper()} using ImageMagick")
+            result = self._process_with_imagemagick(input_path, str(output_path), output_format, quality, new_width, new_height)
             
-            # Open and resize image
-            with Image.open(input_path) as img:
-                # Resize image
-                resized_img = img.resize((new_width, new_height), Image.LANCZOS)
-                
-                # Handle transparency
-                if resized_img.mode in ('RGBA', 'LA') or (resized_img.mode == 'P' and 'transparency' in resized_img.info):
-                    # Ensure we have an alpha channel
-                    if resized_img.mode != 'RGBA':
-                        resized_img = resized_img.convert('RGBA')
-                else:
-                    # Convert to RGB if no transparency
-                    resized_img = resized_img.convert('RGB')
-                
-                # Save image with appropriate settings
-                save_kwargs = {}
-                if output_format == 'png':
-                    save_kwargs.update({
-                        'optimize': True,
-                        'compress_level': 9
-                    })
-                elif output_format == 'webp':
-                    save_kwargs.update({
-                        'quality': quality,
-                        'method': 6,
-                        'lossless': False
-                    })
-                
-                # Save the image
-                resized_img.save(str(output_path), format=output_format.upper(), **save_kwargs)
+            if not result['success']:
+                return result
             
             # Check if file was created and get final metadata
-            self.logger.info(f"[PROCESSING] Checking if output file was created: {output_path}")
-            self.logger.info(f"[PROCESSING] Output file exists: {os.path.exists(output_path)}")
-            
             if not output_path.exists():
                 self.logger.error(f"[PROCESSING] Output file was not created: {output_path}")
                 return {
@@ -212,42 +185,25 @@ class ImageProcessor:
             
             final_metadata = self.get_image_metadata(str(output_path))
             
-            # Check file size - if over 512KB, reduce quality (for WebP only)
+            # Check file size - if over 512KB, reduce quality
             if final_metadata and final_metadata['file_size_kb'] > self.MAX_FILE_SIZE_KB:
-                if output_format == 'webp':
-                    self.logger.warning(f"[SIZE] Output size {final_metadata['file_size_kb']:.2f}KB exceeds {self.MAX_FILE_SIZE_KB}KB, reducing quality")
-                    # Try with lower quality
-                    with Image.open(input_path) as img:
-                        resized_img = img.resize((new_width, new_height), Image.LANCZOS)
-                        if resized_img.mode in ('RGBA', 'LA') or (resized_img.mode == 'P' and 'transparency' in resized_img.info):
-                            if resized_img.mode != 'RGBA':
-                                resized_img = resized_img.convert('RGBA')
-                        else:
-                            resized_img = resized_img.convert('RGB')
-                        
-                        # Save with lower quality
-                        resized_img.save(str(output_path), format='WEBP', quality=50, method=6, lossless=False)
-                    
+                self.logger.warning(f"[SIZE] Output size {final_metadata['file_size_kb']:.2f}KB exceeds {self.MAX_FILE_SIZE_KB}KB, reducing quality")
+                
+                # Try with lower quality
+                reduced_quality = max(50, quality - 20)
+                result = self._process_with_imagemagick(input_path, str(output_path), output_format, reduced_quality, new_width, new_height)
+                
+                if result['success']:
                     final_metadata = self.get_image_metadata(str(output_path))
                     
                     if final_metadata and final_metadata['file_size_kb'] > self.MAX_FILE_SIZE_KB:
-                        # If still too large, convert to PNG
-                        self.logger.warning(f"[SIZE] WebP still too large, converting to PNG")
-                        with Image.open(input_path) as img:
-                            resized_img = img.resize((new_width, new_height), Image.LANCZOS)
-                            if resized_img.mode in ('RGBA', 'LA') or (resized_img.mode == 'P' and 'transparency' in resized_img.info):
-                                if resized_img.mode != 'RGBA':
-                                    resized_img = resized_img.convert('RGBA')
-                            else:
-                                resized_img = resized_img.convert('RGB')
-                            
-                            output_path = output_path.with_suffix('.png')
-                            resized_img.save(str(output_path), format='PNG', optimize=True, compress_level=9)
+                        # If still too large, convert to PNG with maximum compression
+                        self.logger.warning(f"[SIZE] Still too large, converting to PNG with maximum compression")
+                        result = self._process_with_imagemagick(input_path, str(output_path.with_suffix('.png')), 'png', 50, new_width, new_height)
                         
-                        final_metadata = self.get_image_metadata(str(output_path))
-                else:
-                    # For PNG, we've already used maximum compression
-                    self.logger.warning(f"[SIZE] PNG output size {final_metadata['file_size_kb']:.2f}KB exceeds {self.MAX_FILE_SIZE_KB}KB but cannot reduce further")
+                        if result['success']:
+                            final_metadata = self.get_image_metadata(str(output_path.with_suffix('.png')))
+                            output_path = output_path.with_suffix('.png')
             
             self.logger.info(f"[SUCCESS] Processed {os.path.basename(input_path)} -> {final_metadata['file_size_kb']:.2f}KB")
             
@@ -269,6 +225,64 @@ class ImageProcessor:
                 'error': str(e)
             }
 
+    def _process_with_imagemagick(self, input_path, output_path, output_format, quality, new_width, new_height):
+        """Process image using ImageMagick command line"""
+        try:
+            # Build ImageMagick command
+            cmd = ['magick', input_path]
+            
+            # Resize image
+            cmd.extend(['-resize', f'{new_width}x{new_height}!'])
+            
+            # Set quality based on format
+            if output_format == 'webp':
+                cmd.extend(['-quality', str(quality)])
+            elif output_format == 'png':
+                # PNG quality mapping - INVERTED for consistent user experience:
+                # User expects: Higher quality = Larger file size (like WebP)
+                # PNG reality: Higher quality = Better compression = Smaller file size
+                # So we invert: User quality 50 -> ImageMagick quality 95 (small file)
+                #               User quality 95 -> ImageMagick quality 10 (large file)
+                if quality <= 50:
+                    png_quality = 95  # Small file
+                elif quality <= 70:
+                    png_quality = 50  # Medium file
+                elif quality <= 85:
+                    png_quality = 25  # Larger file
+                else:
+                    png_quality = 10  # Largest file
+                cmd.extend(['-quality', str(png_quality)])
+            
+            # Preserve transparency (use correct syntax)
+            cmd.extend(['-alpha', 'set'])
+            
+            # Output file
+            cmd.append(output_path)
+            
+            self.logger.info(f"[IMAGEMAGICK] Command: {' '.join(cmd)}")
+            
+            # Execute command
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode == 0:
+                self.logger.info(f"[IMAGEMAGICK] Successfully processed {os.path.basename(input_path)}")
+                return {'success': True}
+            else:
+                self.logger.error(f"[IMAGEMAGICK] Command failed: {result.stderr}")
+                return {'success': False, 'error': f'ImageMagick command failed: {result.stderr}'}
+                
+        except subprocess.TimeoutExpired:
+            self.logger.error("[IMAGEMAGICK] Command timed out")
+            return {'success': False, 'error': 'ImageMagick command timed out'}
+        except Exception as e:
+            self.logger.error(f"[IMAGEMAGICK] Error: {e}")
+            return {'success': False, 'error': str(e)}
+    
 
 # Global instance
 image_processor = ImageProcessor()
