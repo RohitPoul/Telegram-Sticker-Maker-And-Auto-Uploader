@@ -17,6 +17,29 @@ class ImageHandler {
     this.init();
   }
   
+  // Ensure UI and state are reset when images are cleared/removed
+  resetConversionUI() {
+    this.currentProcessId = null;
+    this.previewMode = 'original';
+
+    const statusEl = document.getElementById('image-conversion-status');
+    if (statusEl) {
+      const statusText = statusEl.querySelector('.status-text');
+      const progressText = statusEl.querySelector('.progress-text');
+      if (statusText) statusText.textContent = 'Ready';
+      if (progressText) progressText.textContent = '';
+    }
+
+    const convertBtn = document.getElementById('start-image-conversion');
+    if (convertBtn) {
+      const canConvert = this.imageFiles.some(img => img.selected) && this.outputDir;
+      convertBtn.disabled = !canConvert;
+      convertBtn.innerHTML = '<i class="fas fa-magic"></i> Convert';
+    }
+
+    this.updateImageDetails(null);
+  }
+
   init() {
     this.setupEventListeners();
     this.checkImageMagick();
@@ -93,11 +116,6 @@ class ImageHandler {
       deselectAllBtn.addEventListener('click', () => this.deselectAllImages());
     }
     
-    // Clear results button
-    const clearResultsBtn = document.getElementById('clear-image-results');
-    if (clearResultsBtn) {
-      clearResultsBtn.addEventListener('click', () => this.clearResults());
-    }
   }
   
   async checkImageMagick() {
@@ -172,6 +190,7 @@ class ImageHandler {
       this.updateImageList();
       this.updateImageDetails(null);
       this.app.showToast('info', 'Images Cleared', 'All images have been removed');
+      this.resetConversionUI();
       
       // Force garbage collection hint
       if (window.gc) window.gc();
@@ -362,6 +381,9 @@ class ImageHandler {
     }
     this.updateImageList();
     this.updateSelectionCount();
+    if (this.imageFiles.length === 0) {
+      this.resetConversionUI();
+    }
   }
   
   selectImage(index) {
@@ -427,6 +449,14 @@ class ImageHandler {
           <div class="preview-info-item">
             <span class="label">File:</span>
             <span class="value ${previewMeta.file_size_kb > 512 ? 'text-error' : 'text-success'}">${previewMeta.file_size_kb}KB</span>
+          </div>
+          <div class="preview-info-item">
+            <span class="label">Input:</span>
+            <span class="value">${meta.format ? meta.format.toUpperCase() : 'Unknown'}</span>
+          </div>
+          <div class="preview-info-item">
+            <span class="label">Output:</span>
+            <span class="value">${this.selectedFormat ? this.selectedFormat.toUpperCase() : 'PNG'}</span>
           </div>
         </div>
       </div>
@@ -761,8 +791,6 @@ class ImageHandler {
       }
     }
     
-    // Display results
-    this.displayResults(proc.results || []);
     
     // Reset image selection statuses
     this.imageFiles.forEach(img => {
@@ -775,63 +803,6 @@ class ImageHandler {
     this.updateSelectionCount();
   }
   
-  displayResults(results) {
-    const resultsCard = document.getElementById('image-results-card');
-    const resultsList = document.getElementById('image-results-list');
-    
-    if (!resultsCard || !resultsList) return;
-    
-    resultsCard.style.display = 'block';
-    resultsList.innerHTML = '';
-    
-    results.forEach((result, index) => {
-      const resultItem = document.createElement('div');
-      resultItem.className = `result-item ${result.success ? 'success' : 'failed'}`;
-      
-      if (result.success) {
-        const original = result.original_metadata;
-        const final = result.final_metadata;
-        
-        resultItem.innerHTML = `
-          <div class="result-icon">
-            <i class="fas fa-${result.success ? 'check-circle' : 'times-circle'}"></i>
-          </div>
-          <div class="result-content">
-            <div class="result-filename">${original.filename}</div>
-            <div class="result-details">
-              <span>${original.width}x${original.height} (${original.file_size_kb}KB)</span>
-              <i class="fas fa-arrow-right"></i>
-              <span>${final.width}x${final.height} (${final.file_size_kb}KB)</span>
-              <span class="result-format">${result.output_format.toUpperCase()}</span>
-            </div>
-          </div>
-          <button class="btn btn-sm btn-secondary" onclick="window.electronAPI.openExternal('file://${result.output_path.replace(/\\/g, '/')}')">
-            <i class="fas fa-folder-open"></i> Open
-          </button>
-        `;
-      } else {
-        resultItem.innerHTML = `
-          <div class="result-icon">
-            <i class="fas fa-times-circle"></i>
-          </div>
-          <div class="result-content">
-            <div class="result-filename">${result.input_path.split('/').pop().split('\\').pop()}</div>
-            <div class="result-error">${result.error}</div>
-          </div>
-        `;
-      }
-      
-      resultsList.appendChild(resultItem);
-    });
-  }
-  
-  clearResults() {
-    const resultsCard = document.getElementById('image-results-card');
-    const resultsList = document.getElementById('image-results-list');
-    
-    if (resultsCard) resultsCard.style.display = 'none';
-    if (resultsList) resultsList.innerHTML = '';
-  }
 }
 
 // Export for use in main app
