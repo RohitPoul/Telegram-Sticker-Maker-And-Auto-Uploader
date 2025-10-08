@@ -2199,124 +2199,92 @@ def process_batch_images():
         }
         add_process(process_id, process_data)
         
-        # Start processing in background thread (like video conversion)
-        def image_batch_thread():
+        # Start background thread so frontend can poll live progress
+        logger.info(f"[IMAGE_BATCH] ========== THREADED PROCESSING START ==========")
+        logger.info(f"[IMAGE_BATCH] Process ID: {process_id}")
+        logger.info(f"[IMAGE_BATCH] Total files: {len(input_files)}")
+        logger.info(f"[IMAGE_BATCH] Output dir: {output_dir}")
+        logger.info(f"[IMAGE_BATCH] Format: {output_format}, Quality: {quality}")
+
+        def _run_image_batch(process_id_local: str, files: list, out_dir: str, fmt: str, qual: int):
             try:
-                logger.info(f"[IMAGE_BATCH] ========== BACKGROUND THREAD STARTED ==========")
-                logger.info(f"[IMAGE_BATCH] Process ID: {process_id}")
-                logger.info(f"[IMAGE_BATCH] Total files: {len(input_files)}")
-                logger.info(f"[IMAGE_BATCH] Output dir: {output_dir}")
-                logger.info(f"[IMAGE_BATCH] Format: {output_format}, Quality: {quality}")
-                
-                # Update status to processing
-                with process_lock:
-                    proc = get_process(process_id)
-                    if proc:
-                        proc["status"] = "processing"
-                        update_process(process_id, proc)
-                
-                # Import image processor
+                # Import here to avoid any circular import at module load time
                 from image_processor import image_processor
-                
-                # Ensure output directory exists
-                os.makedirs(output_dir, exist_ok=True)
-                
-                results = []
-                total_files = len(input_files)
-                
-                logger.info(f"[IMAGE_BATCH] Starting background processing loop with {total_files} files")
-                
-                # Process each file one by one
-                for idx, input_file in enumerate(input_files):
+                os.makedirs(out_dir, exist_ok=True)
+
+                results_local = []
+                total_files_local = len(files)
+
+                with process_lock:
+                    if process_id_local in active_processes:
+                        active_processes[process_id_local]["status"] = "processing"
+                        active_processes[process_id_local]["progress"] = 0
+
+                for idx, input_file in enumerate(files):
                     try:
-                        logger.info(f"[IMAGE_BATCH] Processing {idx + 1}/{total_files}: {os.path.basename(input_file)}")
-                        logger.info(f"[IMAGE_BATCH] Full input path: {input_file}")
-                        logger.info(f"[IMAGE_BATCH] Input file exists: {os.path.exists(input_file)}")
-                        
-                        # Update current file in process tracking
                         with process_lock:
-                            proc = get_process(process_id)
-                            if proc:
-                                proc["current_file"] = input_file
-                                update_process(process_id, proc)
-                        
-                        # Generate output filename
+                            if process_id_local in active_processes:
+                                active_processes[process_id_local]["current_file"] = input_file
+
                         input_path = Path(input_file)
-                        output_filename = f"{input_path.stem}_processed.{output_format}"
-                        output_path = Path(output_dir) / output_filename
-                        
-                        # Process single image using existing logic
+                        output_filename = f"{input_path.stem}_processed.{fmt}"
+                        output_path = Path(out_dir) / output_filename
+
                         result = image_processor.process_image(
                             input_path=input_file,
                             output_path=str(output_path),
-                            output_format=output_format,
-                            quality=quality
+                            output_format=fmt,
+                            quality=qual
                         )
-                        
-                        results.append(result)
-                        
-                        # Update process tracking
-                        with process_lock:
-                            proc = get_process(process_id)
-                            if proc:
-                                proc["completed_files"] = idx + 1
-                                proc["progress"] = int(((idx + 1) / total_files) * 100)
-                                proc["results"] = results.copy()
-                                update_process(process_id, proc)
-                                logger.info(f"[IMAGE_BATCH] Updated process: {idx + 1}/{total_files} - Success: {result.get('success', False)}")
-                                    
-                    except Exception as e:
-                        logger.error(f"[IMAGE_BATCH] Error processing file {input_file}: {e}", exc_info=True)
-                        # Continue with next file even if one fails
+
+                        results_local.append(result)
+                    except Exception as file_err:
                         error_result = {
                             'success': False,
-                            'error': str(e),
+                            'error': str(file_err),
                             'input_path': input_file
                         }
-                        results.append(error_result)
-                        
-                        # Update process tracking with error
+                        results_local.append(error_result)
+                    finally:
+                        # Update per-file progress after each file
                         with process_lock:
-                            proc = get_process(process_id)
-                            if proc:
-                                proc["completed_files"] = idx + 1
-                                proc["progress"] = int(((idx + 1) / total_files) * 100)
-                                proc["results"] = results.copy()
-                                update_process(process_id, proc)
-                                logger.info(f"[IMAGE_BATCH] Updated process with error: {idx + 1}/{total_files}")
-                
-                # Final status update
-                success_count = sum(1 for r in results if r.get('success', False))
-                logger.info(f"[IMAGE_BATCH] Batch processing completed! Success: {success_count}/{total_files}")
-                
+                            if process_id_local in active_processes:
+                                completed = idx + 1
+                                active_processes[process_id_local]["completed_files"] = completed
+                                active_processes[process_id_local]["progress"] = int((completed / total_files_local) * 100)
+                                active_processes[process_id_local]["results"] = results_local.copy()
+
+                success_count_local = sum(1 for r in results_local if r.get('success', False))
                 with process_lock:
-                    update_process(process_id, {
-                        "status": "completed" if success_count > 0 else "failed",
-                        "completed_files": total_files,
-                        "progress": 100,
-                        "results": results,
-                        "success_count": success_count,
-                        "failed_count": total_files - success_count,
-                        "end_time": time.time()
-                    })
-                    logger.info(f"[IMAGE_BATCH] Final status updated for process {process_id}")
-                    
-            except Exception as e:
-                logger.error(f"[IMAGE_BATCH] CRITICAL ERROR in batch processing thread: {e}", exc_info=True)
+                    if process_id_local in active_processes:
+                        active_processes[process_id_local].update({
+                            "status": "completed" if success_count_local > 0 else "failed",
+                            "completed_files": total_files_local,
+                            "progress": 100,
+                            "results": results_local,
+                            "success_count": success_count_local,
+                            "failed_count": total_files_local - success_count_local,
+                            "end_time": time.time()
+                        })
+                logger.info(f"[IMAGE_BATCH] Thread finished for {process_id_local}")
+            except Exception as thread_err:
+                logger.error(f"[IMAGE_BATCH] Thread error: {thread_err}", exc_info=True)
                 with process_lock:
-                    update_process(process_id, {
-                        "status": "failed",
-                        "error": str(e),
-                        "end_time": time.time()
-                    })
-                    logger.error(f"[IMAGE_BATCH] Process {process_id} marked as failed")
-        
-        # Start the background thread
-        thread = threading.Thread(target=image_batch_thread, daemon=True)
-        thread.start()
-        
-        # Return immediately with process_id so frontend can start polling
-        logger.info(f"[IMAGE_BATCH] Batch processing started successfully! Process ID: {process_id}")
+                    if process_id_local in active_processes:
+                        active_processes[process_id_local].update({
+                            "status": "failed",
+                            "error": str(thread_err),
+                            "end_time": time.time()
+                        })
+
+        import threading
+        th = threading.Thread(
+            target=_run_image_batch,
+            args=(process_id, input_files, output_dir, output_format, quality),
+            daemon=True
+        )
+        th.start()
+
         return jsonify({
             "success": True,
             "process_id": process_id,
