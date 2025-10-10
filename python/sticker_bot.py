@@ -391,7 +391,7 @@ class SimpleConversationManager:
         self.logger.info(f"[DEBUG] Stopped listening for bot messages in thread: {thread_name}")
 
     async def wait_for_response(self, expected_type: BotResponseType, timeout: float = 30.0):
-        self.logger.info(f"[WAIT] Waiting for {expected_type.value}")
+        self.logger.info(f"[WAIT] Waiting for {expected_type.value} with timeout {timeout}s")
         start_time = time.time()
         
         while time.time() - start_time < timeout:
@@ -401,7 +401,11 @@ class SimpleConversationManager:
                     response = await asyncio.wait_for(self.response_queue.get(), timeout=2.0)
                 except asyncio.TimeoutError:
                     # Continue waiting - this is expected
+                    elapsed = time.time() - start_time
+                    self.logger.debug(f"[WAIT] Still waiting for {expected_type.value}, {timeout - elapsed:.1f}s remaining")
                     continue
+                
+                self.logger.info(f"[WAIT] Received response: {response.response_type.value} - '{response.message[:50]}...'")
                 
                 if response.response_type == expected_type:
                     self.logger.info(f"[SUCCESS] Received expected response: {expected_type.value}")
@@ -459,9 +463,12 @@ class SimpleConversationManager:
 
         # Send message
         if os.path.exists(message):
+            file_size = os.path.getsize(message)
+            self.logger.info(f"[MSG] Sending file: {message} (size: {file_size} bytes)")
             await self.client.send_file(self.bot_peer, message, force_document=True)
             self.logger.info(f"[MSG] Sent file as document: {os.path.basename(message)}")
         else:
+            self.logger.info(f"[MSG] Sending text message: {message}")
             await self.client.send_message(self.bot_peer, message)
             self.logger.info(f"[MSG] Sent message: {message}")
 
@@ -472,6 +479,8 @@ class SimpleConversationManager:
         else:
             # Wait for specific response type
             response = await self.wait_for_response(expected_response, timeout)
+        
+        self.logger.info(f"[MSG] Completed send_and_wait for '{message[:50]}...'")
         return response
 
     async def send_file_and_wait(self, file_path: str, expected_response: BotResponseType, timeout: float = 60.0):
@@ -489,10 +498,13 @@ class SimpleConversationManager:
         # This is especially important for sticker creation where image quality must be preserved
         await self.client.send_file(self.bot_peer, file_path, force_document=True)
         self.logger.info(f"[FILE] Sent file as document: {os.path.basename(file_path)}")
+        self.logger.info(f"[FILE] File size: {os.path.getsize(file_path)} bytes")
+        self.logger.info(f"[FILE] File modification time: {os.path.getmtime(file_path)}")
 
         # Wait for response with retry mechanism for timeouts
         try:
             response = await self.wait_for_response(expected_response, timeout)
+            self.logger.info(f"[FILE] Successfully received expected response for {os.path.basename(file_path)}: {response.response_type.value}")
             return response
         except asyncio.TimeoutError:
             self.logger.warning(f"[FILE] Timeout waiting for response after sending {os.path.basename(file_path)}")
@@ -750,6 +762,15 @@ class StickerBotCore:
             self.logger.info(f"[STICKER] Starting pack creation: {pack_name}")
             self.logger.info(f"[STICKER] Process ID: {process_id}")
             self.logger.info(f"[STICKER] Available processes: {list(active_processes.keys())}")
+            
+            # Initialize process tracking data
+            with process_lock:
+                if process_id in active_processes:
+                    active_processes[process_id]['completed_files'] = 0
+                    active_processes[process_id]['failed_files'] = 0
+                    active_processes[process_id]['file_statuses'] = {}
+                    active_processes[process_id]['total_files'] = len(media_items)
+                    self.logger.info(f"[STICKER] Initialized process tracking for {len(media_items)} files")
 
             # Step 1: Create new sticker pack
             command = "/newvideo" if sticker_type == "video" else "/newpack"
@@ -798,15 +819,38 @@ class StickerBotCore:
 
                     self.logger.info(f"[STICKER] Emoji accepted: {response.message[:100]}...")
 
+
                     # Update progress
                     with process_lock:
                         if process_id in active_processes:
                             active_processes[process_id]['completed_files'] = i + 1
                             active_processes[process_id]['progress'] = ((i + 1) / len(media_items)) * 100
                             active_processes[process_id]['current_stage'] = f'Completed {filename}'
+                            # Track individual file status
+                            if 'file_statuses' not in active_processes[process_id]:
+                                active_processes[process_id]['file_statuses'] = {}
+                            active_processes[process_id]['file_statuses'][filename] = {
+                                'status': 'completed',
+                                'emoji': media_item.emoji,
+                                'completed_at': time.time()
+                            }
 
                 except Exception as e:
                     self.logger.error(f"[STICKER] Error processing {filename}: {e}")
+                    self.logger.error(f"[STICKER] Full traceback: {traceback.format_exc()}")
+                    # Track failed file status
+                    with process_lock:
+                        if process_id in active_processes:
+                            if 'file_statuses' not in active_processes[process_id]:
+                                active_processes[process_id]['file_statuses'] = {}
+                            active_processes[process_id]['file_statuses'][filename] = {
+                                'status': 'failed',
+                                'error': str(e),
+                                'emoji': media_item.emoji,
+                                'failed_at': time.time()
+                            }
+                            # Update failed files count
+                            active_processes[process_id]['failed_files'] = active_processes[process_id].get('failed_files', 0) + 1
                     # Continue with next file instead of failing completely
                     continue
 
