@@ -39,6 +39,9 @@ def get_next_process_id():
 def add_process(process_id, process_data):
     """Add a process to active_processes"""
     with process_lock:
+        # Ensure default values for tracking
+        process_data.setdefault('failed_files', 0)
+        process_data.setdefault('file_statuses', {})
         active_processes[process_id] = process_data
         shared_logger.info(f"Added process {process_id} to active_processes")
         shared_logger.info(f"Current processes: {list(active_processes.keys())}")
