@@ -5475,6 +5475,21 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
                 progress.status || "processing";
             }
           }
+          
+          // Show detailed file status updates
+          if (progress.file_statuses) {
+            const failedFiles = Object.values(progress.file_statuses).filter(status => status.status === 'failed').length;
+            const completedFiles = Object.values(progress.file_statuses).filter(status => status.status === 'completed').length;
+            
+            if (failedFiles > 0) {
+              this.addStatusItem(`⚠️ ${failedFiles} files failed during processing. Check logs for details.`, "warning");
+            }
+            
+            // Show completed files periodically to avoid spam
+            if (completedFiles > 0 && completedFiles % 10 === 0) {
+              this.addStatusItem(`✅ ${completedFiles} files completed successfully`, "info");
+            }
+          }
         } else {
           consecutiveErrors++;
           
@@ -5498,18 +5513,46 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
             return;
           }
           
+          // Show detailed error information
+          this.addStatusItem(`⚠️ Monitoring error ${consecutiveErrors}/3: ${response.error || 'Unknown error'}`, "warning");
+          
           // OPTIMIZED: Reduced from 5 to 3 for faster failure detection
           if (consecutiveErrors >= 3) {
             this.stopStickerProgressMonitoring();
             this.addStatusItem("❌ Process monitoring failed - sticker creation may have stopped", "error");
+            // Show last known progress for debugging
+            if (this.lastKnownProgress) {
+              const completed = this.lastKnownProgress.completed_files || 0;
+              const total = this.lastKnownProgress.total_files || 0;
+              const failed = this.lastKnownProgress.failed_files || 0;
+              this.addStatusItem(`📊 Last known status: ${completed}/${total} completed, ${failed} failed`, "info");
+            }
           }
         }
       } catch (error) {
         consecutiveErrors++;
         
+        // Show detailed error information
+        this.addStatusItem(`⚠️ Monitoring error ${consecutiveErrors}/3: ${error.message}`, "warning");
+        
         if (consecutiveErrors >= 3) {
           this.stopStickerProgressMonitoring();
-          this.addStatusItem(`❌ Monitoring error: ${error.message}`, "error");
+          this.addStatusItem("❌ Process monitoring failed - sticker creation may have stopped", "error");
+          this.addStatusItem(`🔧 Technical details: ${error.message}`, "info");
+          this.addStatusItem("📋 Please check the application logs for more detailed information about what caused the process to stop", "info");
+          
+          // Show last known progress for debugging
+          if (this.lastKnownProgress) {
+            const completed = this.lastKnownProgress.completed_files || 0;
+            const total = this.lastKnownProgress.total_files || 0;
+            const failed = this.lastKnownProgress.failed_files || 0;
+            this.addStatusItem(`📊 Last known status: ${completed}/${total} completed, ${failed} failed`, "info");
+            
+            // Show information about the last file being processed
+            if (this.lastKnownProgress.current_file) {
+              this.addStatusItem(`📂 Last file processed: ${this.lastKnownProgress.current_file}`, "info");
+            }
+          }
         }
       }
       
@@ -5552,7 +5595,32 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       progress.completed_files !== undefined &&
       progress.total_files !== undefined
     ) {
-      progressText.textContent = `${progress.completed_files}/${progress.total_files} files processed`;
+      const failedFiles = progress.failed_files || 0;
+      if (failedFiles > 0) {
+        progressText.textContent = `${progress.completed_files}/${progress.total_files} files processed (${failedFiles} failed)`;
+      } else {
+        progressText.textContent = `${progress.completed_files}/${progress.total_files} files processed`;
+      }
+    }
+    
+    // Update individual file statuses if available
+    if (progress.file_statuses) {
+      this.updateFileStatuses(progress.file_statuses);
+    }
+  }
+  
+  updateFileStatuses(fileStatuses) {
+    // Update the UI with individual file statuses
+    const statusList = document.getElementById("sticker-status-list");
+    if (!statusList) return;
+    
+    // Add detailed file status information
+    for (const [filename, statusInfo] of Object.entries(fileStatuses)) {
+      if (statusInfo.status === 'failed') {
+        this.addStatusItem(`❌ Failed to process ${filename}: ${statusInfo.error}`, "error");
+      } else if (statusInfo.status === 'completed') {
+        this.addStatusItem(`✅ Completed ${filename} with emoji ${statusInfo.emoji}`, "completed");
+      }
     }
   }
 
