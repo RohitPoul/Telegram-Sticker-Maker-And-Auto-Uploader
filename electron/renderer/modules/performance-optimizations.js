@@ -128,7 +128,6 @@ class PerformanceOptimizer {
     // Skip modal optimization - handled separately
     // Skip list optimization for now - can cause performance issues
     
-    console.log('✅ Selective GPU optimizations applied');
   }
 
   // Debounced scroll optimization
@@ -289,14 +288,6 @@ class PerformanceOptimizer {
     
     this.setupMemoryCleanup();
     
-    console.log('✅ Lightweight performance optimizations initialized', {
-      gpuAccelerated: this.isGPUAccelerated,
-      optimizationsApplied: [
-        'Selective GPU acceleration',
-        'Memory cleanup',
-        'FPS monitoring disabled (performance gain)'
-      ]
-    });
   }
 }
 
