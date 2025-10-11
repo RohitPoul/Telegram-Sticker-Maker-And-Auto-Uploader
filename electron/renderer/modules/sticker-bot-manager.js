@@ -449,6 +449,58 @@ class StickerBotManager {
   }
 
   // =============================================
+  // STATUS MESSAGING
+  // =============================================
+  
+  showSingleStatusMessage(message, type = "info") {
+    // Remove any existing status messages
+    const existingStatus = document.querySelector('.sticker-status-message');
+    if (existingStatus) {
+      existingStatus.remove();
+    }
+    
+    // Create new status message
+    const statusDiv = document.createElement('div');
+    statusDiv.className = `sticker-status-message ${type}`;
+    statusDiv.innerHTML = `
+      <div class="status-content">
+        <span class="status-icon">${type === 'info' ? 'ℹ️' : type === 'success' ? '✅' : type === 'error' ? '❌' : '⚠️'}</span>
+        <span class="status-text">${message}</span>
+      </div>
+    `;
+    
+    // Add styles
+    statusDiv.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: ${type === 'info' ? '#e3f2fd' : type === 'success' ? '#e8f5e8' : type === 'error' ? '#ffebee' : '#fff3e0'};
+      border: 1px solid ${type === 'info' ? '#2196f3' : type === 'success' ? '#4caf50' : type === 'error' ? '#f44336' : '#ff9800'};
+      border-radius: 8px;
+      padding: 12px 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      z-index: 10000;
+      max-width: 400px;
+      font-size: 14px;
+      transition: all 0.3s ease;
+    `;
+    
+    // Add to page
+    document.body.appendChild(statusDiv);
+    
+    // Auto-remove after 5 seconds for info messages
+    if (type === 'info') {
+      setTimeout(() => {
+        if (statusDiv.parentNode) {
+          statusDiv.style.opacity = '0';
+          statusDiv.style.transform = 'translateX(100%)';
+          setTimeout(() => statusDiv.remove(), 300);
+        }
+      }, 5000);
+    }
+  }
+
+  // =============================================
   // STICKER PACK CREATION
   // =============================================
   
@@ -518,7 +570,8 @@ class StickerBotManager {
       if (response.success) {
         this.currentStickerProcessId = response.data.process_id;
         this.startStickerProgressMonitoring();
-        window.uiManager?.showToast("success", "Pack Creation Started", "Sticker pack creation has begun");
+        // Show single status message instead of multiple toasts
+        this.showSingleStatusMessage("Sticker pack creation started", "info");
       } else {
         throw new Error(response.error || "Failed to start pack creation");
       }
@@ -645,14 +698,14 @@ class StickerBotManager {
       createBtn.innerHTML = '<i class="fas fa-magic"></i> Create Sticker Pack';
     }
     
-    console.log(`🎉 [STICKER-BOT] Attempting to show success modal with link: ${shareableLink}`);
+    // Show single success status message
+    this.showSingleStatusMessage("Sticker pack created successfully!", "success");
     
     // ENHANCED: Multiple fallback methods to show success modal
     let modalShown = false;
     
     // Method 1: Try uiManager first
     if (window.uiManager?.showSuccessModal) {
-      console.log(`🎉 [STICKER-BOT] Using uiManager.showSuccessModal`);
       window.uiManager.showSuccessModal(shareableLink);
       modalShown = true;
     }
@@ -737,7 +790,8 @@ class StickerBotManager {
       createBtn.innerHTML = '<i class="fas fa-magic"></i> Create Sticker Pack';
     }
     
-    window.uiManager?.showToast("error", "Creation Failed", error || "An error occurred during pack creation");
+    // Show single error status message
+    this.showSingleStatusMessage(`Creation failed: ${error || "An error occurred during pack creation"}`, "error");
   }
 
   // =============================================

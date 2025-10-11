@@ -460,7 +460,6 @@ class ComponentOptimizer {
   }
 
   initialize() {
-    console.log('Component optimizer initialized - vanilla JS with React-like optimizations!');
   }
 }
 

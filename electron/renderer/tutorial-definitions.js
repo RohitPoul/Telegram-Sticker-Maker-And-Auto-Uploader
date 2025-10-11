@@ -372,7 +372,6 @@ function registerAllTutorials() {
     ]
   });
 
-  console.log(`✅ Registered ${tutorialSystem.tutorials.size} tutorials`);
 }
 
 // Auto-show first-time tutorial if user hasn't seen it

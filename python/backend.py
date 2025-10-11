@@ -18,15 +18,16 @@ import queue
 import platform
 import shutil
 import uuid
+from logging_config import setup_sticker_logging
 
 # Stats functions will be defined after logger is initialized
 
 # Add the current directory to Python path
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, current_dir)
-print(f"[INIT] Added to Python path: {current_dir}")
-print(f"[INIT] Current working directory: {os.getcwd()}")
-print(f"[INIT] Python path: {sys.path[:3]}")
+
+# Initialize professional logging system
+sticker_logger = setup_sticker_logging()
 
 # Import statistics tracker from separate module
 from stats_tracker import stats_tracker

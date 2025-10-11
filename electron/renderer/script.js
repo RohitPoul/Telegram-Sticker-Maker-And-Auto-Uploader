@@ -240,7 +240,10 @@ class TelegramUtilities {
 
   // Debug warning method for detailed UI debugging
   debugWarn(label, payload = undefined) {
-    // Debug logging removed for production
+    // Debug logging removed for production - only log critical errors
+    if (label.includes('ERROR') || label.includes('CRITICAL')) {
+      console.error(label, payload);
+    }
   }
 
   // OPTIMIZED apiRequest with better error handling and timeout
@@ -1436,8 +1439,6 @@ class TelegramUtilities {
           document.head.appendChild(style);
         }
         
-        // console.log(`✅ [SUCCESS_MODAL] Success modal injected into DOM`);
-        
         // Now proceed with normal flow
         const injectedModal = document.getElementById("success-modal");
         const linkInput = document.getElementById("shareable-link");
@@ -1493,10 +1494,6 @@ class TelegramUtilities {
       // Debug: Log all modal-like elements if modal not found
       if (!modal) {
         const allModalElements = document.querySelectorAll('[id*="modal"], .modal');
-        // console.log(`🎉 [SUCCESS_MODAL] Found ${allModalElements.length} modal elements:`);
-        allModalElements.forEach((el, i) => {
-          // console.log(`  ${i}: ${el.tagName}#${el.id}.${el.className}`);
-        });
       }
       
       return { modal, overlay, linkInput };
@@ -1508,8 +1505,6 @@ class TelegramUtilities {
     
       // If modal still not found after DOM ready, try additional retries
       if (!elements.modal) {
-        // console.log(`🎉 [SUCCESS_MODAL] Modal not found after DOM ready, retrying...`);
-        
         // Try multiple retries with increasing delays
         let retryCount = 0;
         const maxRetries = 3;
@@ -1520,13 +1515,11 @@ class TelegramUtilities {
             elements = findModalElements();
             
             if (elements.modal) {
-              // console.log(`🎉 [SUCCESS_MODAL] Modal found on retry ${retryCount}`);
               this.displaySuccessModal(elements.modal, elements.overlay, elements.linkInput, shareableLink);
               return;
             }
-            
+
             if (retryCount < maxRetries) {
-              // console.log(`🎉 [SUCCESS_MODAL] Retry ${retryCount}/${maxRetries} failed, trying again...`);
               retryFind();
               return;
             }
@@ -2732,8 +2725,6 @@ class TelegramUtilities {
 
   // Unified progress monitoring system with enhanced debouncing
   monitorProcess(processId) {
-    if (RENDERER_DEBUG) console.log("Starting to monitor process:", processId);
-    
     const MAX_CONSECUTIVE_ERRORS = 3;
     const POLLING_INTERVAL = 2000; // Reduced from 1000ms to 2000ms
     const MAX_OPERATION_TIME = 30 * 60 * 1000; // 30 minutes
@@ -2854,20 +2845,14 @@ class TelegramUtilities {
 
   // Improved process completion handler
   async handleProcessCompletion(processData) {
-    if (RENDERER_DEBUG) console.log("=== PROCESS COMPLETION DEBUG ===");
-    if (RENDERER_DEBUG) console.log("🎯 Process completion data:", processData);
-    if (RENDERER_DEBUG) console.log("🎯 Current process ID:", this.currentProcessId);
-    if (RENDERER_DEBUG) console.log("🎯 Active processes before cleanup:", this.activeProcesses.size);
     
     // Clean up process tracking
     if (this.currentProcessId) {
       this.activeProcesses.delete(this.currentProcessId);
-      if (RENDERER_DEBUG) console.log("🗑️ Removed process from active processes:", this.currentProcessId);
     }
     
     // Determine overall success based on process status
     const isSuccessful = processData.status === 'completed';
-    if (RENDERER_DEBUG) console.log("🎯 Overall success:", isSuccessful);
     
     // Update all file statuses based on results
     if (processData.file_statuses) {
@@ -3641,54 +3626,26 @@ class TelegramUtilities {
   }
 
   updateFileStatuses(fileStatuses) {
-    this.debugWarn('🎯 DETAILED DEBUG - updateFileStatuses Called', {
-      input: fileStatuses,
-      inputType: typeof fileStatuses,
-      inputKeys: Object.keys(fileStatuses || {}),
-      inputIsValid: fileStatuses && typeof fileStatuses === 'object'
-    });
-    
     // Handle both object and array-like structures
     if (!fileStatuses || typeof fileStatuses !== 'object') {
-      this.debugWarn('🚨 DETAILED DEBUG - Invalid File Statuses', {
+      this.debugWarn('🚨 CRITICAL ERROR - Invalid File Statuses', {
         fileStatuses: fileStatuses,
-        type: typeof fileStatuses,
-        isNull: fileStatuses === null,
-        isUndefined: fileStatuses === undefined
+        type: typeof fileStatuses
       });
       return;
     }
     
     const fileStatusKeys = Object.keys(fileStatuses);
-    this.debugWarn('🎯 DETAILED DEBUG - Processing File Status Keys', {
-      keys: fileStatusKeys,
-      count: fileStatusKeys.length
-    });
     
     fileStatusKeys.forEach(index => {
       const fileStatus = fileStatuses[index];
       if (!fileStatus) {
-        this.debugWarn('🚨 DETAILED DEBUG - Empty File Status', { index, fileStatus });
+        this.debugWarn('🚨 CRITICAL ERROR - Empty File Status', { index, fileStatus });
         return;
       }
       
-      this.debugWarn('🎯 DETAILED DEBUG - Processing File Status', {
-        index: index,
-        fileStatus: fileStatus,
-        status: fileStatus.status,
-        progress: fileStatus.progress,
-        stage: fileStatus.stage,
-        filename: fileStatus.filename
-      });
-      
       // Our DOM uses data-index, not data-file-index
       const fileElement = document.querySelector(`[data-index="${index}"]`);
-      this.debugWarn('🎯 DETAILED DEBUG - DOM Element Search', { 
-        index, 
-        selector: `[data-index="${index}"]`,
-        found: !!fileElement,
-        elementHTML: fileElement ? fileElement.outerHTML.substring(0, 200) + '...' : 'NOT FOUND'
-      });
       
       if (fileElement) {
         // Update file item class based on status
@@ -3939,6 +3896,7 @@ class TelegramUtilities {
         
         if (needsCode) {
           this.pendingCode = true;
+            try { this.hideIconModal(); } catch {}
           this.showModal("code-modal");
           this.showToast(
             "info",
@@ -3951,6 +3909,7 @@ class TelegramUtilities {
           }, 500);
         } else if (needsPassword) {
           this.pendingPassword = true;
+            try { this.hideIconModal(); } catch {}
           this.showModal("password-modal");
           this.showToast(
             "info",
@@ -5396,6 +5355,22 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
                 return;
               }
               
+              // If verification is pending, do not show icon modal
+              if (this.pendingCode || this.pendingPassword) {
+                console.log(`[MONITORING] Icon request detected but verification pending; skipping icon modal`);
+                return;
+              }
+              // DOM-based guard as a fallback
+              try {
+                const codeModal = document.getElementById('code-modal');
+                const passModal = document.getElementById('password-modal');
+                const codeVisible = codeModal && codeModal.style && codeModal.style.display && codeModal.style.display !== 'none';
+                const passVisible = passModal && passModal.style && passModal.style.display && passModal.style.display !== 'none';
+                if (codeVisible || passVisible) {
+                  console.log(`[MONITORING] Verification modal visible; skipping icon modal`);
+                  return;
+                }
+              } catch {}
               console.log(`[MONITORING] ICON REQUEST DETECTED! Showing icon modal...`);
               console.log(`[MONITORING] Calling showIconModal with:`, { processId, message: progress.icon_request_message?.substring(0, 50) });
               
@@ -6028,6 +6003,22 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   // Icon Selection Modal Functions
   showIconModal(iconRequestMessage) {
     console.log(`🖼️ [ICON_MODAL] Showing icon modal with message: ${iconRequestMessage}`);
+    // Guard: suppress icon modal if verification flow is active
+    if (this.pendingCode || this.pendingPassword) {
+      console.warn('[ICON_MODAL] Skipped because verification modal is active');
+      return;
+    }
+    // DOM-based guard: if code/password modal is visible, skip
+    try {
+      const codeModal = document.getElementById('code-modal');
+      const passModal = document.getElementById('password-modal');
+      const codeVisible = codeModal && codeModal.style && codeModal.style.display && codeModal.style.display !== 'none';
+      const passVisible = passModal && passModal.style && passModal.style.display && passModal.style.display !== 'none';
+      if (codeVisible || passVisible) {
+        console.warn('[ICON_MODAL] Skipped due to verification modal visible (DOM)');
+        return;
+      }
+    } catch {}
     
     // Hide any existing loading overlay
     this.hideLoadingOverlay();
@@ -8704,7 +8695,6 @@ This action cannot be undone. Are you sure?
     this.logDebug('initializeTelegramConnection() - CLEAN WORKFLOW');
     
     // CLEAN WORKFLOW: Always start disconnected and force cleanup
-    console.log('🔄 [CLEAN_INIT] Starting clean workflow initialization...');
     
     try {
       // STEP 1: Force backend cleanup on frontend startup (with retry)

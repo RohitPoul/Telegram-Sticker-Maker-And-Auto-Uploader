@@ -93,11 +93,7 @@ class ImageHandler {
     // Start conversion button
     const startConversionBtn = document.getElementById('start-image-conversion');
     if (startConversionBtn) {
-      console.log('[INIT] Convert button found, adding event listener');
       startConversionBtn.addEventListener('click', () => {
-        console.log('[BUTTON] Convert button clicked!');
-        console.log('[BUTTON] Selected images:', this.imageFiles.filter(img => img.selected).length);
-        console.log('[BUTTON] Output dir:', this.outputDir);
         this.startConversion();
       });
     } else {
@@ -627,7 +623,6 @@ class ImageHandler {
   }
   
   async monitorProgress(processId) {
-    console.log('[MONITOR] Starting progress monitoring for:', processId);
     const statusEl = document.getElementById('image-conversion-status');
     const startBtn = document.getElementById('start-image-conversion');
     
@@ -636,17 +631,12 @@ class ImageHandler {
     
     const checkProgress = async () => {
       pollCount++;
-      console.log(`[MONITOR] Poll #${pollCount} for process:`, processId);
       
       try {
         const response = await this.app.apiRequest('GET', `/api/image/process-status/${processId}`);
         
-        console.log(`[MONITOR] Response:`, response);
-        
         if (response && response.success && response.process) {
           const proc = response.process;
-          console.log(`[MONITOR] Process status:`, proc.status, `Progress:`, proc.progress, `Completed:`, proc.completed_files, `/${proc.total_files}`);
-          console.log(`[MONITOR] Results count:`, proc.results?.length || 0);
           
           // Update status display
           if (statusEl) {
