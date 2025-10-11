@@ -26,7 +26,7 @@ if not logger.handlers:
         logger.addHandler(fh)
     except Exception:
         pass
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.WARNING)
 
 from shared_state import set_current_session_file
 
