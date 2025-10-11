@@ -25,8 +25,6 @@ class PerformanceTurbo {
   init() {
     if (this.isInitialized) return;
     
-    console.log('🚀 [TURBO] Initializing Performance Turbo...');
-    
     // 1. Optimize CSS and DOM
     this.optimizeCSS();
     
@@ -49,11 +47,9 @@ class PerformanceTurbo {
     this.optimizeGPUAcceleration();
     
     this.isInitialized = true;
-    console.log('✅ [TURBO] Performance optimization complete!');
   }
 
   optimizeCSS() {
-    console.log('🔧 [TURBO] Optimizing CSS...');
     
     // Inject high-performance CSS
     const styleElement = document.createElement('style');
@@ -142,7 +138,6 @@ class PerformanceTurbo {
   }
 
   optimizeScrolling() {
-    console.log('📜 [TURBO] Optimizing scroll performance...');
     
     // Debounced scroll handler
     const optimizedScrollHandler = this.debounce((e) => {
@@ -165,7 +160,6 @@ class PerformanceTurbo {
   }
 
   optimizeModals() {
-    console.log('🪟 [TURBO] Optimizing modal performance...');
     
     // Enhanced modal visibility handling with MutationObserver
     const observer = new MutationObserver((mutations) => {
@@ -249,7 +243,6 @@ class PerformanceTurbo {
   }
 
   optimizeRepainting() {
-    console.log('🎨 [TURBO] Optimizing repainting...');
     
     // Batch DOM updates
     this.batchedUpdates = [];
@@ -285,7 +278,6 @@ class PerformanceTurbo {
   }
 
   optimizeEventHandlers() {
-    console.log('⚡ [TURBO] Optimizing event handlers...');
     
     // Debounced resize handler
     const optimizedResizeHandler = this.debounce(() => {
@@ -322,7 +314,6 @@ class PerformanceTurbo {
   }
 
   implementVirtualScrolling() {
-    console.log('📋 [TURBO] Implementing virtual scrolling...');
     
     const listContainers = document.querySelectorAll('.media-files-list, .status-list');
     
@@ -364,7 +355,6 @@ class PerformanceTurbo {
   }
 
   optimizeGPUAcceleration() {
-    console.log('🎮 [TURBO] Optimizing GPU acceleration...');
     
     // Smart GPU layer management
     const interactiveElements = document.querySelectorAll('.btn, .modal, .nav-item');
@@ -548,7 +538,6 @@ class PerformanceTurbo {
     }
     
     this.isInitialized = false;
-    console.log('🧹 [TURBO] Performance optimization cleaned up');
   }
 }
 
