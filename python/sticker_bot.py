@@ -13,6 +13,7 @@ import traceback
 from typing import Optional, Dict, List
 from enum import Enum
 from dataclasses import dataclass
+from logging_config import get_sticker_logger
 
 # Note: avoid importing fcntl on Windows to prevent portability issues
 try:
@@ -391,7 +392,6 @@ class SimpleConversationManager:
         self.logger.info(f"[DEBUG] Stopped listening for bot messages in thread: {thread_name}")
 
     async def wait_for_response(self, expected_type: BotResponseType, timeout: float = 30.0):
-        self.logger.info(f"[WAIT] Waiting for {expected_type.value} with timeout {timeout}s")
         start_time = time.time()
         
         while time.time() - start_time < timeout:
@@ -402,7 +402,9 @@ class SimpleConversationManager:
                 except asyncio.TimeoutError:
                     # Continue waiting - this is expected
                     elapsed = time.time() - start_time
-                    self.logger.debug(f"[WAIT] Still waiting for {expected_type.value}, {timeout - elapsed:.1f}s remaining")
+                    # Only log every 10 seconds to reduce spam
+                    if int(elapsed) % 10 == 0 and elapsed > 0:
+                        self.logger.debug(f"[WAIT] Still waiting for {expected_type.value}, {timeout - elapsed:.1f}s remaining")
                     continue
                 
                 self.logger.info(f"[WAIT] Received response: {response.response_type.value} - '{response.message[:50]}...'")
@@ -529,7 +531,7 @@ class MediaItem:
 
 class StickerBotCore:
     def __init__(self, logger=None):
-        self.logger = logger or logging.getLogger(__name__)
+        self.logger = logger or get_sticker_logger('core')
         self.client = None
         self.bot_peer = None
         self.conversation_manager = None
@@ -749,7 +751,17 @@ class StickerBotCore:
             return result
 
         except Exception as e:
-            self.logger.error(f"[STICKER] Pack creation error for process {process_id}: {e}")
+            creation_logger = get_sticker_logger('creation')
+            creation_logger.error(f"FATAL - Process: {process_id}, Error: {e}")
+            
+            # Update process status to failed
+            from shared_state import active_processes, process_lock
+            with process_lock:
+                if process_id in active_processes:
+                    active_processes[process_id]['status'] = 'failed'
+                    active_processes[process_id]['error'] = str(e)
+                    active_processes[process_id]['current_stage'] = f'Failed: {str(e)}'
+            
             raise
 
     async def _create_sticker_pack_async(self, pack_name: str, pack_url_name: str, sticker_type: str, media_items: List[MediaItem], process_id: str, auto_skip_icon: bool = True):
@@ -757,11 +769,10 @@ class StickerBotCore:
         try:
             # Import active_processes from shared state
             from shared_state import active_processes, process_lock, add_process, update_process
-            self.logger.info(f"[STICKER] Successfully imported active_processes, current processes: {list(active_processes.keys())}")
-
-            self.logger.info(f"[STICKER] Starting pack creation: {pack_name}")
-            self.logger.info(f"[STICKER] Process ID: {process_id}")
-            self.logger.info(f"[STICKER] Available processes: {list(active_processes.keys())}")
+            
+            # Log only essential information to reduce flood
+            creation_logger = get_sticker_logger('creation')
+            creation_logger.info(f"START - Pack: {pack_name}, Files: {len(media_items)}, Process: {process_id}")
             
             # Initialize process tracking data
             with process_lock:
@@ -770,30 +781,22 @@ class StickerBotCore:
                     active_processes[process_id]['failed_files'] = 0
                     active_processes[process_id]['file_statuses'] = {}
                     active_processes[process_id]['total_files'] = len(media_items)
-                    self.logger.info(f"[STICKER] Initialized process tracking for {len(media_items)} files")
 
             # Step 1: Create new sticker pack
             command = "/newvideo" if sticker_type == "video" else "/newpack"
-            self.logger.info(f"[STICKER] Sending command: {command}")
             
             response = await self.conversation_manager.send_and_wait(
                 command, BotResponseType.NEW_PACK_CREATED, timeout=30.0
             )
 
-            self.logger.info(f"[STICKER] Pack creation confirmed: {response.message[:100]}...")
-
             # Step 2: Send pack name
-            self.logger.info(f"[STICKER] Sending pack name: {pack_name}")
             response = await self.conversation_manager.send_and_wait(
                 pack_name, BotResponseType.PACK_NAME_ACCEPTED, timeout=30.0
             )
 
-            self.logger.info(f"[STICKER] Pack name accepted: {response.message[:100]}...")
-
-            # Step 3: Upload stickers using send_file_and_wait
+            # Step 3: Upload stickers using send_file_and_wait with improved error handling
             for i, media_item in enumerate(media_items):
                 filename = os.path.basename(media_item.file_path)
-                self.logger.info(f"[STICKER] Processing sticker {i+1}/{len(media_items)}: {filename}")
                 
                 # Update process status
                 with process_lock:
@@ -803,22 +806,53 @@ class StickerBotCore:
                         active_processes[process_id]['progress'] = (i / len(media_items)) * 100
 
                 try:
-                    # Upload file using send_file_and_wait method as specified
-                    self.logger.info(f"[STICKER] Uploading file: {filename}")
-                    response = await self.conversation_manager.send_file_and_wait(
-                        media_item.file_path, BotResponseType.FILE_UPLOADED, timeout=60.0
-                    )
+                    # Upload file with retry mechanism and better timeout handling
+                    max_retries = 3
+                    retry_count = 0
+                    file_uploaded = False
+                    
+                    while retry_count < max_retries and not file_uploaded:
+                        try:
+                            # Increase timeout for large files and add retry logic
+                            timeout = 90.0 if sticker_type == "video" else 60.0
+                            response = await self.conversation_manager.send_file_and_wait(
+                                media_item.file_path, BotResponseType.FILE_UPLOADED, timeout=timeout
+                            )
+                            file_uploaded = True
+                            
+                        except (asyncio.TimeoutError, TimeoutError) as timeout_error:
+                            retry_count += 1
+                            if retry_count < max_retries:
+                                self.logger.warning(f"[STICKER] File upload timeout for {filename}, retry {retry_count}/{max_retries}")
+                                await asyncio.sleep(2)  # Brief pause before retry
+                            else:
+                                raise timeout_error
 
-                    self.logger.info(f"[STICKER] File uploaded: {response.message[:100]}...")
+                    if not file_uploaded:
+                        raise Exception(f"Failed to upload {filename} after {max_retries} retries")
 
-                    # Send emoji
-                    self.logger.info(f"[STICKER] Sending emoji: {media_item.emoji}")
-                    response = await self.conversation_manager.send_and_wait(
-                        media_item.emoji, BotResponseType.EMOJI_ACCEPTED, timeout=30.0
-                    )
+                    # Send emoji with retry mechanism
+                    emoji_sent = False
+                    emoji_retry_count = 0
+                    max_emoji_retries = 2
+                    
+                    while emoji_retry_count < max_emoji_retries and not emoji_sent:
+                        try:
+                            response = await self.conversation_manager.send_and_wait(
+                                media_item.emoji, BotResponseType.EMOJI_ACCEPTED, timeout=45.0
+                            )
+                            emoji_sent = True
+                            
+                        except (asyncio.TimeoutError, TimeoutError) as timeout_error:
+                            emoji_retry_count += 1
+                            if emoji_retry_count < max_emoji_retries:
+                                self.logger.warning(f"[STICKER] Emoji timeout for {filename}, retry {emoji_retry_count}/{max_emoji_retries}")
+                                await asyncio.sleep(1)
+                            else:
+                                raise timeout_error
 
-                    self.logger.info(f"[STICKER] Emoji accepted: {response.message[:100]}...")
-
+                    if not emoji_sent:
+                        raise Exception(f"Failed to send emoji for {filename} after {max_emoji_retries} retries")
 
                     # Update progress
                     with process_lock:
@@ -834,10 +868,13 @@ class StickerBotCore:
                                 'emoji': media_item.emoji,
                                 'completed_at': time.time()
                             }
+                    
+                    # Log progress every 10 files or at completion
+                    if (i + 1) % 10 == 0 or (i + 1) == len(media_items):
+                        creation_logger.info(f"PROGRESS - Process: {process_id}, {i + 1}/{len(media_items)} ({(i + 1) / len(media_items) * 100:.1f}%) - {filename}")
 
                 except Exception as e:
-                    self.logger.error(f"[STICKER] Error processing {filename}: {e}")
-                    self.logger.error(f"[STICKER] Full traceback: {traceback.format_exc()}")
+                    creation_logger.error(f"ERROR - Process: {process_id}, File: {filename}, Error: {e}")
                     # Track failed file status
                     with process_lock:
                         if process_id in active_processes:
@@ -851,7 +888,17 @@ class StickerBotCore:
                             }
                             # Update failed files count
                             active_processes[process_id]['failed_files'] = active_processes[process_id].get('failed_files', 0) + 1
-                    # Continue with next file instead of failing completely
+                    
+                    # Check if we should continue or abort based on failure rate
+                    failed_count = active_processes[process_id].get('failed_files', 0)
+                    total_processed = i + 1
+                    failure_rate = failed_count / total_processed
+                    
+                    if failure_rate > 0.5:  # If more than 50% fail, abort the process
+                        creation_logger.error(f"ABORT - Process: {process_id}, High failure rate: {failure_rate:.1%}")
+                        raise Exception(f"Process aborted due to high failure rate: {failed_count}/{total_processed} files failed")
+                    
+                    # Continue with next file for individual failures
                     continue
 
             # Step 4: Publish pack
@@ -938,7 +985,12 @@ class StickerBotCore:
                             if link_match:
                                 shareable_link = link_match.group(0)
                                 active_processes[process_id]["shareable_link"] = shareable_link
-                                self.logger.info(f"[STICKER] Shareable link extracted: {shareable_link}")
+                                
+                                # Log completion with success count
+                                success_count = active_processes[process_id].get('completed_files', 0)
+                                failed_count = active_processes[process_id].get('failed_files', 0)
+                                creation_logger.info(f"COMPLETE - Process: {process_id}, Status: SUCCESS, Success: {success_count}, Failed: {failed_count}")
+                                creation_logger.info(f"PACK_URL - {shareable_link}")
                 
                 # FIXED: Increment sticker creation stats in backend
                 try:
@@ -1365,7 +1417,17 @@ class StickerBotCore:
             return result
 
         except Exception as e:
-            self.logger.error(f"[STICKER] Pack creation error for process {process_id}: {e}")
+            creation_logger = get_sticker_logger('creation')
+            creation_logger.error(f"FATAL - Process: {process_id}, Error: {e}")
+            
+            # Update process status to failed
+            from shared_state import active_processes, process_lock
+            with process_lock:
+                if process_id in active_processes:
+                    active_processes[process_id]['status'] = 'failed'
+                    active_processes[process_id]['error'] = str(e)
+                    active_processes[process_id]['current_stage'] = f'Failed: {str(e)}'
+            
             raise
 
 # Removed duplicate TelegramSessionManager class - using EnhancedTelegramSessionManager instead
@@ -1542,31 +1604,20 @@ def sticker_pack_worker():
             
             # Import active_processes from shared state
             from shared_state import active_processes, process_lock, update_process
-            print(f"🔧 [WORKER] Successfully imported active_processes")
-            print(f"🔧 [WORKER] Current processes: {list(active_processes.keys())}")
-            print(f"🔧 [WORKER] Looking for process: {process_id}")
-            print(f"🔧 [WORKER] Process exists: {process_id in active_processes}")
             logging.info(f"[WORKER] Successfully imported active_processes, current processes: {list(active_processes.keys())}")
             
             # Update process status to processing
             with process_lock:
-                print(f"🔧 [WORKER] Acquired process_lock for process {process_id}")
-                print(f"🔧 [WORKER] Looking for process {process_id} in active_processes")
-                print(f"🔧 [WORKER] Current active_processes keys: {list(active_processes.keys())}")
-                print(f"🔧 [WORKER] Process {process_id} exists: {process_id in active_processes}")
                 
                 logging.info(f"[WORKER] Looking for process {process_id} in active_processes")
                 logging.info(f"[WORKER] Current active_processes keys: {list(active_processes.keys())}")
                 logging.info(f"[WORKER] Process {process_id} exists: {process_id in active_processes}")
                 
                 if process_id in active_processes:
-                    print(f"🔧 [WORKER] Found process {process_id}, updating to processing")
                     active_processes[process_id]['status'] = 'processing'
                     active_processes[process_id]['current_stage'] = 'Starting sticker pack creation...'
                     logging.info(f"[WORKER] Updated process {process_id} to processing status")
                 else:
-                    print(f"🔧 [WORKER] Process {process_id} NOT FOUND! Creating fallback entry")
-                    print(f"🔧 [WORKER] Available processes: {list(active_processes.keys())}")
                     logging.error(f"[WORKER] Process {process_id} not found in active_processes!")
                     logging.error(f"[WORKER] Available processes: {list(active_processes.keys())}")
                     # Create the process entry if it doesn't exist
@@ -1581,7 +1632,6 @@ def sticker_pack_worker():
                         'pack_name': pack_name,
                         'sticker_type': sticker_type
                     }
-                    print(f"🔧 [WORKER] Created fallback process entry for {process_id}")
                     logging.info(f"[WORKER] Created missing process entry for {process_id}")
             
             try:
@@ -1612,8 +1662,6 @@ def sticker_pack_worker():
                 # Log detailed error information
                 error_msg = str(e)
                 error_type = type(e).__name__
-                print(f"🔧 [WORKER] Process {process_id} failed with {error_type}: {error_msg}")
-                print(f"🔧 [WORKER] Full traceback:")
                 import traceback
                 traceback.print_exc()
                 
@@ -1638,8 +1686,6 @@ def sticker_pack_worker():
         except Exception as e:
             error_msg = str(e)
             error_type = type(e).__name__
-            print(f"🔧 [WORKER] Worker thread error: {error_type}: {error_msg}")
-            print(f"🔧 [WORKER] Full traceback:")
             import traceback
             traceback.print_exc()
             
@@ -1894,44 +1940,19 @@ def register_sticker_routes(app):
                 "url_name_attempts": 0
             }
             
-            print(f"🔧 [STICKER_API] Auto-skip icon setting: {auto_skip_icon}")
-            print(f"🔧 [STICKER_API] Process data: {process_data}")
             
-            print(f"🔧 [DEBUG] Creating process {process_id} in active_processes")
-            print(f"🔧 [DEBUG] Before creation - active_processes keys: {list(active_processes.keys())}")
-            print(f"🔧 [DEBUG] Before creation - active_processes type: {type(active_processes)}")
-            print(f"🔧 [DEBUG] Before creation - active_processes id: {id(active_processes)}")
             
             add_process(process_id, process_data)
             
-            print(f"🔧 [DEBUG] After creation - active_processes keys: {list(active_processes.keys())}")
-            print(f"🔧 [DEBUG] After creation - active_processes type: {type(active_processes)}")
-            print(f"🔧 [DEBUG] After creation - active_processes id: {id(active_processes)}")
-            print(f"🔧 [DEBUG] Process {process_id} exists: {process_id in active_processes}")
-            print(f"🔧 [DEBUG] Process {process_id} data: {active_processes.get(process_id, 'NOT_FOUND')}")
             
             # Verify the process was actually added
             if process_id in active_processes:
-                print(f"🔧 [DEBUG] ✅ Process {process_id} successfully added to active_processes")
-            else:
-                print(f"🔧 [DEBUG] ❌ Process {process_id} FAILED to be added to active_processes!")
             
-            # Double-check by importing shared state again
-            from shared_state import active_processes as ss_active_processes
-            print(f"🔧 [DEBUG] Shared state active_processes keys: {list(ss_active_processes.keys())}")
-            print(f"🔧 [DEBUG] Shared state active_processes id: {id(ss_active_processes)}")
-            print(f"🔧 [DEBUG] Are they the same object? {active_processes is ss_active_processes}")
 
             # Add task to queue
-            print(f"🔧 [DEBUG] Adding task to queue: {process_id}")
             # Put sanitized media into the queue to avoid OS path errors later
             sticker_pack_queue.put((pack_name, sticker_type, sanitized_media_files, process_id))
-            print(f"🔧 [DEBUG] Task added to queue successfully")
             
-            # Verify process still exists after queue operation
-            print(f"🔧 [DEBUG] Verifying process still exists after queue operation...")
-            print(f"🔧 [DEBUG] Process {process_id} exists: {process_id in active_processes}")
-            print(f"🔧 [DEBUG] Current active_processes keys: {list(active_processes.keys())}")
             
             # Log the process creation for debugging
             logging.info(f"[API] Process {process_id} added to queue and active_processes")
