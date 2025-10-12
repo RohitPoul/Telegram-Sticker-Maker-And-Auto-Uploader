@@ -2233,6 +2233,10 @@ class TelegramUtilities {
         container._scrollTimeout = null;
       }
       
+      // Clear all virtual list properties
+      delete container._virtualSpacer;
+      delete container._virtualItemHeight;
+      
       // Reset container styles
       container.style.height = '';
       container.style.overflowY = '';
@@ -2243,6 +2247,7 @@ class TelegramUtilities {
       container.innerHTML = '';
     }
     
+    // Force a complete UI refresh
     this.updateVideoFileList();
     this.showToast("info", "Cleared", `Removed ${count} video files`);
   }
@@ -2283,18 +2288,24 @@ class TelegramUtilities {
     // Use virtualized list for better performance with large datasets
     if (this.videoFiles.length > 50) {
       // Use virtualized rendering for large lists
-      window.updateVirtualList(
-        container,
-        this.videoFiles,
-        (file, index) => this.createVideoFileElement(file, index),
-        (file, index) => index,
-        {
-          itemHeight: 100, // Increased height for better spacing
-          bufferSize: 15,   // Increased buffer for smoother scrolling
-          scrollTop: container.scrollTop || 0,
-          containerHeight: container.clientHeight || 300
-        }
-      );
+      if (window.updateVirtualList) {
+        window.updateVirtualList(
+          container,
+          this.videoFiles,
+          (file, index) => this.createVideoFileElement(file, index),
+          (file, index) => index,
+          {
+            itemHeight: 100, // Increased height for better spacing
+            bufferSize: 15,   // Increased buffer for smoother scrolling
+            scrollTop: container.scrollTop || 0,
+            containerHeight: container.clientHeight || 300,
+            autoMeasure: true // Auto-measure item height
+          }
+        );
+      } else {
+        // Fallback to regular rendering if virtual list is not available
+        this.updateVideoFileListRegular(container);
+      }
     } else {
       // Use regular rendering for smaller lists
       this.updateVideoFileListRegular(container);
