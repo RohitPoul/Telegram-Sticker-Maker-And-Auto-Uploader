@@ -198,285 +198,114 @@ class ComponentOptimizer {
   // Virtual DOM-like diff for lists (existing implementation)
   updateList(container, newItems, renderItem, keyFn = (item, index) => index) {
     const existingItems = Array.from(container.children);
-    const newKeys = newItems.map(keyFn);
-    const existingKeys = existingItems.map((el, i) => el.dataset.key || i);
     
-    // Find items to remove, add, and update
-    const toRemove = [];
-    const toAdd = [];
-    const toUpdate = [];
-    
-    // Check existing items
-    existingItems.forEach((el, index) => {
-      const key = el.dataset.key || index;
-      const newIndex = newKeys.indexOf(key);
-      
-      if (newIndex === -1) {
-        toRemove.push(el);
-      } else {
-        toUpdate.push({ element: el, newItem: newItems[newIndex], newIndex });
-      }
+    // Create a map of existing items by key for efficient lookup
+    const existingMap = new Map();
+    existingItems.forEach((item, index) => {
+      const key = item.dataset.key || keyFn(null, index);
+      existingMap.set(key, { element: item, index });
     });
     
-    // Check for new items
+    // Create a map of new items by key
+    const newMap = new Map();
     newItems.forEach((item, index) => {
       const key = keyFn(item, index);
-      if (!existingKeys.includes(key)) {
-        toAdd.push({ item, index, key });
+      newMap.set(key, { item, index });
+    });
+    
+    // Remove items that are no longer in the list
+    existingMap.forEach(({ element, index }, key) => {
+      if (!newMap.has(key)) {
+        container.removeChild(element);
       }
     });
     
-    // Batch DOM operations
-    this.batchRender(() => {
-      // Remove old items
-      toRemove.forEach(el => {
-        el.style.transition = 'opacity 0.2s ease-out';
-        el.style.opacity = '0';
-        setTimeout(() => {
-          if (el.parentNode) {
-            el.parentNode.removeChild(el);
-          }
-        }, 200);
-      });
+    // Update or add items
+    newItems.forEach((item, index) => {
+      const key = keyFn(item, index);
+      const existing = existingMap.get(key);
       
-      // Update existing items
-      toUpdate.forEach(({ element, newItem, newIndex }) => {
-        const newContent = renderItem(newItem, newIndex);
-        if (element.innerHTML !== newContent) {
-          element.innerHTML = newContent;
+      if (existing) {
+        // Update existing item
+        const newElement = renderItem(item, index);
+        if (newElement instanceof Node) {
+          // Replace the content
+          existing.element.innerHTML = '';
+          existing.element.appendChild(newElement);
+        } else {
+          existing.element.innerHTML = String(newElement);
         }
-      });
-      
-      // Add new items
-      toAdd.forEach(({ item, index, key }) => {
+        existing.element.dataset.index = index;
+      } else {
+        // Add new item
         const element = document.createElement('div');
         element.dataset.key = key;
-        element.innerHTML = renderItem(item, index);
-        element.style.opacity = '0';
-        element.style.transition = 'opacity 0.2s ease-in';
+        element.dataset.index = index;
         
-        // Insert at correct position
-        const referenceNode = container.children[index];
-        if (referenceNode) {
-          container.insertBefore(element, referenceNode);
+        const rendered = renderItem(item, index);
+        if (rendered instanceof Node) {
+          element.appendChild(rendered);
         } else {
-          container.appendChild(element);
+          element.innerHTML = String(rendered);
         }
         
-        // Fade in
-        requestAnimationFrame(() => {
-          element.style.opacity = '1';
-        });
-      });
-    }, container);
-  }
-
-  // Optimized event handling (like React's SyntheticEvents)
-  setupEventDelegation(container, eventType, selector, handler) {
-    const delegatedHandler = (e) => {
-      const target = e.target.closest(selector);
-      if (target && container.contains(target)) {
-        handler.call(target, e);
+        container.appendChild(element);
       }
-    };
-    
-    container.addEventListener(eventType, delegatedHandler, {
-      passive: eventType.startsWith('touch') || eventType === 'scroll'
-    });
-    
-    return () => {
-      container.removeEventListener(eventType, delegatedHandler);
-    };
-  }
-
-  // Component lifecycle management
-  createComponent(definition) {
-    const component = {
-      element: null,
-      state: {},
-      props: {},
-      mounted: false,
-      ...definition
-    };
-    
-    // Add state management
-    component.setState = (newState) => {
-      const prevState = { ...component.state };
-      component.state = { ...component.state, ...newState };
-      
-      // Only re-render if state actually changed
-      if (JSON.stringify(prevState) !== JSON.stringify(component.state)) {
-        this.batchRender(() => {
-          if (component.render) {
-            component.render();
-          }
-        }, component);
-      }
-    };
-    
-    // Add prop updates
-    component.setProps = (newProps) => {
-      const prevProps = { ...component.props };
-      component.props = { ...component.props, ...newProps };
-      
-      // Only re-render if props actually changed
-      if (JSON.stringify(prevProps) !== JSON.stringify(component.props)) {
-        this.batchRender(() => {
-          if (component.render) {
-            component.render();
-          }
-        }, component);
-      }
-    };
-    
-    // Lifecycle methods
-    component.mount = (container) => {
-      if (component.beforeMount) {
-        component.beforeMount();
-      }
-      
-      component.element = container;
-      component.mounted = true;
-      
-      if (component.render) {
-        component.render();
-      }
-      
-      if (component.afterMount) {
-        component.afterMount();
-      }
-    };
-    
-    component.unmount = () => {
-      if (component.beforeUnmount) {
-        component.beforeUnmount();
-      }
-      
-      component.mounted = false;
-      
-      if (component.afterUnmount) {
-        component.afterUnmount();
-      }
-    };
-    
-    return component;
-  }
-
-  // Intersection Observer for lazy loading
-  setupLazyLoading(elements, callback, options = {}) {
-    const defaultOptions = {
-      root: null,
-      rootMargin: '50px',
-      threshold: 0.1
-    };
-    
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          callback(entry.target);
-          observer.unobserve(entry.target);
-        }
-      });
-    }, { ...defaultOptions, ...options });
-    
-    elements.forEach((el) => {
-      observer.observe(el);
-    });
-    
-    return observer;
-  }
-
-  // Memory leak prevention
-  setupComponentCleanup() {
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        mutation.removedNodes.forEach((node) => {
-          if (node.nodeType === Node.ELEMENT_NODE) {
-            // Clean up component references
-            if (node._component) {
-              if (node._component.unmount) {
-                node._component.unmount();
-              }
-              delete node._component;
-            }
-            
-            // Clean up event listeners
-            if (node._listeners) {
-              node._listeners.forEach(({ event, handler }) => {
-                node.removeEventListener(event, handler);
-              });
-              delete node._listeners;
-            }
-            
-            // Clean up observers
-            if (node._observers) {
-              node._observers.forEach((observer) => {
-                observer.disconnect();
-              });
-              delete node._observers;
-            }
-          }
-        });
-      });
-    });
-    
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
     });
   }
 
-  // Performance monitoring for components
-  measureComponent(component, operation, fn) {
-    const start = performance.now();
-    const result = fn();
-    const end = performance.now();
-    
-    const duration = end - start;
-    if (duration > 16) {
-      console.warn(`Slow component ${operation}:`, {
-        component: component.constructor.name || 'Anonymous',
-        duration: `${duration.toFixed(2)}ms`
+  // Optimized DOM updates with requestAnimationFrame
+  scheduleUpdate(fn) {
+    if (!this.updateScheduled) {
+      this.updateScheduled = true;
+      requestAnimationFrame(() => {
+        fn();
+        this.updateScheduled = false;
       });
     }
-    
-    return result;
   }
 
+  // Setup performance optimizations
   setupOptimizations() {
-    // Setup component cleanup
-    this.setupComponentCleanup();
-    
-    // Add helper functions to window
-    window.createOptimizedComponent = (definition) => this.createComponent(definition);
-    window.updateOptimizedList = (container, items, render, key) => 
-      this.updateList(container, items, render, key);
-    window.updateVirtualList = (container, items, render, key, options) => 
-      this.updateVirtualList(container, items, render, key, options);
-    window.setupEventDelegation = (container, event, selector, handler) => 
-      this.setupEventDelegation(container, event, selector, handler);
-    window.setupLazyLoading = (elements, callback, options) => 
-      this.setupLazyLoading(elements, callback, options);
+    // Throttle scroll events
+    window.addEventListener('scroll', this.throttle((e) => {
+      // Handle scroll events for performance
+    }, 16), { passive: true });
+
+    // Throttle resize events
+    window.addEventListener('resize', this.throttle((e) => {
+      // Handle resize events for performance
+    }, 100), { passive: true });
   }
 
-  initialize() {
+  // Utility function for throttling
+  throttle(func, limit) {
+    let inThrottle;
+    return function() {
+      const args = arguments;
+      const context = this;
+      if (!inThrottle) {
+        func.apply(context, args);
+        inThrottle = true;
+        setTimeout(() => inThrottle = false, limit);
+      }
+    }
   }
-}
 
-// Auto-initialize
-if (typeof window !== 'undefined') {
-  window.componentOptimizer = new ComponentOptimizer();
-  
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-      window.componentOptimizer.initialize();
-    });
-  } else {
-    window.componentOptimizer.initialize();
+  // Utility function for debouncing
+  debounce(func, wait, immediate) {
+    let timeout;
+    return function() {
+      const context = this;
+      const args = arguments;
+      const later = function() {
+        timeout = null;
+        if (!immediate) func.apply(context, args);
+      };
+      const callNow = immediate && !timeout;
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+      if (callNow) func.apply(context, args);
+    };
   }
-}
-
-// Export for module systems
-if (typeof module !== 'undefined') {
-  module.exports = ComponentOptimizer;
 }
