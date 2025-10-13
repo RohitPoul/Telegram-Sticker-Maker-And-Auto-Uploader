@@ -1639,7 +1639,10 @@ def sticker_pack_worker():
                 if sticker_bot is None:
                     logging.error(f"[WORKER] sticker_bot is None, initializing...")
                     sticker_bot = StickerBotCore()
-                    logging.info(f"[WORKER] sticker_bot initialized in worker thread")
+                    # Set the sticker_bot in shared_state for global access
+                    from shared_state import set_sticker_bot
+                    set_sticker_bot(sticker_bot)
+                    logging.info(f"[WORKER] sticker_bot initialized and set in shared_state in worker thread")
                 
                 # Get auto-skip setting from process data
                 pack_url_name = active_processes.get(process_id, {}).get('pack_url_name', '')
@@ -1716,7 +1719,10 @@ def register_sticker_routes(app):
     if sticker_bot is None:
         logging.info(f"[DEBUG] Initializing sticker_bot in register_sticker_routes")
         sticker_bot = StickerBotCore()
-        logging.info(f"[DEBUG] sticker_bot initialized successfully")
+        # Set the sticker_bot in shared_state for global access
+        from shared_state import set_sticker_bot
+        set_sticker_bot(sticker_bot)
+        logging.info(f"[DEBUG] sticker_bot initialized and set in shared_state successfully")
     
 
 
@@ -1947,7 +1953,7 @@ def register_sticker_routes(app):
             
             # Verify the process was actually added
             if process_id in active_processes:
-            
+                pass  # Empty if block - likely placeholder or incomplete code
 
             # Add task to queue
             # Put sanitized media into the queue to avoid OS path errors later
@@ -2579,10 +2585,3 @@ def register_sticker_routes(app):
             
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500
-
-# Enhanced logging configuration
-import sys
-
-# Create a dedicated logger for Telegram connection
-telegram_logger = logging.getLogger('TelegramConnection')
-telegram_logger.setLevel(logging.DEBUG)
