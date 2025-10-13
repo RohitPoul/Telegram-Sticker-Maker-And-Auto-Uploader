@@ -355,13 +355,21 @@ class SimpleConversationManager:
         self.bot_peer = bot_peer
         self.logger = logger or logging.getLogger(__name__)
         self.matcher = AdvancedResponseMatcher()
-        self.response_queue = asyncio.Queue()
+        self.response_queue = None  # Will be initialized in the correct event loop
         self.listening = False
         self.message_handler = None
+        
+    def _ensure_queue(self):
+        """Ensure the response queue is initialized in the correct event loop"""
+        if self.response_queue is None:
+            self.response_queue = asyncio.Queue()
 
     async def start_listening(self):
         thread_name = threading.current_thread().name
         self.logger.info(f"[DEBUG] start_listening called from thread: {thread_name}")
+        
+        # Ensure queue is initialized in the correct event loop
+        self._ensure_queue()
         
         if self.listening:
             self.logger.info(f"[DEBUG] Already listening, returning")
@@ -398,6 +406,9 @@ class SimpleConversationManager:
         self.logger.info(f"[DEBUG] Stopped listening for bot messages in thread: {thread_name}")
 
     async def wait_for_response(self, expected_type: BotResponseType, timeout: float = 30.0):
+        # Ensure queue is initialized
+        self._ensure_queue()
+        
         start_time = time.time()
         
         while time.time() - start_time < timeout:
@@ -452,6 +463,9 @@ class SimpleConversationManager:
         
     async def wait_for_response_types(self, expected_types: list, timeout: float = 30.0):
         """Wait for any of multiple response types"""
+        # Ensure queue is initialized
+        self._ensure_queue()
+        
         start_time = time.time()
         
         while time.time() - start_time < timeout:
@@ -477,6 +491,9 @@ class SimpleConversationManager:
 
     async def send_and_wait(self, message: str, expected_response, timeout: float = 30.0):
         self.logger.info(f"[MSG] Sending: {message}")
+        
+        # Ensure queue is initialized
+        self._ensure_queue()
         
         # Clear pending responses
         while not self.response_queue.empty():
@@ -538,6 +555,9 @@ class SimpleConversationManager:
     async def send_file_and_wait(self, file_path: str, expected_response: BotResponseType, timeout: float = 60.0):
         """Send a file and wait for the expected response"""
         self.logger.info(f"[FILE] Sending file: {file_path}")
+        
+        # Ensure queue is initialized
+        self._ensure_queue()
         
         # Clear pending responses
         while not self.response_queue.empty():
@@ -993,9 +1013,8 @@ class StickerBotCore:
                                 'completed_at': time.time()
                             }
                     
-                    # Log progress every 10 files or at completion
-                    if (i + 1) % 10 == 0 or (i + 1) == len(media_items):
-                        creation_logger.info(f"PROGRESS - Process: {process_id}, {i + 1}/{len(media_items)} ({(i + 1) / len(media_items) * 100:.1f}%) - {filename}")
+                    # Log progress every file with more detailed information
+                    creation_logger.info(f"PROGRESS - Process: {process_id}, {i + 1}/{len(media_items)} ({(i + 1) / len(media_items) * 100:.1f}%) - Sent {filename} with emoji {media_item.emoji}")
 
                 except Exception as e:
                     creation_logger.error(f"ERROR - Process: {process_id}, File: {filename}, Error: {e}")
