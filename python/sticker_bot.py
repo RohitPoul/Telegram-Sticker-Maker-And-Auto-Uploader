@@ -220,6 +220,7 @@ class BotResponseType(Enum):
     ICON_ACCEPTED = "icon_accepted"
     PACK_SUCCESS = "pack_success"
     ERROR_RESPONSE = "error_response"
+    TEMPORARY_ERROR = "temporary_error"
     UNKNOWN = "unknown"
 
 @dataclass
@@ -299,6 +300,11 @@ class AdvancedResponseMatcher:
                 r"sorry,\s*i\s*don't\s*understand",
                 r"please\s*try\s*again",
                 r"error", r"failed", r"invalid",
+            ],
+            BotResponseType.TEMPORARY_ERROR: [
+                r"sorry,\s*an\s*error\s*has\s*occurred\s*during\s*your\s*request",
+                r"please\s*try\s*again\s*later",
+                r"code\s*\d+",
             ],
         }
 
@@ -417,6 +423,22 @@ class SimpleConversationManager:
                     self.logger.error(f"[ERROR] Bot error response: {response.message}")
                     raise RuntimeError(f"Bot error: {response.message}")
                 
+                # Handle temporary errors with retry mechanism
+                if response.response_type == BotResponseType.TEMPORARY_ERROR:
+                    self.logger.warning(f"[TEMPORARY_ERROR] Telegram temporary error: {response.message}")
+                    # Don't raise immediately, continue waiting for a valid response
+                    continue
+                
+                # Additional check for temporary errors in message content
+                # Even if not classified as TEMPORARY_ERROR, check if it contains temporary error patterns
+                message_lower = response.message.lower()
+                if ("sorry, an error occurred during your request" in message_lower or 
+                    "please try again later" in message_lower or 
+                    "code" in message_lower and any(char.isdigit() for char in message_lower)):
+                    self.logger.warning(f"[TEMPORARY_ERROR] Detected temporary error in message content: {response.message}")
+                    # Don't raise immediately, continue waiting for a valid response
+                    continue
+                
                 self.logger.warning(f"[WARNING] Unexpected response type: {response.response_type.value}")
                 
             except Exception as e:
@@ -475,12 +497,40 @@ class SimpleConversationManager:
             self.logger.info(f"[MSG] Sent message: {message}")
 
         # Handle both single expected response and list of expected responses
-        if isinstance(expected_response, list):
-            # Wait for any of the expected response types
-            response = await self.wait_for_response_types(expected_response, timeout)
-        else:
-            # Wait for specific response type
-            response = await self.wait_for_response(expected_response, timeout)
+        # Add retry logic for temporary errors
+        max_retries = 3
+        retry_count = 0
+        
+        while retry_count < max_retries:
+            try:
+                if isinstance(expected_response, list):
+                    # Wait for any of the expected response types
+                    response = await self.wait_for_response_types(expected_response, timeout)
+                else:
+                    # Wait for specific response type
+                    response = await self.wait_for_response(expected_response, timeout)
+                return response
+            except RuntimeError as runtime_error:
+                # Check if this is a temporary Telegram error
+                error_msg = str(runtime_error).lower()
+                if "sorry, an error occurred" in error_msg or "try again later" in error_msg or "code" in error_msg:
+                    retry_count += 1
+                    if retry_count < max_retries:
+                        self.logger.warning(f"[SEND_AND_WAIT] Temporary Telegram error, retry {retry_count}/{max_retries}: {runtime_error}")
+                        # Add delay for temporary errors
+                        await asyncio.sleep(10 * retry_count)
+                        # Clear pending responses before retrying
+                        while not self.response_queue.empty():
+                            try:
+                                await self.response_queue.get_nowait()
+                            except asyncio.QueueEmpty:
+                                break
+                        continue
+                    else:
+                        raise runtime_error
+                else:
+                    # Re-raise non-temporary errors immediately
+                    raise runtime_error
         
         self.logger.info(f"[MSG] Completed send_and_wait for '{message[:50]}...'")
         return response
@@ -503,21 +553,59 @@ class SimpleConversationManager:
         self.logger.info(f"[FILE] File size: {os.path.getsize(file_path)} bytes")
         self.logger.info(f"[FILE] File modification time: {os.path.getmtime(file_path)}")
 
-        # Wait for response with retry mechanism for timeouts
-        try:
-            response = await self.wait_for_response(expected_response, timeout)
-            self.logger.info(f"[FILE] Successfully received expected response for {os.path.basename(file_path)}: {response.response_type.value}")
-            return response
-        except asyncio.TimeoutError:
-            self.logger.warning(f"[FILE] Timeout waiting for response after sending {os.path.basename(file_path)}")
-            # Even on timeout, we know the file was sent, so we can continue monitoring
-            # Return a special response indicating the file was sent but response is pending
-            return BotResponse(
-                message="File sent; awaiting response",
-                response_type=BotResponseType.UNKNOWN,
-                timestamp=time.time(),
-                confidence=0.5
-            )
+        # Wait for response with retry mechanism for timeouts and temporary errors
+        max_retries = 3
+        retry_count = 0
+        
+        while retry_count < max_retries:
+            try:
+                response = await self.wait_for_response(expected_response, timeout)
+                self.logger.info(f"[FILE] Successfully received expected response for {os.path.basename(file_path)}: {response.response_type.value}")
+                return response
+            except asyncio.TimeoutError:
+                retry_count += 1
+                if retry_count < max_retries:
+                    self.logger.warning(f"[FILE] Timeout waiting for response after sending {os.path.basename(file_path)}, retry {retry_count}/{max_retries}")
+                    # Add delay before retry
+                    await asyncio.sleep(5 * retry_count)
+                    # Clear pending responses before retrying
+                    while not self.response_queue.empty():
+                        try:
+                            await self.response_queue.get_nowait()
+                        except asyncio.QueueEmpty:
+                            break
+                    continue
+                else:
+                    self.logger.warning(f"[FILE] Timeout waiting for response after sending {os.path.basename(file_path)}")
+                    # Even on timeout, we know the file was sent, so we can continue monitoring
+                    # Return a special response indicating the file was sent but response is pending
+                    return BotResponse(
+                        message="File sent; awaiting response",
+                        response_type=BotResponseType.UNKNOWN,
+                        timestamp=time.time(),
+                        confidence=0.5
+                    )
+            except RuntimeError as runtime_error:
+                # Check if this is a temporary Telegram error
+                error_msg = str(runtime_error).lower()
+                if "sorry, an error occurred" in error_msg or "try again later" in error_msg or "code" in error_msg:
+                    retry_count += 1
+                    if retry_count < max_retries:
+                        self.logger.warning(f"[FILE] Temporary Telegram error after sending {os.path.basename(file_path)}, retry {retry_count}/{max_retries}: {runtime_error}")
+                        # Add longer delay for temporary errors
+                        await asyncio.sleep(10 * retry_count)
+                        # Clear pending responses before retrying
+                        while not self.response_queue.empty():
+                            try:
+                                await self.response_queue.get_nowait()
+                            except asyncio.QueueEmpty:
+                                break
+                        continue
+                    else:
+                        raise runtime_error
+                else:
+                    # Re-raise non-temporary errors immediately
+                    raise runtime_error
 
 
 class MediaItem:
@@ -798,6 +886,13 @@ class StickerBotCore:
             for i, media_item in enumerate(media_items):
                 filename = os.path.basename(media_item.file_path)
                 
+                # Add human-like delay to avoid rate limiting
+                # Random delay between 1-3 seconds to mimic human behavior
+                import random
+                delay = random.uniform(1.0, 3.0)
+                self.logger.info(f"[HUMAN_DELAY] Adding {delay:.1f}s delay before sending {filename}")
+                await asyncio.sleep(delay)
+                
                 # Update process status
                 with process_lock:
                     if process_id in active_processes:
@@ -807,7 +902,7 @@ class StickerBotCore:
 
                 try:
                     # Upload file with retry mechanism and better timeout handling
-                    max_retries = 3
+                    max_retries = 5  # Increase retries for temporary errors
                     retry_count = 0
                     file_uploaded = False
                     
@@ -824,9 +919,24 @@ class StickerBotCore:
                             retry_count += 1
                             if retry_count < max_retries:
                                 self.logger.warning(f"[STICKER] File upload timeout for {filename}, retry {retry_count}/{max_retries}")
-                                await asyncio.sleep(2)  # Brief pause before retry
+                                # Add longer delay for rate limiting issues
+                                await asyncio.sleep(5 * retry_count)  # Exponential backoff
                             else:
                                 raise timeout_error
+                        except RuntimeError as runtime_error:
+                            # Check if this is a temporary Telegram error
+                            error_msg = str(runtime_error).lower()
+                            if "sorry, an error occurred" in error_msg or "try again later" in error_msg or "code" in error_msg:
+                                retry_count += 1
+                                if retry_count < max_retries:
+                                    self.logger.warning(f"[STICKER] Temporary Telegram error for {filename}, retry {retry_count}/{max_retries}: {runtime_error}")
+                                    # Add longer delay for temporary errors
+                                    await asyncio.sleep(10 * retry_count)  # Exponential backoff for temporary errors
+                                else:
+                                    raise runtime_error
+                            else:
+                                # Re-raise non-temporary errors immediately
+                                raise runtime_error
 
                     if not file_uploaded:
                         raise Exception(f"Failed to upload {filename} after {max_retries} retries")
@@ -834,7 +944,7 @@ class StickerBotCore:
                     # Send emoji with retry mechanism
                     emoji_sent = False
                     emoji_retry_count = 0
-                    max_emoji_retries = 2
+                    max_emoji_retries = 5  # Increase retries for temporary errors
                     
                     while emoji_retry_count < max_emoji_retries and not emoji_sent:
                         try:
@@ -847,9 +957,23 @@ class StickerBotCore:
                             emoji_retry_count += 1
                             if emoji_retry_count < max_emoji_retries:
                                 self.logger.warning(f"[STICKER] Emoji timeout for {filename}, retry {emoji_retry_count}/{max_emoji_retries}")
-                                await asyncio.sleep(1)
+                                await asyncio.sleep(2 * emoji_retry_count)  # Exponential backoff
                             else:
                                 raise timeout_error
+                        except RuntimeError as runtime_error:
+                            # Check if this is a temporary Telegram error
+                            error_msg = str(runtime_error).lower()
+                            if "sorry, an error occurred" in error_msg or "try again later" in error_msg or "code" in error_msg:
+                                emoji_retry_count += 1
+                                if emoji_retry_count < max_emoji_retries:
+                                    self.logger.warning(f"[STICKER] Temporary Telegram error for emoji of {filename}, retry {emoji_retry_count}/{max_emoji_retries}: {runtime_error}")
+                                    # Add longer delay for temporary errors
+                                    await asyncio.sleep(5 * emoji_retry_count)  # Exponential backoff for temporary errors
+                                else:
+                                    raise runtime_error
+                            else:
+                                # Re-raise non-temporary errors immediately
+                                raise runtime_error
 
                     if not emoji_sent:
                         raise Exception(f"Failed to send emoji for {filename} after {max_emoji_retries} retries")
@@ -902,6 +1026,12 @@ class StickerBotCore:
                     continue
 
             # Step 4: Publish pack
+            # Add human-like delay before publishing
+            import random
+            delay = random.uniform(2.0, 5.0)
+            self.logger.info(f"[HUMAN_DELAY] Adding {delay:.1f}s delay before publishing pack")
+            await asyncio.sleep(delay)
+            
             self.logger.info(f"[STICKER] Publishing pack...")
             response = await self.conversation_manager.send_and_wait(
                 "/publish", BotResponseType.ICON_REQUEST, timeout=30.0
@@ -927,9 +1057,38 @@ class StickerBotCore:
                         active_processes[process_id]["auto_skip_handled"] = True
                 
                 # Send skip command automatically - expect URL_NAME_REQUEST not ICON_ACCEPTED
-                response = await self.conversation_manager.send_and_wait(
-                    "/skip", BotResponseType.URL_NAME_REQUEST, timeout=30.0
-                )
+                # Add retry logic for temporary errors
+                skip_sent = False
+                skip_retry_count = 0
+                max_skip_retries = 3
+                            
+                while skip_retry_count < max_skip_retries and not skip_sent:
+                    try:
+                        response = await self.conversation_manager.send_and_wait(
+                            "/skip", BotResponseType.URL_NAME_REQUEST, timeout=30.0
+                        )
+                        skip_sent = True
+                    except RuntimeError as runtime_error:
+                        # Check if this is a temporary Telegram error
+                        error_msg = str(runtime_error).lower()
+                        if "sorry, an error occurred" in error_msg or "try again later" in error_msg or "code" in error_msg:
+                            skip_retry_count += 1
+                            if skip_retry_count < max_skip_retries:
+                                self.logger.warning(f"[STICKER] Temporary Telegram error during skip, retry {skip_retry_count}/{max_skip_retries}: {runtime_error}")
+                                # Add longer delay for temporary errors
+                                await asyncio.sleep(10 * skip_retry_count)
+                            else:
+                                raise runtime_error
+                        else:
+                            # Re-raise non-temporary errors immediately
+                            raise runtime_error
+                    except (asyncio.TimeoutError, TimeoutError) as timeout_error:
+                        skip_retry_count += 1
+                        if skip_retry_count < max_skip_retries:
+                            self.logger.warning(f"[STICKER] Skip timeout, retry {skip_retry_count}/{max_skip_retries}")
+                            await asyncio.sleep(5 * skip_retry_count)
+                        else:
+                            raise timeout_error
 
                 self.logger.info(f"[STICKER] Icon step skipped, received URL name request: {response.message[:100]}...")
                 
@@ -941,9 +1100,38 @@ class StickerBotCore:
                         active_processes[process_id]["progress"] = 85
                 
                 # Send the URL name that was already provided
-                response = await self.conversation_manager.send_and_wait(
-                    pack_url_name, [BotResponseType.PACK_SUCCESS, BotResponseType.URL_NAME_TAKEN], timeout=30.0
-                )
+                # Add retry logic for temporary errors
+                url_sent = False
+                url_retry_count = 0
+                max_url_retries = 3
+                
+                while url_retry_count < max_url_retries and not url_sent:
+                    try:
+                        response = await self.conversation_manager.send_and_wait(
+                            pack_url_name, [BotResponseType.PACK_SUCCESS, BotResponseType.URL_NAME_TAKEN], timeout=30.0
+                        )
+                        url_sent = True
+                    except RuntimeError as runtime_error:
+                        # Check if this is a temporary Telegram error
+                        error_msg = str(runtime_error).lower()
+                        if "sorry, an error occurred" in error_msg or "try again later" in error_msg or "code" in error_msg:
+                            url_retry_count += 1
+                            if url_retry_count < max_url_retries:
+                                self.logger.warning(f"[STICKER] Temporary Telegram error during URL submission, retry {url_retry_count}/{max_url_retries}: {runtime_error}")
+                                # Add longer delay for temporary errors
+                                await asyncio.sleep(10 * url_retry_count)
+                            else:
+                                raise runtime_error
+                        else:
+                            # Re-raise non-temporary errors immediately
+                            raise runtime_error
+                    except (asyncio.TimeoutError, TimeoutError) as timeout_error:
+                        url_retry_count += 1
+                        if url_retry_count < max_url_retries:
+                            self.logger.warning(f"[STICKER] URL submission timeout, retry {url_retry_count}/{max_url_retries}")
+                            await asyncio.sleep(5 * url_retry_count)
+                        else:
+                            raise timeout_error
                 
                 # Check if URL name was taken
                 if response.response_type == BotResponseType.URL_NAME_TAKEN:
