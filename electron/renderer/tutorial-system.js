@@ -31,6 +31,9 @@ class TutorialSystem {
     
     // Add keyboard event listeners
     this.addKeyboardListeners();
+    
+    // Add periodic cleanup for stray elements
+    this.setupPeriodicCleanup();
   }
 
   loadProgress() {
@@ -77,11 +80,15 @@ class TutorialSystem {
         opacity: 0;
         pointer-events: none;
         transition: opacity 0.2s ease;
+        /* Ensure visibility */
+        visibility: hidden;
+        display: block;
       }
 
       .tutorial-overlay.active {
         opacity: 1;
         pointer-events: all;
+        visibility: visible;
       }
 
       /* Spotlight Effect - Simplified */
@@ -92,12 +99,19 @@ class TutorialSystem {
         border: 2px solid #4CAF50;
         border-radius: 4px;
         box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.4); /* More transparent */
+        /* Ensure visibility */
+        visibility: hidden;
+        display: block;
+      }
+      
+      .tutorial-spotlight.active {
+        visibility: visible;
       }
 
       /* Tutorial Tooltip - Enhanced glass effect */
       .tutorial-tooltip {
         position: fixed;
-        background: rgba(20, 20, 20, 0.6); /* Even more transparent glass effect */
+        background: rgba(30, 30, 30, 0.9); /* Solid background for better performance */
         color: #f5f5f5;
         padding: 0;
         border-radius: 12px;
@@ -105,15 +119,18 @@ class TutorialSystem {
         z-index: 10000;
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
         border: 1px solid rgba(255, 255, 255, 0.18);
-        backdrop-filter: blur(15px); /* Even more blur for glass effect */
+        /* Removed backdrop-filter for better performance */
         opacity: 0;
         transform: scale(0.95) translateY(10px);
         transition: all 0.2s ease;
+        /* Ensure visibility */
+        visibility: hidden;
       }
 
       .tutorial-tooltip.active {
         opacity: 1;
         transform: scale(1) translateY(0);
+        visibility: visible;
       }
 
       .tutorial-tooltip-header {
@@ -222,7 +239,7 @@ class TutorialSystem {
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%) scale(0.95);
-        background: rgba(20, 20, 20, 0.65); /* Even more transparent glass effect */
+        background: rgba(30, 30, 30, 0.95); /* Solid background for better performance */
         border-radius: 16px;
         padding: 0;
         max-width: 550px;
@@ -232,14 +249,18 @@ class TutorialSystem {
         z-index: 10001;
         box-shadow: 0 16px 64px rgba(0, 0, 0, 0.2);
         border: 1px solid rgba(255, 255, 255, 0.18);
-        backdrop-filter: blur(18px); /* Even more blur for glass effect */
+        /* Removed backdrop-filter for better performance */
         opacity: 0;
         transition: all 0.2s ease;
+        /* Ensure visibility */
+        visibility: hidden;
+        display: block;
       }
 
       .tutorial-menu.active {
         opacity: 1;
         transform: translate(-50%, -50%) scale(1);
+        visibility: visible;
       }
 
       .tutorial-menu-header {
@@ -419,7 +440,18 @@ class TutorialSystem {
   }
 
   registerDefaultTutorials() {
-    // Will be populated by tutorial-definitions.js
+    // This method is a placeholder - tutorials are registered via tutorial-definitions.js
+    // Check if tutorials have been registered
+    if (this.tutorials.size === 0) {
+      // Try to trigger tutorial registration
+      if (typeof registerAllTutorials === 'function') {
+        try {
+          registerAllTutorials();
+        } catch (e) {
+          console.warn('Failed to register tutorials:', e);
+        }
+      }
+    }
   }
 
   addKeyboardListeners() {
@@ -441,6 +473,16 @@ class TutorialSystem {
           break;
       }
     });
+  }
+  
+  // Setup periodic cleanup to remove stray elements
+  setupPeriodicCleanup() {
+    // Run cleanup every 30 seconds when tutorial is not active
+    setInterval(() => {
+      if (!this.isActive) {
+        this.cleanupTutorialElements();
+      }
+    }, 30000); // 30 seconds
   }
 
   async startTutorial(tutorialId) {
@@ -567,20 +609,37 @@ class TutorialSystem {
       <div class="tutorial-tooltip-footer">
         <div class="tutorial-progress">${currentStep} / ${totalSteps}</div>
         <div class="tutorial-actions">
-          <button class="tutorial-btn tutorial-btn-skip" onclick="tutorialSystem.endTutorial()">
+          <button class="tutorial-btn tutorial-btn-skip" data-action="skip">
             Skip
           </button>
           <button class="tutorial-btn tutorial-btn-prev" 
-                  onclick="tutorialSystem.previousStep()"
+                  data-action="prev"
                   ${this.currentStep === 0 ? 'disabled' : ''}>
             Prev
           </button>
-          <button class="tutorial-btn tutorial-btn-next" onclick="tutorialSystem.nextStep()">
+          <button class="tutorial-btn tutorial-btn-next" data-action="next">
             ${currentStep === totalSteps ? 'Finish' : 'Next'}
           </button>
         </div>
       </div>
     `;
+    
+    // Add event listeners to the action buttons
+    const skipBtn = this.tooltip.querySelector('[data-action="skip"]');
+    const prevBtn = this.tooltip.querySelector('[data-action="prev"]');
+    const nextBtn = this.tooltip.querySelector('[data-action="next"]');
+    
+    if (skipBtn) {
+      skipBtn.addEventListener('click', () => this.endTutorial());
+    }
+    
+    if (prevBtn) {
+      prevBtn.addEventListener('click', () => this.previousStep());
+    }
+    
+    if (nextBtn) {
+      nextBtn.addEventListener('click', () => this.nextStep());
+    }
   }
 
   positionTooltip(step) {
@@ -674,21 +733,34 @@ class TutorialSystem {
       this.markCompleted(this.currentTutorial.id);
     }
 
-    // Remove UI elements
+    // Remove UI elements with enhanced cleanup
     if (this.overlay) {
       this.overlay.classList.remove('active');
-      setTimeout(() => this.overlay?.remove(), 200);
-      this.overlay = null;
+      // Ensure overlay is removed from DOM
+      setTimeout(() => {
+        if (this.overlay && this.overlay.parentNode) {
+          this.overlay.parentNode.removeChild(this.overlay);
+        }
+        this.overlay = null;
+      }, 200);
     }
 
     if (this.tooltip) {
       this.tooltip.classList.remove('active');
-      setTimeout(() => this.tooltip?.remove(), 200);
-      this.tooltip = null;
+      // Ensure tooltip is removed from DOM
+      setTimeout(() => {
+        if (this.tooltip && this.tooltip.parentNode) {
+          this.tooltip.parentNode.removeChild(this.tooltip);
+        }
+        this.tooltip = null;
+      }, 200);
     }
 
     if (this.spotlight) {
-      this.spotlight.remove();
+      // Ensure spotlight is removed from DOM
+      if (this.spotlight.parentNode) {
+        this.spotlight.parentNode.removeChild(this.spotlight);
+      }
       this.spotlight = null;
     }
 
@@ -701,11 +773,42 @@ class TutorialSystem {
     document.querySelectorAll('[style*="z-index: 10000"]').forEach(el => {
       el.style.zIndex = '';
     });
+    
+    // Additional cleanup for any remaining tutorial elements
+    this.cleanupTutorialElements();
   }
 
   showTutorialMenu() {
+    // Ensure tutorials are loaded before showing menu
+    if (this.tutorials.size === 0) {
+      // Try to register tutorials if not already done
+      this.registerDefaultTutorials();
+      
+      // If still no tutorials, show error
+      if (this.tutorials.size === 0) {
+        console.warn('No tutorials available');
+        return;
+      }
+    }
+    
     const menu = document.createElement('div');
     menu.className = 'tutorial-menu';
+    
+    // Build menu content safely
+    let tutorialItemsHTML = '';
+    Array.from(this.tutorials.values()).forEach(tutorial => {
+      tutorialItemsHTML += `
+        <div class="tutorial-menu-item" tabindex="0" data-tutorial-id="${tutorial.id}">
+          <div class="tutorial-menu-item-icon">${tutorial.icon}</div>
+          <div class="tutorial-menu-item-content">
+            <h4 class="tutorial-menu-item-title">${tutorial.title}</h4>
+            <p class="tutorial-menu-item-desc">${tutorial.description}</p>
+          </div>
+          ${this.hasCompleted(tutorial.id) ? '<span class="tutorial-menu-item-badge">✓ Completed</span>' : ''}
+        </div>
+      `;
+    });
+    
     menu.innerHTML = `
       <div class="tutorial-menu-header">
         <h2 class="tutorial-menu-title">📚 Tutorials</h2>
@@ -716,19 +819,10 @@ class TutorialSystem {
         </div>
       </div>
       <div class="tutorial-menu-content" id="tutorial-menu-content">
-        ${Array.from(this.tutorials.values()).map(tutorial => `
-          <div class="tutorial-menu-item" tabindex="0" onclick="tutorialSystem.startTutorial('${tutorial.id}'); tutorialSystem.closeTutorialMenu();">
-            <div class="tutorial-menu-item-icon">${tutorial.icon}</div>
-            <div class="tutorial-menu-item-content">
-              <h4 class="tutorial-menu-item-title">${tutorial.title}</h4>
-              <p class="tutorial-menu-item-desc">${tutorial.description}</p>
-            </div>
-            ${this.hasCompleted(tutorial.id) ? '<span class="tutorial-menu-item-badge">✓ Completed</span>' : ''}
-          </div>
-        `).join('')}
+        ${tutorialItemsHTML}
       </div>
       <div class="tutorial-menu-footer">
-        <button class="tutorial-btn tutorial-btn-next" onclick="tutorialSystem.closeTutorialMenu()">
+        <button class="tutorial-btn tutorial-btn-next" id="tutorial-close-btn">
           Close
         </button>
       </div>
@@ -762,6 +856,48 @@ class TutorialSystem {
       });
     });
 
+    // Add event listeners for tutorial items
+    const tutorialItems = menu.querySelectorAll('.tutorial-menu-item');
+    tutorialItems.forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const tutorialId = item.getAttribute('data-tutorial-id');
+        if (tutorialId) {
+          // Close the menu first, then start the tutorial
+          this.closeTutorialMenu();
+          // Use a small delay to ensure the menu is closed before starting tutorial
+          setTimeout(() => {
+            this.startTutorial(tutorialId);
+          }, 100);
+        }
+      });
+      
+      // Also support Enter key for accessibility
+      item.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          const tutorialId = item.getAttribute('data-tutorial-id');
+          if (tutorialId) {
+            // Close the menu first, then start the tutorial
+            this.closeTutorialMenu();
+            // Use a small delay to ensure the menu is closed before starting tutorial
+            setTimeout(() => {
+              this.startTutorial(tutorialId);
+            }, 100);
+          }
+        }
+      });
+    });
+    
+    // Add event listener for close button
+    const closeBtn = menu.querySelector('#tutorial-close-btn');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        this.closeTutorialMenu();
+      });
+    }
+
     // Focus search input when menu opens
     setTimeout(() => {
       searchInput.focus();
@@ -785,11 +921,41 @@ class TutorialSystem {
     overlay.classList.remove('active');
 
     setTimeout(() => {
-      menu.remove();
-      overlay.remove();
+      // Ensure menu and overlay are removed from DOM
+      if (menu && menu.parentNode) {
+        menu.parentNode.removeChild(menu);
+      }
+      if (overlay && overlay.parentNode) {
+        overlay.parentNode.removeChild(overlay);
+      }
     }, 200);
 
     this.currentMenu = null;
+    
+    // Additional cleanup for any remaining tutorial elements
+    this.cleanupTutorialElements();
+  }
+  
+  // Additional cleanup method to ensure no tutorial elements remain
+  cleanupTutorialElements() {
+    // Remove any stray tutorial elements
+    document.querySelectorAll('.tutorial-overlay, .tutorial-tooltip, .tutorial-spotlight, .tutorial-menu').forEach(el => {
+      if (el.parentNode) {
+        el.parentNode.removeChild(el);
+      }
+    });
+    
+    // Reset any remaining z-index modifications
+    document.querySelectorAll('[style*="z-index"]').forEach(el => {
+      if (el.style.zIndex && el.style.zIndex.includes('10000')) {
+        el.style.zIndex = '';
+      }
+    });
+    
+    // Reset pointer events on body if accidentally set
+    if (document.body.style.pointerEvents) {
+      document.body.style.pointerEvents = '';
+    }
   }
 
   createLauncher() {
@@ -802,13 +968,25 @@ class TutorialSystem {
     launcher.innerHTML = '🎓';
     launcher.title = 'Tutorials & Help';
     
+    // Ensure launcher doesn't block interactions
+    launcher.style.pointerEvents = 'auto';
+    
     // Add click event to show tutorial menu
-    launcher.addEventListener('click', () => {
+    launcher.addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevent event from bubbling up
       this.showTutorialMenu();
     });
 
     // Add to document
     document.body.appendChild(launcher);
+    
+    // Ensure launcher is always visible and doesn't interfere
+    setTimeout(() => {
+      if (launcher && launcher.parentNode) {
+        launcher.style.zIndex = '9997'; // Ensure proper z-index
+        launcher.style.pointerEvents = 'auto'; // Ensure clickable
+      }
+    }, 100);
   }
 }
 

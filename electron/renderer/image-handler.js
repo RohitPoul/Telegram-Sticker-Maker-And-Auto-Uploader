@@ -536,12 +536,15 @@ class ImageHandler {
   async startConversion() {
     const selectedImages = this.imageFiles.filter(img => img.selected);
     
-    console.log('[CONVERT] Starting conversion...', {
-      selectedCount: selectedImages.length,
-      outputDir: this.outputDir,
-      format: this.selectedFormat,
-      quality: this.quality
-    });
+    // Only log in debug mode
+    if (typeof RENDERER_DEBUG !== 'undefined' && RENDERER_DEBUG) {
+      console.log('[CONVERT] Starting conversion...', {
+        selectedCount: selectedImages.length,
+        outputDir: this.outputDir,
+        format: this.selectedFormat,
+        quality: this.quality
+      });
+    }
     
     if (selectedImages.length === 0) {
       this.app.showToast('warning', 'No Images Selected', 'Please select at least one image to convert');
@@ -571,8 +574,11 @@ class ImageHandler {
       const processId = `img_${Date.now()}`;
       const imagePaths = selectedImages.map(img => img.path);
       
-      console.log('[CONVERT] Process ID:', processId);
-      console.log('[CONVERT] Image paths:', imagePaths);
+      // Only log in debug mode
+      if (typeof RENDERER_DEBUG !== 'undefined' && RENDERER_DEBUG) {
+        console.log('[CONVERT] Process ID:', processId);
+        console.log('[CONVERT] Image paths:', imagePaths);
+      }
       
       // Mark selected images as processing
       selectedImages.forEach(img => {
@@ -588,11 +594,17 @@ class ImageHandler {
         process_id: processId
       };
       
-      console.log('[CONVERT] Sending request:', payload);
+      // Only log in debug mode
+      if (typeof RENDERER_DEBUG !== 'undefined' && RENDERER_DEBUG) {
+        console.log('[CONVERT] Sending request:', payload);
+      }
       
       const response = await this.app.apiRequest('POST', '/api/image/process-batch', payload);
       
-      console.log('[CONVERT] Response:', response);
+      // Only log in debug mode
+      if (typeof RENDERER_DEBUG !== 'undefined' && RENDERER_DEBUG) {
+        console.log('[CONVERT] Response:', response);
+      }
       
       if (response && response.success) {
         this.currentProcessId = processId;
@@ -715,14 +727,20 @@ class ImageHandler {
           setTimeout(checkProgress, 300); // Faster polling for better responsiveness
         } else {
           // Handle case where process is not found or response is invalid
-          console.warn('[MONITOR] Invalid response or process not found');
+          // Only log in debug mode
+          if (typeof RENDERER_DEBUG !== 'undefined' && RENDERER_DEBUG) {
+            console.warn('[MONITOR] Invalid response or process not found');
+          }
           if (startBtn) {
             startBtn.disabled = false;
             startBtn.innerHTML = '<i class="fas fa-magic"></i> Convert';
           }
         }
       } catch (error) {
-        console.error('Error checking progress:', error);
+        // Only log in debug mode
+        if (typeof RENDERER_DEBUG !== 'undefined' && RENDERER_DEBUG) {
+          console.error('Error checking progress:', error);
+        }
         if (startBtn) {
           startBtn.disabled = false;
           startBtn.innerHTML = '<i class="fas fa-magic"></i> Convert';

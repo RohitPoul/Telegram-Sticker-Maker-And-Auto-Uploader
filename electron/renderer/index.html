@@ -505,6 +505,9 @@
               <div class="card-header">
                 <h3><i class="fas fa-chart-line"></i> Creation Status</h3>
                 <div class="status-controls">
+                  <button class="btn btn-sm btn-secondary" id="copy-status-log" title="Copy Log">
+                    <i class="fas fa-copy"></i>
+                  </button>
                   <button class="btn btn-sm btn-secondary" id="clear-status-history" title="Clear History">
                     <i class="fas fa-trash"></i>
                   </button>
@@ -1618,6 +1621,13 @@
         setTimeout(() => {
           if (typeof tutorialSystem !== 'undefined' && tutorialSystem.createLauncher) {
             tutorialSystem.createLauncher();
+          } else {
+            // Fallback: try again after a longer delay
+            setTimeout(() => {
+              if (typeof tutorialSystem !== 'undefined' && tutorialSystem.createLauncher) {
+                tutorialSystem.createLauncher();
+              }
+            }, 1000);
           }
         }, 500);
       });

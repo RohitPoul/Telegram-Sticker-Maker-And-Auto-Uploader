@@ -1046,6 +1046,15 @@ class TelegramUtilities {
   }
 
   setupStatusControls() {
+    // Copy status log button
+    const copyBtn = document.getElementById("copy-status-log");
+    if (copyBtn) {
+      copyBtn.addEventListener("click", () => {
+        this.copyStatusLog();
+        this.showToast("info", "Copy Log", "Status log copied to clipboard");
+      });
+    }
+    
     // Clear status history button
     const clearBtn = document.getElementById("clear-status-history");
     if (clearBtn) {
@@ -5438,9 +5447,20 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           
           // OPTIMIZED: Prevent duplicate stage notifications with better tracking
           if (progress.current_stage && progress.current_stage !== this.lastStage) {
-            // Show ALL meaningful stage changes, not just queue messages
+            // Filter out excessive logging - only show essential messages
+            const isEssentialMessage = 
+              progress.current_stage.includes('START') ||
+              progress.current_stage.includes('COMPLETE') ||
+              progress.current_stage.includes('ERROR') ||
+              progress.current_stage.includes('FAILED') ||
+              progress.current_stage.includes('SUCCESS') ||
+              progress.current_stage.includes('created successfully') ||
+              progress.current_stage.includes('URL name') ||
+              progress.current_stage.includes('icon');
+              
+            // Show queue messages only once
             const isQueueMessage = progress.current_stage.includes('waiting in queue');
-            const shouldShow = !isQueueMessage || !this.lastStageWasQueue;
+            const shouldShow = isEssentialMessage || (!isQueueMessage || !this.lastStageWasQueue);
             
             if (shouldShow) {
               this.addStatusItem(progress.current_stage, "info");
@@ -5462,7 +5482,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
             }
           }
           
-          // Show detailed file status updates
+          // Show essential file status updates only
           if (progress.file_statuses) {
             const failedFiles = Object.values(progress.file_statuses).filter(status => status.status === 'failed').length;
             const completedFiles = Object.values(progress.file_statuses).filter(status => status.status === 'completed').length;
@@ -5471,8 +5491,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
               this.addStatusItem(`⚠️ ${failedFiles} files failed during processing. Check logs for details.`, "warning");
             }
             
-            // Show completed files periodically to avoid spam
-            if (completedFiles > 0 && completedFiles % 10 === 0) {
+            // Show completed files less frequently to avoid spam (every 25 files instead of 10)
+            if (completedFiles > 0 && completedFiles % 25 === 0) {
               this.addStatusItem(`✅ ${completedFiles} files completed successfully`, "info");
             }
           }
@@ -5615,9 +5635,9 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     const statusList = document.getElementById("sticker-status-list");
     if (!statusList) return;
     
-    // FIXED: Only prevent exact duplicate messages, allow similar but different ones
-    if (this.lastStatusMessage === message && this.lastStatusType === type) {
-      return; // Skip exact duplicate
+    // Enhanced duplicate detection to prevent similar messages
+    if (this.isDuplicateMessage(message, type)) {
+      return; // Skip duplicate or similar messages
     }
     
     this.lastStatusMessage = message;
@@ -5637,22 +5657,65 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       <div class="status-icon"><i class="${iconClass}"></i></div>
     `;
     
-    // Add to the top of the list (latest first)
-    statusList.insertBefore(statusItem, statusList.firstChild);
+    // Add to the bottom of the list (chronological order)
+    statusList.appendChild(statusItem);
     
-    // OPTIMIZED: Limit to 50 items to show more progress history
+    // OPTIMIZED: Limit to 100 items to show more progress history
     const items = statusList.querySelectorAll('.status-item');
-    if (items.length > 50) {
-      statusList.removeChild(items[items.length - 1]);
+    if (items.length > 100) {
+      statusList.removeChild(items[0]); // Remove the oldest item (first child)
     }
     
-    // Auto-scroll to show latest message if enabled
+    // Auto-scroll to show latest message if enabled and user is at the bottom
     if (this.autoScrollEnabled) {
-      statusItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      // Check if user is near the bottom (within 50px)
+      const isNearBottom = (statusList.scrollTop + statusList.clientHeight + 50 >= statusList.scrollHeight);
+      if (isNearBottom) {
+        statusList.scrollTop = statusList.scrollHeight; // Scroll to bottom
+      }
     }
   }
 
-  getStatusIconClass(type) {
+  isDuplicateMessage(message, type) {
+    // Exact duplicate check
+    if (this.lastStatusMessage === message && this.lastStatusType === type) {
+      return true;
+    }
+    
+    // Similar message check (for progress updates)
+    if (type === 'info' && this.lastStatusType === 'info') {
+      // Check if both messages are progress updates
+      const isProgressUpdate1 = message.includes('PROGRESS') || message.includes('Completed') || message.includes('files processed');
+      const isProgressUpdate2 = this.lastStatusMessage.includes('PROGRESS') || this.lastStatusMessage.includes('Completed') || this.lastStatusMessage.includes('files processed');
+      
+      if (isProgressUpdate1 && isProgressUpdate2) {
+        // Extract file numbers to compare
+        const fileRegex = /(\d+)\/\d+\s*files/;
+        const match1 = message.match(fileRegex);
+        const match2 = this.lastStatusMessage.match(fileRegex);
+        
+        if (match1 && match2) {
+          const currentFile1 = parseInt(match1[1]);
+          const currentFile2 = parseInt(match2[1]);
+          
+          // Only show every 5th progress update to reduce spam
+          if (Math.abs(currentFile1 - currentFile2) < 5) {
+            return true;
+          }
+        }
+      }
+      
+      // Check for repetitive "waiting" messages
+      const waitingRegex = /waiting|pending|queued/i;
+      if (waitingRegex.test(message) && waitingRegex.test(this.lastStatusMessage)) {
+        return true;
+      }
+    }
+    
+    return false;
+  };
+  
+  getStatusIconClass = (type) => {
     const iconMap = {
       'ready': 'fas fa-check-circle',
       'processing': 'fas fa-spinner fa-spin',
@@ -5662,7 +5725,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       'info': 'fas fa-info-circle'
     };
     return iconMap[type] || 'fas fa-info-circle';
-  }
+  };
 
   clearStatusHistory() {
     const statusList = document.getElementById("sticker-status-list");
@@ -5677,6 +5740,33 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     `;
   }
 
+  copyStatusLog() {
+    const statusList = document.getElementById("sticker-status-list");
+    if (!statusList) return;
+    
+    // Get all status items
+    const items = statusList.querySelectorAll('.status-item');
+    let logText = '';
+    
+    // Extract text from each status item in chronological order
+    items.forEach(item => {
+      const timeElement = item.querySelector('.status-time');
+      const messageElement = item.querySelector('.status-message');
+      
+      if (timeElement && messageElement) {
+        const time = timeElement.textContent;
+        const message = messageElement.textContent;
+        logText += `[${time}] ${message}\n`;
+      }
+    });
+    
+    // Copy to clipboard
+    navigator.clipboard.writeText(logText).catch(err => {
+      console.error('Failed to copy log to clipboard:', err);
+      this.showToast("error", "Copy Failed", "Failed to copy log to clipboard");
+    });
+  }
+  
   toggleAutoScroll() {
     this.autoScrollEnabled = !this.autoScrollEnabled;
     const button = document.getElementById("toggle-auto-scroll");
@@ -6768,16 +6858,15 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   }
 
   showToast(type, title, message, duration = 5000) {
-    console.log('🔔 showToast called:', { type, title, message });
-    
     const toastContainer = document.getElementById("toast-container");
     if (!toastContainer) {
-      console.error('❌ Toast container not found!');
+      // Only show error in development mode
+      if (typeof RENDERER_DEBUG !== 'undefined' && RENDERER_DEBUG) {
+        console.error('❌ Toast container not found!');
+      }
       alert(`${type.toUpperCase()}: ${title} - ${message}`);
       return;
     }
-    
-    console.log('✅ Toast container found');
     
     const toast = document.createElement("div");
     toast.className = `toast ${type}`;
@@ -6787,25 +6876,19 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       <p>${message}</p>
     `;
     
-    console.log('✅ Toast element created');
-    
     // Simply append the toast - CSS flexbox will handle proper stacking
     toastContainer.appendChild(toast);
-    
-    console.log('✅ Toast added to container');
     
     // Auto-remove with proper cleanup
     setTimeout(() => {
       if (toast && toast.parentNode) {
         toast.remove();
-        console.log('✅ Toast removed');
       }
     }, duration);
     
     // Click to dismiss with proper cleanup
     toast.onclick = () => {
       toast.remove();
-      console.log('✅ Toast clicked and removed');
     };
   }
 
