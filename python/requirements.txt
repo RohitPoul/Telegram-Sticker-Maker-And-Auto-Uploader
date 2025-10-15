@@ -7,3 +7,4 @@ Pillow==11.3.0
 pyOpenSSL==25.3.0
 psutil==7.1.0
 cryptography
+nest_asyncio==1.6.0

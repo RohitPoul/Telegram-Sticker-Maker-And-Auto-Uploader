@@ -1407,11 +1407,15 @@ try:
     # Register all sticker bot routes properly
     register_sticker_routes(app)
     logger.info("Sticker bot routes registered successfully")
+    
+    # Verify routes were registered
+    sticker_routes = [rule.rule for rule in app.url_map.iter_rules() if '/api/sticker/' in rule.rule]
+    logger.info(f"Registered sticker routes: {sticker_routes}")
 
 except ImportError as e:
-    logger.warning(f"Could not import sticker bot routes: {e}")
+    logger.error(f"Could not import sticker bot routes: {e}", exc_info=True)
 except Exception as e:
-    logger.error(f"Error registering sticker bot routes: {e}")
+    logger.error(f"Error registering sticker bot routes: {e}", exc_info=True)
 
 @app.route('/api/backend-status', methods=['GET', 'OPTIONS'], strict_slashes=False)
 def backend_status():
@@ -1695,32 +1699,36 @@ def telegram_session_status():
         if handler:
             logger.debug("[SESSION_STATUS] Checking handler session...")
             try:
-                # Check if handler has a client
-                if handler._client:
+                # Check if handler has a client - with proper null checks
+                if hasattr(handler, '_client') and handler._client:
                     # Get session file from client
-                    if hasattr(handler._client, 'session') and getattr(handler._client.session, 'filename', None):
-                        session_file = handler._client.session.filename
-                        session_info["session_file"] = session_file
-                        session_info["session_exists"] = os.path.exists(session_file)
-                        
-                        # Check if actually connected and authorized (not just file exists)
-                        try:
-                            async def _check_real_connection():
-                                if not handler._client.is_connected():
-                                    return False
-                                return await handler._client.is_user_authorized()
+                    if hasattr(handler._client, 'session') and handler._client.session and hasattr(handler._client.session, 'filename'):
+                        session_file = getattr(handler._client.session, 'filename', None)
+                        if session_file:
+                            session_info["session_file"] = session_file
+                            session_info["session_exists"] = os.path.exists(session_file)
                             
-                            session_valid = handler.run_async(_check_real_connection())
-                            session_info["session_valid"] = session_valid
-                            logger.debug(f"[SESSION_STATUS] Real connection status: {session_valid}")
-                        except Exception as e:
-                            logger.debug(f"[SESSION_STATUS] Connection check failed: {e}")
-                            session_info["session_valid"] = False
-                        
-                        return jsonify({
-                            "success": True,
-                            "data": session_info
-                        })
+                            # Check if actually connected and authorized (not just file exists)
+                            try:
+                                async def _check_real_connection():
+                                    try:
+                                        if not handler._client.is_connected():
+                                            return False
+                                        return await handler._client.is_user_authorized()
+                                    except Exception:
+                                        return False
+                                
+                                session_valid = handler.run_async(_check_real_connection())
+                                session_info["session_valid"] = session_valid
+                                logger.debug(f"[SESSION_STATUS] Real connection status: {session_valid}")
+                            except Exception as e:
+                                logger.debug(f"[SESSION_STATUS] Connection check failed: {e}")
+                                session_info["session_valid"] = False
+                            
+                            return jsonify({
+                                "success": True,
+                                "data": session_info
+                            })
                 else:
                     logger.debug("[SESSION_STATUS] No client in handler")
             except Exception as e:

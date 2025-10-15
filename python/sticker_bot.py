@@ -1526,33 +1526,21 @@ class StickerBotCore:
     def create_sticker_pack(self, pack_name: str, pack_url_name: str, sticker_type: str, media_files: List[Dict], process_id: str, auto_skip_icon: bool = True):
         """REAL sticker pack creation with EXACT advanced logic from Python version"""
         try:
-            self.logger.info(f"[STICKER] Starting create_sticker_pack with process_id: {process_id}")
-            self.logger.info(f"[STICKER] Pack name: {pack_name}")
-            self.logger.info(f"[STICKER] Sticker type: {sticker_type}")
-            self.logger.info(f"[STICKER] Media files count: {len(media_files)}")
-            self.logger.info(f"[STICKER] Auto-skip icon: {auto_skip_icon}")
-            
-            # Check current connection status
-            self.logger.info(f"[STICKER] Current conversation_manager: {self.conversation_manager}")
-            self.logger.info(f"[STICKER] Current client: {self.client}")
-            self.logger.info(f"[STICKER] Current bot_peer: {self.bot_peer}")
+            # Only log essential info - reduce spam
+            self.logger.info(f"[STICKER] Creating pack '{pack_name}' ({len(media_files)} files) - Process: {process_id}")
             
             # Check if we have a conversation manager, if not try to set it up from existing connection
             if not self.conversation_manager:
-                self.logger.info("[STICKER] No conversation manager found, attempting to set up from existing connection")
                 try:
                     # Try to get the client from the telegram handler
                     from telegram_connection_handler import get_telegram_handler
                     handler = get_telegram_handler()
                     if handler and handler._client:
-                        self.logger.info("[STICKER] Found existing client in handler, setting up conversation manager")
-                        
                         # Use the handler's event loop to get the bot peer
                         async def setup_conversation_manager():
                             try:
                                 # Get bot peer using the handler's event loop
                                 bot_peer = await handler._client.get_entity('@stickers')
-                                self.logger.info(f"[STICKER] Bot peer obtained: {bot_peer}")
                                 
                                 # Set up the client and bot peer
                                 self.client = handler._client
@@ -1567,12 +1555,9 @@ class StickerBotCore:
                                 
                                 # Start listening
                                 await self.conversation_manager.start_listening()
-                                self.logger.info("[STICKER] Conversation manager set up successfully")
                                 return True
                             except Exception as e:
-                                self.logger.error(f"[STICKER] Error setting up conversation manager: {e}")
-                                self.logger.error(f"[STICKER] Error type: {type(e)}")
-                                self.logger.error(f"[STICKER] Full traceback: {traceback.format_exc()}")
+                                self.logger.error(f"[STICKER] Setup error: {e}")
                                 return False
                         
                         # Run the setup in the handler's event loop
@@ -1582,9 +1567,7 @@ class StickerBotCore:
                     else:
                         raise RuntimeError("No existing Telegram connection found")
                 except Exception as e:
-                    self.logger.error(f"[STICKER] Failed to set up conversation manager: {e}")
-                    self.logger.error(f"[STICKER] Error type: {type(e)}")
-                    self.logger.error(f"[STICKER] Full traceback: {traceback.format_exc()}")
+                    self.logger.error(f"[STICKER] Connection setup failed: {e}")
                     raise RuntimeError("Not connected to Telegram")
             
             if not self.conversation_manager:
@@ -1611,16 +1594,26 @@ class StickerBotCore:
                 )
                 media_items.append(media_item)
 
-            self.logger.info(f"[STICKER] Created {len(media_items)} media items for process {process_id}")
-
-            # Create a fresh coroutine to avoid reuse issues
-            async def create_pack_fresh():
-                return await self._create_sticker_pack_async(pack_name, pack_url_name, sticker_type, media_items, process_id, auto_skip_icon)
+            # Use the telegram handler's event loop directly to avoid loop issues
+            from telegram_connection_handler import get_telegram_handler
+            handler = get_telegram_handler()
             
-            # Run creation using the fresh coroutine
-            result = run_telegram_coroutine(create_pack_fresh())
+            if handler and handler._loop and handler._running:
+                # Run in handler's event loop
+                async def create_pack_async():
+                    return await self._create_sticker_pack_async(pack_name, pack_url_name, sticker_type, media_items, process_id, auto_skip_icon)
+                
+                # No timeout - let the process complete naturally
+                # If there's a real issue, it will raise an exception
+                future = asyncio.run_coroutine_threadsafe(create_pack_async(), handler._loop)
+                result = future.result(timeout=None)
+            else:
+                # Fallback to run_telegram_coroutine
+                async def create_pack_fresh():
+                    return await self._create_sticker_pack_async(pack_name, pack_url_name, sticker_type, media_items, process_id, auto_skip_icon)
+                
+                result = run_telegram_coroutine(create_pack_fresh())
 
-            self.logger.info(f"[STICKER] Pack creation completed for process {process_id}")
             return result
 
         except Exception as e:
@@ -1641,65 +1634,51 @@ class StickerBotCore:
 
 def run_telegram_coroutine(coro):
     """
-    Safely run a Telegram coroutine with database lock handling.
+    Safely run a Telegram coroutine with proper event loop management.
+    Always tries to use the handler's event loop first to avoid loop conflicts.
     
     :param coro: Coroutine to run
     :return: Result of the coroutine
     """
-    thread_name = threading.current_thread().name
-    
     # Ensure we're working with a coroutine object
     if not asyncio.iscoroutine(coro):
         raise TypeError(f"Expected a coroutine object, got {type(coro)}")
     
     try:
-        # Try to use the handler's event loop first
-        try:
-            from telegram_connection_handler import get_telegram_handler
-            handler = get_telegram_handler()
-            if handler and handler._loop and handler._running:
-                # Use the handler's dedicated event loop
-                future = asyncio.run_coroutine_threadsafe(coro, handler._loop)
-                # Allow up to 180s to accommodate longer Telegram waits
-                return future.result(timeout=180)
-        except Exception as e:
-            logging.warning(f"Could not use handler's event loop: {e}")
-        
-        # Fallback to creating a new event loop if handler is not available
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_closed():
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-        except RuntimeError:
-            # No event loop in this thread, create a new one
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        
-        # Check if the loop is already running (nested call)
-        if loop.is_running():
-            future = asyncio.run_coroutine_threadsafe(coro, loop)
-            return future.result(timeout=30)
-        else:
-            # Run the coroutine in the event loop
-            return loop.run_until_complete(coro)
-    
-    except RuntimeError as e:
-        # Handle the specific "cannot reuse already awaited coroutine" error
-        if "cannot reuse already awaited coroutine" in str(e):
-            logging.error(f"[COROUTINE] Attempted to reuse an already awaited coroutine in thread {thread_name}")
-            raise RuntimeError("Coroutine has already been executed. This is likely due to an internal error in coroutine management.")
-        else:
-            # Re-raise other RuntimeError exceptions
-            raise
+        # Always try to use the handler's event loop first to avoid conflicts
+        from telegram_connection_handler import get_telegram_handler
+        handler = get_telegram_handler()
+        if handler and handler._loop and handler._running:
+            # Use the handler's dedicated event loop
+            future = asyncio.run_coroutine_threadsafe(coro, handler._loop)
+            # No timeout - let it complete naturally
+            return future.result(timeout=None)
+    except ImportError:
+        pass
     except Exception as e:
-        # Handle specific database lock errors
-        if "database is locked" in str(e).lower():
-            logging.warning(f"[DATABASE] Lock detected: {e}")
-            handle_database_lock_error(e, "coroutine execution")
-        
-        # Re-raise the original exception
-        raise
+        logging.debug(f"Handler loop not available: {e}")
+    
+    # Only use fallback if handler is truly unavailable
+    try:
+        # Try to get existing event loop
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():
+            raise RuntimeError("Event loop is closed")
+    except RuntimeError:
+        # No event loop in this thread, create a new one
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    # Check if the loop is already running (nested call)
+    if loop.is_running():
+        # This should not happen if we're using handler's loop properly
+        logging.warning("[ASYNCIO] Nested event loop detected - this may cause issues")
+        import nest_asyncio
+        nest_asyncio.apply()
+        return loop.run_until_complete(coro)
+    else:
+        # Run the coroutine in the event loop
+        return loop.run_until_complete(coro)
 
 
 def create_fresh_coroutine(func, *args, **kwargs):
