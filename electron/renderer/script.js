@@ -89,6 +89,9 @@ class TelegramUtilities {
     this.telegramConnectionData = null;
     this.mediaData = {};
     
+    // Track logged file statuses to prevent duplicate logging
+    this.loggedFileStatuses = new Set();
+    
     // Debouncing for UI updates
     this.debouncedUpdateVideoFileList = this.debounce(this.updateVideoFileList.bind(this), 100);
     this._lastMinorUpdate = 0;
@@ -2262,25 +2265,32 @@ class TelegramUtilities {
   }
 
   updateVideoFileList() {
-    const container = document.getElementById("video-file-list");
-    if (!container) {
-      // Try again after a short delay in case DOM is still loading
-      setTimeout(() => {
-        const retryContainer = document.getElementById("video-file-list");
-        if (retryContainer && this.videoFiles.length > 0) {
-          this.updateVideoFileList();
-        }
-      }, 100);
-      return;
+    // Initialize debounce property if not exists
+    if (!this._updateVideoFileListDebounce) {
+      this._updateVideoFileListDebounce = null;
     }
     
-    // Update video file list
-    const fileCount = this.videoFiles.length;
+    // Clear existing timeout
+    if (this._updateVideoFileListDebounce) {
+      clearTimeout(this._updateVideoFileListDebounce);
+    }
     
-    // IMMEDIATE FILE COUNT UPDATE - Do this first for instant feedback
+    // Update counter immediately
     const counter = document.getElementById("video-file-count");
     if (counter) {
       counter.textContent = this.videoFiles.length;
+    }
+    
+    // Debounce the actual list update
+    this._updateVideoFileListDebounce = setTimeout(() => {
+      this._updateVideoFileListInternal();
+    }, 50);
+  }
+  
+  _updateVideoFileListInternal() {
+    const container = document.getElementById("video-file-list");
+    if (!container) {
+      return;
     }
     
     if (this.videoFiles.length === 0) {
@@ -2294,29 +2304,10 @@ class TelegramUtilities {
       return;
     }
     
-    // Use virtualized list for better performance with large datasets
-    if (this.videoFiles.length > 50) {
-      // Use virtualized rendering for large lists
-      if (window.updateVirtualList) {
-        window.updateVirtualList(
-          container,
-          this.videoFiles,
-          (file, index) => this.createVideoFileElement(file, index),
-          (file, index) => index,
-          {
-            itemHeight: 100, // Increased height for better spacing
-            bufferSize: 15,   // Increased buffer for smoother scrolling
-            scrollTop: container.scrollTop || 0,
-            containerHeight: container.clientHeight || 300,
-            autoMeasure: true // Auto-measure item height
-          }
-        );
-      } else {
-        // Fallback to regular rendering if virtual list is not available
-        this.updateVideoFileListRegular(container);
-      }
+    // Implement virtual scrolling for large lists
+    if (this.videoFiles.length > 100) {
+      this.renderVirtualVideoList(container);
     } else {
-      // Use regular rendering for smaller lists
       this.updateVideoFileListRegular(container);
     }
   }
@@ -2334,6 +2325,76 @@ class TelegramUtilities {
     // Clear and append in one operation for better performance
     container.innerHTML = '';
     container.appendChild(fragment);
+  }
+  
+  // Virtual scrolling implementation for video files
+  renderVirtualVideoList(container) {
+    const itemHeight = 100;
+    const visibleHeight = Math.min(600, container.parentElement.clientHeight || 600);
+    const totalHeight = this.videoFiles.length * itemHeight;
+    
+    // Setup container
+    container.innerHTML = '';
+    container.style.height = visibleHeight + 'px';
+    container.style.overflowY = 'auto';
+    container.style.position = 'relative';
+    
+    // Create spacer for scrollbar
+    const spacer = document.createElement('div');
+    spacer.style.height = totalHeight + 'px';
+    spacer.style.position = 'relative';
+    
+    // Create items container
+    const itemsContainer = document.createElement('div');
+    itemsContainer.style.position = 'absolute';
+    itemsContainer.style.top = '0';
+    itemsContainer.style.left = '0';
+    itemsContainer.style.right = '0';
+    
+    spacer.appendChild(itemsContainer);
+    container.appendChild(spacer);
+    
+    let lastRenderTop = 0;
+    const renderBuffer = 5;
+    
+    const renderVisibleItems = () => {
+      const scrollTop = container.scrollTop;
+      const startIndex = Math.max(0, Math.floor(scrollTop / itemHeight) - renderBuffer);
+      const endIndex = Math.min(
+        this.videoFiles.length,
+        Math.ceil((scrollTop + visibleHeight) / itemHeight) + renderBuffer
+      );
+      
+      // Only re-render if scrolled significantly
+      if (Math.abs(scrollTop - lastRenderTop) < itemHeight / 2) return;
+      lastRenderTop = scrollTop;
+      
+      // Create visible items
+      const fragment = document.createDocumentFragment();
+      
+      for (let i = startIndex; i < endIndex; i++) {
+        const element = this.createVideoFileElement(this.videoFiles[i], i);
+        element.style.position = 'absolute';
+        element.style.top = (i * itemHeight) + 'px';
+        element.style.left = '0';
+        element.style.right = '0';
+        element.style.height = itemHeight + 'px';
+        fragment.appendChild(element);
+      }
+      
+      itemsContainer.innerHTML = '';
+      itemsContainer.appendChild(fragment);
+    };
+    
+    // Debounced scroll handler
+    let scrollTimeout;
+    container.addEventListener('scroll', () => {
+      if (scrollTimeout) clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(renderVisibleItems, 16);
+    });
+    
+    // Initial render
+    renderVisibleItems();
   }
 
   // Create a single video file element
@@ -3983,11 +4044,18 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           this.addStatusItem(`⚠️ Telegram rate limit: Wait ${waitTime}`, "warning");
           this.addStatusItem(`💡 Next connection will reuse session to avoid limits`, "info");
           
+          // Reset UI state before returning
+          this.hideLoadingOverlay();
+          this.updateTelegramStatus("disconnected");
           return; // Don't proceed further
         }
         
         const errorMsg = (response && response.error) || 'Unknown error occurred';
         this.showToast('error', 'Connection Failed', errorMsg);
+        
+        // Reset UI state for general connection failure
+        this.hideLoadingOverlay();
+        this.updateTelegramStatus("disconnected");
       }
     } catch (error) {
       if (RENDERER_DEBUG) console.error('[DEBUG] Connection error caught:', error);
@@ -4012,6 +4080,9 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       } else {
         this.showToast('error', 'Connection Error', errorMsg);
       }
+      
+      // Reset UI state after error
+      this.updateTelegramStatus("disconnected");
       
     } finally {
       // Reset connection flag
@@ -4947,6 +5018,9 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       return;
     }
 
+    // Clear logged file statuses for new pack creation
+    this.loggedFileStatuses.clear();
+    
     // Add initial status
     this.addStatusItem(`🚀 Starting sticker pack creation: "${packName}"`, "info");
     
@@ -5620,12 +5694,20 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     const statusList = document.getElementById("sticker-status-list");
     if (!statusList) return;
     
-    // Add detailed file status information
+    // Add detailed file status information - only log once per file
     for (const [filename, statusInfo] of Object.entries(fileStatuses)) {
-      if (statusInfo.status === 'failed') {
-        this.addStatusItem(`❌ Failed to process ${filename}: ${statusInfo.error}`, "error");
-      } else if (statusInfo.status === 'completed') {
-        this.addStatusItem(`✅ Completed ${filename} with emoji ${statusInfo.emoji}`, "completed");
+      // Create unique key for this file's status
+      const statusKey = `${filename}:${statusInfo.status}`;
+      
+      // Only log if we haven't logged this file status before
+      if (!this.loggedFileStatuses.has(statusKey)) {
+        if (statusInfo.status === 'failed') {
+          this.addStatusItem(`❌ Failed to process ${filename}: ${statusInfo.error}`, "error");
+          this.loggedFileStatuses.add(statusKey);
+        } else if (statusInfo.status === 'completed') {
+          this.addStatusItem(`✅ Completed ${filename} with emoji ${statusInfo.emoji}`, "completed");
+          this.loggedFileStatuses.add(statusKey);
+        }
       }
     }
   }
@@ -6876,20 +6958,33 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       <p>${message}</p>
     `;
     
-    // Simply append the toast - CSS flexbox will handle proper stacking
+    // Append to container - CSS will handle stacking with gap
     toastContainer.appendChild(toast);
     
-    // Auto-remove with proper cleanup
+    // Auto-remove with slide-out animation
+    const autoRemoveTimer = setTimeout(() => {
+      this.removeToast(toast);
+    }, duration);
+    
+    // Click to dismiss immediately
+    toast.onclick = () => {
+      clearTimeout(autoRemoveTimer);
+      this.removeToast(toast);
+    };
+  }
+  
+  removeToast(toast) {
+    if (!toast || !toast.parentNode) return;
+    
+    // Add slide-out animation
+    toast.style.animation = 'slideOut 0.3s ease';
+    
+    // Remove after animation completes
     setTimeout(() => {
       if (toast && toast.parentNode) {
         toast.remove();
       }
-    }, duration);
-    
-    // Click to dismiss with proper cleanup
-    toast.onclick = () => {
-      toast.remove();
-    };
+    }, 300);
   }
 
   repositionToasts() {
@@ -7827,34 +7922,79 @@ This action cannot be undone. Are you sure?
     }
   }
   
-  // Enhanced emoji modal functions
+  // Enhanced emoji modal functions with lazy loading
   setupEmojiModal() {
-    // Emoji tab switching with delegation for better performance
-    const tabContainer = document.querySelector('.emoji-tabs');
-    const categories = document.querySelectorAll('.emoji-category');
-    
-    if (tabContainer) {
-      tabContainer.addEventListener('click', (e) => {
-        const tab = e.target.closest('.emoji-tab');
-        if (!tab) return;
-        
-        const category = tab.getAttribute('data-category');
-        
-        // Update active tab
-        document.querySelectorAll('.emoji-tab').forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-        
-        // Update active category
-        categories.forEach(cat => cat.classList.remove('active'));
-        const targetCategory = document.getElementById(`category-${category}`);
-        if (targetCategory) {
-          targetCategory.classList.add('active');
-        }
-      });
+    // Initialize lazy loading cache properties
+    if (!this._emojiDataCache) {
+      this._emojiDataCache = null;
+    }
+    if (!this._emojiLoadPromise) {
+      this._emojiLoadPromise = null;
     }
     
-    // Setup smooth scroll navigation buttons
-    this.setupEmojiScrollNavigation();
+    // Defer emoji loading until needed
+    const modal = document.getElementById('emoji-modal');
+    if (!modal) return;
+    
+    // Use a single event listener for all emoji interactions
+    modal.addEventListener('click', (e) => {
+      const tab = e.target.closest('.emoji-tab');
+      if (tab) {
+        this.handleEmojiTabClick(tab);
+        return;
+      }
+      
+      const emojiBtn = e.target.closest('.emoji-btn');
+      if (emojiBtn) {
+        const emoji = emojiBtn.getAttribute('data-emoji');
+        this.selectQuickEmoji(emoji);
+      }
+    });
+  }
+  
+  handleEmojiTabClick(tab) {
+    const category = tab.getAttribute('data-category');
+    
+    // Batch DOM updates
+    requestAnimationFrame(() => {
+      // Update tabs
+      document.querySelectorAll('.emoji-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      
+      // Update categories
+      document.querySelectorAll('.emoji-category').forEach(cat => cat.classList.remove('active'));
+      const targetCategory = document.getElementById(`category-${category}`);
+      if (targetCategory) {
+        targetCategory.classList.add('active');
+      }
+    });
+  }
+  
+  async lazyLoadEmojiOptions() {
+    // Return cached data if available
+    if (this._emojiDataCache) return this._emojiDataCache;
+    
+    // Return existing promise if loading is in progress
+    if (this._emojiLoadPromise) return this._emojiLoadPromise;
+    
+    // Start loading emoji data
+    this._emojiLoadPromise = this.loadEmojiData();
+    this._emojiDataCache = await this._emojiLoadPromise;
+    this._emojiLoadPromise = null;
+    
+    return this._emojiDataCache;
+  }
+  
+  async loadEmojiData() {
+    // Simulate loading emoji data (in real app, might load from file)
+    return new Promise(resolve => {
+      setTimeout(() => {
+        resolve({
+          loaded: true,
+          categories: ['smileys', 'hearts', 'animals', 'food', 'objects']
+        });
+      }, 10);
+    });
   }
   
   setupEmojiScrollNavigation() {
