@@ -23,6 +23,10 @@ app.commandLine.appendSwitch("disable-background-timer-throttling");
 app.commandLine.appendSwitch("disable-renderer-backgrounding");
 app.commandLine.appendSwitch("disable-features", "VizDisplayCompositor");
 
+// Memory optimization flags
+app.commandLine.appendSwitch('max-old-space-size', '2048'); // Limit V8 heap to 2GB
+app.commandLine.appendSwitch('js-flags', '--expose-gc'); // Allow manual garbage collection
+
 // Optional: Users can still enable GPU if they want to experiment
 if (process.env.ENABLE_GPU === "1") {
   console.log("GPU acceleration manually enabled via ENABLE_GPU=1");
@@ -155,6 +159,17 @@ function createWindow() {
         shell.openExternal(url);
         return { action: "deny" };
     });
+
+    // Memory optimization: Clear cache periodically
+    setInterval(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.session.clearCache();
+            // Trigger garbage collection if available
+            if (global.gc) {
+                global.gc();
+            }
+        }
+    }, 300000); // Every 5 minutes
 
     // no noisy log on did-finish-load
     mainWindow.webContents.on("did-finish-load", () => {});
