@@ -448,7 +448,7 @@ class TutorialSystem {
         try {
           registerAllTutorials();
         } catch (e) {
-          console.warn('Failed to register tutorials:', e);
+          console.error('Failed to register tutorials:', e);
         }
       }
     }
@@ -786,7 +786,6 @@ class TutorialSystem {
       
       // If still no tutorials, show error
       if (this.tutorials.size === 0) {
-        console.warn('No tutorials available');
         return;
       }
     }
