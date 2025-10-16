@@ -4,7 +4,6 @@
 
 class ModalOptimizer {
   constructor() {
-    console.log('Modal optimizer disabled - using original modal system');
   }
   
   initialize() {
