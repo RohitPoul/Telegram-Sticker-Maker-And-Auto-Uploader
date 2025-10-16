@@ -592,8 +592,6 @@ class StickerBotManager {
         } else if (response.error) {
           // SMART ERROR HANDLING: Check if this is a "Process not found" after progress
           if (response.error.includes("Process not found") && lastKnownProgress) {
-            console.log('🔧 [STICKER-BOT] Process lost after progress, likely completed successfully');
-            
             // If we had significant progress and now process is not found,
             // it might have completed successfully
             if (lastKnownProgress.step && 
@@ -601,19 +599,14 @@ class StickerBotManager {
                  lastKnownProgress.step.includes('Sticker pack creation queued') ||
                  lastKnownProgress.step.includes('Icon step skipped'))) {
                 
-                console.log('🎉 [STICKER-BOT] Detected likely completion after skip, checking for completion...');
-                
                 // Try to get final status first
                 try {
                   const statusResponse = await window.coreSystem.apiRequest("GET", `/api/process-status/${this.currentStickerProcessId}`);
                   if (statusResponse.success && statusResponse.data?.shareable_link) {
-                    console.log('✅ [STICKER-BOT] Found shareable link in status, showing success modal');
                     this.handleStickerPackComplete(statusResponse.data.shareable_link);
                     return;
                   }
-                } catch (e) {
-                  console.log('Could not get final status, will attempt completion fallback');
-                }
+                } catch (e) { }
                 
                 // Enhanced fallback: Construct link from pack name if available
                 const packName = lastKnownProgress.pack_name || lastKnownProgress.url_name || 
@@ -621,7 +614,6 @@ class StickerBotManager {
                                 
                 if (packName) {
                   const constructedLink = `https://t.me/addstickers/${packName}`;
-                  console.log('🎉 [STICKER-BOT] Showing success modal with constructed link:', constructedLink);
                   this.handleStickerPackComplete(constructedLink);
                   return;
                 }
@@ -632,7 +624,6 @@ class StickerBotManager {
                 
                 if (formUrlName) {
                   const constructedLink = `https://t.me/addstickers/${formUrlName}`;
-                  console.log('🎉 [STICKER-BOT] Extracted URL name from form, showing success modal:', constructedLink);
                   this.handleStickerPackComplete(constructedLink);
                   return;
                 }
@@ -671,19 +662,16 @@ class StickerBotManager {
     }
     // Method 2: Try main app instance
     else if (window.app?.showSuccessModal) {
-      console.log(`🎉 [STICKER-BOT] Using app.showSuccessModal`);
       window.app.showSuccessModal(shareableLink);
       modalShown = true;
     }
     // Method 3: Try window.telegramUtilities (from script.js)
     else if (window.telegramUtilities?.showSuccessModal) {
-      console.log(`🎉 [STICKER-BOT] Using telegramUtilities.showSuccessModal`);
       window.telegramUtilities.showSuccessModal(shareableLink);
       modalShown = true;
     }
     // Method 4: Direct modal manipulation as fallback
     else {
-      console.log(`🎉 [STICKER-BOT] Using direct modal manipulation fallback`);
       const modal = document.getElementById("success-modal");
       const overlay = document.getElementById("modal-overlay");
       const linkInput = document.getElementById("shareable-link");
@@ -841,8 +829,6 @@ class StickerBotManager {
   // =============================================
   
   showUrlNameModal(processId, takenName, currentAttempt = 1, maxAttempts = 3) {
-    console.log(`🔧 [FRONTEND] showUrlNameModal called with:`, { processId, takenName, currentAttempt, maxAttempts });
-    
     const modal = document.getElementById("url-name-modal");
     const overlay = document.getElementById("modal-overlay");
     const takenNameSpan = document.getElementById("taken-url-name");
@@ -919,8 +905,6 @@ class StickerBotManager {
     // Show modal
     modal.style.display = "flex";
     overlay.classList.add("active");
-
-    console.log(`🔧 [FRONTEND] URL name modal displayed for process ${processId}`);
   }
 
   generateSuggestedName(takenName) {
