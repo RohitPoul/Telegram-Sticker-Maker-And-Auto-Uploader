@@ -134,9 +134,6 @@ class TelegramUtilities {
       element.addEventListener(event, handler);
       return true;
     } else {
-      if (logError && RENDERER_DEBUG) {
-        console.warn(`⚠️ Element with ID '${elementId}' not found for event '${event}'`);
-      }
       return false;
     }
   }
@@ -330,9 +327,7 @@ class TelegramUtilities {
       
       // ENHANCED: Handle [Errno 22] Invalid argument errors specifically
       if (error.message && (error.message.includes('Invalid argument') || error.message.includes('Errno 22'))) {
-        console.error(`[API] Invalid argument error with path: ${path}`);
-        console.error(`[API] Sanitized path: ${sanitizedPath}`);
-        console.error(`[API] Request body:`, body);
+        console.error(`[API] Invalid argument error`);
         throw new Error('Invalid request data - contains invalid characters. Please check your inputs and try again.');
       }
       
@@ -1335,13 +1330,10 @@ class TelegramUtilities {
   }
 
   showSuccessModal(shareableLink) {
-    // CRITICAL DEBUG: Check if the success modal is missing from the DOM
     const successModalInDOM = document.getElementById("success-modal");
-    const allModalElements = document.querySelectorAll('[id*="modal"], .modal');
     
     // If success modal is missing, try to inject it from the original HTML
     if (!successModalInDOM) {
-      console.warn(`⚠️ [SUCCESS_MODAL] Success modal not found in DOM. This might be due to HTML structure issues. Attempting to inject it...`);
       
       // Try to find the modal overlay to inject the success modal into it
       const overlay = document.getElementById("modal-overlay");
@@ -1494,20 +1486,6 @@ class TelegramUtilities {
       const overlay = document.getElementById("modal-overlay");
       const linkInput = document.getElementById("shareable-link");
       
-      /* console.log(`🎉 [SUCCESS_MODAL] Direct DOM query results:`, {
-        modal: !!modal,
-        overlay: !!overlay, 
-        linkInput: !!linkInput,
-        domReadyState: document.readyState,
-        totalModals: document.querySelectorAll('[id*="modal"]').length,
-        successModalExists: document.querySelector('#success-modal') !== null
-      }); */
-      
-      // Debug: Log all modal-like elements if modal not found
-      if (!modal) {
-        const allModalElements = document.querySelectorAll('[id*="modal"], .modal');
-      }
-      
       return { modal, overlay, linkInput };
     };
     
@@ -1535,8 +1513,6 @@ class TelegramUtilities {
               retryFind();
               return;
             }
-            
-            console.error(`🎉 [SUCCESS_MODAL] CRITICAL: Modal still not found after ${maxRetries} retries!`);
             
             // EMERGENCY: Try to create and inject the success modal if it doesn't exist
             const modalHTML = `
@@ -1595,18 +1571,16 @@ class TelegramUtilities {
               };
             }
             
-            // Get the overlay (should exist)
-            const overlay = document.getElementById("modal-overlay");
-            
-            if (overlay) {
-              // Show the fallback modal
-              overlay.classList.add("active");
-              fallbackModal.style.display = "flex";
-              fallbackModal.style.zIndex = "9999";
+              // Get the overlay (should exist)
+              const overlay = document.getElementById("modal-overlay");
               
-              // console.log('🎉 [SUCCESS_MODAL] Emergency fallback modal created and displayed');
-              return;
-            }
+              if (overlay) {
+                // Show the fallback modal
+                overlay.classList.add("active");
+                fallbackModal.style.display = "flex";
+                fallbackModal.style.zIndex = "9999";
+                return;
+              }
             
             // Ultimate fallback: Show success via toast and status
             this.showToast("success", "🎉 Pack Created!", `Sticker pack created successfully! Link: ${shareableLink}`, 15000);
@@ -1619,8 +1593,6 @@ class TelegramUtilities {
                   window.electronAPI.openUrl(shareableLink);
                 } else if (window.electronAPI && window.electronAPI.shell && window.electronAPI.shell.openExternal) {
                   window.electronAPI.shell.openExternal(shareableLink);
-                } else {
-                  // console.log('🎉 [SUCCESS_MODAL] ElectronAPI methods not available, will show link in status');
                 }
               } catch (error) {
                 console.error('🎉 [SUCCESS_MODAL] Error opening URL:', error);
@@ -1631,8 +1603,6 @@ class TelegramUtilities {
         
         retryFind();
       } else {
-        // Modal found immediately, display it
-        // console.log(`🎉 [SUCCESS_MODAL] Modal found immediately after DOM ready`);
         this.displaySuccessModal(elements.modal, elements.overlay, elements.linkInput, shareableLink);
       }
     });
@@ -1641,8 +1611,6 @@ class TelegramUtilities {
 
 
   displaySuccessModal(modal, overlay, linkInput, shareableLink) {
-    // console.log(`🎉 [SUCCESS_MODAL] Starting modal display process...`);
-    
     // Validate required elements
     if (!modal) {
       console.error(`🎉 [SUCCESS_MODAL] Cannot display modal - modal element is null`);
@@ -1657,9 +1625,6 @@ class TelegramUtilities {
     // Set the shareable link
     if (linkInput && shareableLink) {
       linkInput.value = shareableLink;
-      // console.log(`🎉 [SUCCESS_MODAL] Set link input value: ${shareableLink}`);
-    } else {
-      // console.warn(`🎉 [SUCCESS_MODAL] Link input not found or no link provided - linkInput: ${!!linkInput}, shareableLink: ${!!shareableLink}`);
     }
     
     // Reset any previous states and ensure modal is ready with proper centering
@@ -1696,12 +1661,9 @@ class TelegramUtilities {
     overlay.classList.add("active");
     modal.style.display = "flex";
     
-    // console.log(`🎉 [SUCCESS_MODAL] Modal display set to flex, opacity transition starting...`);
-    
     // Use requestAnimationFrame for smooth display
     requestAnimationFrame(() => {
       modal.style.opacity = "1";
-      // console.log(`🎉 [SUCCESS_MODAL] Opacity set to 1, modal should be visible now`);
     });
     
     // Add critical modal protection (prevent outside click dismissal)
@@ -1716,25 +1678,10 @@ class TelegramUtilities {
       
       // Verify visibility after a short delay
       const computedStyle = getComputedStyle(modal);
-      console.log(`🎉 [SUCCESS_MODAL] Visibility check:`, {
-        display: computedStyle.display,
-        opacity: computedStyle.opacity,
-        visibility: computedStyle.visibility,
-        zIndex: computedStyle.zIndex,
-        position: computedStyle.position,
-        transform: computedStyle.transform
-      });
       
-      // If modal is still not visible, log additional debug info
+      // If modal is still not visible, log error
       if (computedStyle.display === 'none' || computedStyle.opacity === '0') {
-        console.error(`🎉 [SUCCESS_MODAL] Modal visibility issue detected:`, {
-          modalElement: modal,
-          overlayElement: overlay,
-          modalClasses: modal.className,
-          overlayClasses: overlay.className,
-          modalRect: modal.getBoundingClientRect(),
-          overlayRect: overlay.getBoundingClientRect()
-        });
+        console.error(`Modal visibility issue detected`);
       }
       
       // CRITICAL FIX: Scroll to modal if it's not in view
@@ -1747,8 +1694,6 @@ class TelegramUtilities {
       );
       
       if (!isInViewport) {
-        // console.log(`🎉 [SUCCESS_MODAL] Modal not in viewport, scrolling to it`);
-        // Scroll the modal into view
         modal.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
       }
       
@@ -1756,8 +1701,6 @@ class TelegramUtilities {
       modal.style.zIndex = "10000";
       overlay.style.zIndex = "9999";
     }, 100);
-    
-    // console.log(`🎉 [SUCCESS_MODAL] Modal should now be visible`);
     
     // Setup event listeners for modal buttons
     this.setupSuccessModalEventListeners(shareableLink);
@@ -1767,7 +1710,6 @@ class TelegramUtilities {
       const copyBtn = document.getElementById("copy-link-btn");
       if (copyBtn) {
         copyBtn.focus();
-        // console.log(`🎉 [SUCCESS_MODAL] Focus set to copy button`);
       }
     }, 300);
   }
@@ -1775,8 +1717,6 @@ class TelegramUtilities {
   hideSuccessModal() {
     const modal = document.getElementById("success-modal");
     const overlay = document.getElementById("modal-overlay");
-    
-    // console.log(`🎉 [SUCCESS_MODAL] Hiding modal - modal found: ${!!modal}, overlay found: ${!!overlay}`);
     
     if (modal) {
       modal.style.display = "none";
@@ -1788,36 +1728,26 @@ class TelegramUtilities {
       modal.style.left = "";
       modal.style.transform = "";
       modal.style.margin = "";
-      // console.log(`🎉 [SUCCESS_MODAL] Modal hidden`);
     }
     
     if (overlay) {
       overlay.classList.remove("active");
       overlay.style.display = "none";
       overlay.style.visibility = "hidden";
-      // console.log(`🎉 [SUCCESS_MODAL] Overlay hidden`);
     }
     
     // Clean up keyboard event listeners
     if (this.successModalKeyHandler) {
       document.removeEventListener('keydown', this.successModalKeyHandler);
       this.successModalKeyHandler = null;
-      // console.log(`🎉 [SUCCESS_MODAL] Keyboard handlers removed`);
     }
-    
-    console.log(`🎉 [SUCCESS_MODAL] Modal hidden and cleaned up`);
   }
   
   setupSuccessModalEventListeners(shareableLink) {
-    console.log(`🎉 [SUCCESS_MODAL] Setting up event listeners for link: ${shareableLink}`);
-    
     // Copy link button
     const copyBtn = document.getElementById("copy-link-btn");
     if (copyBtn) {
       copyBtn.onclick = () => this.copyShareableLink();
-      console.log(`🎉 [SUCCESS_MODAL] Copy button listener attached`);
-    } else {
-      console.warn(`🎉 [SUCCESS_MODAL] Copy button not found`);
     }
     
     // Open in Telegram button - prevent double opening
@@ -1830,18 +1760,12 @@ class TelegramUtilities {
         e.stopPropagation();
         this.openTelegramLink();
       };
-      console.log(`🎉 [SUCCESS_MODAL] Telegram button listener attached`);
-    } else {
-      console.warn(`🎉 [SUCCESS_MODAL] Telegram button not found`);
     }
     
     // Create another pack button
     const anotherBtn = document.getElementById("create-another-btn");
     if (anotherBtn) {
       anotherBtn.onclick = () => this.createAnotherPack();
-      console.log(`🎉 [SUCCESS_MODAL] Create another button listener attached`);
-    } else {
-      console.warn(`🎉 [SUCCESS_MODAL] Create another button not found`);
     }
     
     // Add keyboard support
@@ -5195,8 +5119,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   }
 
   startStickerProgressMonitoring(processId) {
-    console.log(`[MONITORING] Starting monitoring for process: ${processId}`);
-    
     if (this.stickerProgressInterval) {
       clearInterval(this.stickerProgressInterval);
     }
@@ -5255,18 +5177,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           const isIconRequest = progress.waiting_for_user && !!(progress.icon_request_message || progress.icon_request);
           let isUrlConflict = (progress.waiting_for_user || progress.status === "waiting_for_url_name") && !!progress.url_name_taken;
           
-          // DEBUG LOGGING
-          console.log(`[MONITORING] Process ${processId}:`, {
-            status: progress.status,
-            waiting_for_user: progress.waiting_for_user,
-            icon_request_message: !!progress.icon_request_message,
-            url_name_taken: !!progress.url_name_taken,
-            isIconRequest,
-            isUrlConflict,
-            auto_skip_handled: progress.auto_skip_handled,
-            shareable_link: !!progress.shareable_link
-          });
-          
           // CRITICAL FIX: Handle backend bug where both icon_request and url_name_taken are set
           // Priority: Icon request comes FIRST, then URL conflict
           if (isIconRequest && isUrlConflict) {
@@ -5277,8 +5187,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           
           // Handle URL conflict ONLY if it's not an icon request (for manual mode)
           if (isUrlConflict && !isIconRequest && !this.urlPromptHandledProcesses.has(processId)) {
-            console.log(`[MONITORING] URL CONFLICT DETECTED! Showing retry modal...`);
-            
             // Mark as handled to prevent duplicate processing
             this.urlPromptHandledProcesses.add(processId);
             
@@ -5292,28 +5200,17 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
             
             this.addStatusItem(`URL name '${takenName}' is taken. Showing retry options (${currentAttempt}/${maxAttempts})`, "warning");
             
-            console.log(`[MONITORING] Calling showUrlNameModal with:`, { takenName, currentAttempt, maxAttempts, processId });
             this.showUrlNameModal(takenName, currentAttempt, maxAttempts, processId);
-            
-            // Verify modal was shown
-            setTimeout(() => {
-              const modal = document.getElementById("url-name-modal");
-              console.log(`[MONITORING] URL modal shown? Modal display:`, modal?.style.display);
-            }, 100);
             
             return; // Exit early after handling URL name retry
           }
           
           // PRIORITY CHECK 3: Check for icon selection
           if (progress.waiting_for_user && (progress.icon_request_message || progress.icon_request) && !this.iconHandledProcesses.has(processId)) {
-            console.log(`[MONITORING] Icon handling block entered`);
-            
             // Check if auto-skip was enabled for this process (from backend)
             const processAutoSkip = progress.auto_skip_icon !== undefined ? progress.auto_skip_icon : true; // Default to true
             // Check if auto-skip has already been handled by the backend
             const autoSkipHandled = progress.auto_skip_handled !== undefined ? progress.auto_skip_handled : false;
-            
-            console.log(`[MONITORING] Icon handling - auto_skip: ${processAutoSkip}, auto_skip_handled: ${autoSkipHandled}`);
             
             // REMOVED: Don't check for completion here - it's a backend bug setting status=completed while waiting_for_user=true
             // The completion check should happen AFTER user input, not during icon request
@@ -5322,18 +5219,14 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
             // BUT CRITICAL: Continue monitoring instead of returning - don't exit early!
             // We MUST check for URL name conflicts and completion even when auto-skip is handled
             if (processAutoSkip && autoSkipHandled) {
-              console.log(`[MONITORING] Auto-skip handled by backend, marking icon as processed`);
-              
               // Backend is handling auto-skip, mark as handled but continue monitoring
               this.iconHandledProcesses.add(processId);
               
               // CRITICAL: Now check if there's a URL conflict to handle
               // Check the ORIGINAL url_name_taken flag, not isUrlConflict (which we may have modified)
               const hasUrlConflict = !!progress.url_name_taken;
-              console.log(`[MONITORING] Checking for URL conflict - url_name_taken: ${progress.url_name_taken}, hasUrlConflict: ${hasUrlConflict}`);
               
               if (hasUrlConflict && !this.urlPromptHandledProcesses.has(processId)) {
-                console.log(`[MONITORING] Auto-skip done, now handling URL conflict...`);
                 
                 // Mark as handled to prevent duplicate processing
                 this.urlPromptHandledProcesses.add(processId);
@@ -5348,20 +5241,12 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
                 
                 this.addStatusItem(`URL name '${takenName}' is taken. Showing retry options (${currentAttempt}/${maxAttempts})`, "warning");
                 
-                console.log(`[MONITORING] Calling showUrlNameModal with:`, { takenName, currentAttempt, maxAttempts, processId });
                 this.showUrlNameModal(takenName, currentAttempt, maxAttempts, processId);
-                
-                // Verify modal was shown
-                setTimeout(() => {
-                  const modal = document.getElementById("url-name-modal");
-                  console.log(`[MONITORING] URL modal shown? Modal display:`, modal?.style.display);
-                }, 100);
                 
                 return; // Exit after showing URL retry modal
               }
               
               // No URL conflict - continue monitoring
-              console.log(`[MONITORING] Auto-skip done, no URL conflict, continuing monitoring...`);
               // DON'T return here - fall through to remaining checks
             } else {
               // Manual mode: show icon selection modal and STOP monitoring
@@ -5451,7 +5336,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
               
               // If verification is pending, do not show icon modal
               if (this.pendingCode || this.pendingPassword) {
-                console.log(`[MONITORING] Icon request detected but verification pending; skipping icon modal`);
                 return;
               }
               // DOM-based guard as a fallback
@@ -5461,21 +5345,12 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
                 const codeVisible = codeModal && codeModal.style && codeModal.style.display && codeModal.style.display !== 'none';
                 const passVisible = passModal && passModal.style && passModal.style.display && passModal.style.display !== 'none';
                 if (codeVisible || passVisible) {
-                  console.log(`[MONITORING] Verification modal visible; skipping icon modal`);
                   return;
                 }
               } catch {}
-              console.log(`[MONITORING] ICON REQUEST DETECTED! Showing icon modal...`);
-              console.log(`[MONITORING] Calling showIconModal with:`, { processId, message: progress.icon_request_message?.substring(0, 50) });
               
               this.showIconModal(processId, progress.icon_request_message);
               this.iconHandledProcesses.add(processId);
-              
-              // Verify modal was shown
-              setTimeout(() => {
-                const modal = document.getElementById("icon-modal");
-                console.log(`[MONITORING] Icon modal shown? Modal display:`, modal?.style.display);
-              }, 100);
               
               // CRITICAL FIX: Don't add to urlPromptHandledProcesses here - only when URL prompt is actually handled
               // this.urlPromptHandledProcesses.add(processId);
@@ -5487,7 +5362,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           if (progress.status === "completed") {
             // CRITICAL FIX: Don't treat as completed if still waiting for user input
             if (progress.waiting_for_user) {
-              console.warn(`[MONITORING] Backend marked as 'completed' but waiting_for_user=true. Ignoring completion.`);
               // Continue monitoring - this is a backend bug
             } else {
               // CRITICAL FIX: Check if we have a shareable_link, which means the process is ACTUALLY completed
