@@ -64,11 +64,6 @@ class ComponentOptimizer {
     
     this.renderQueue = [];
     this.isRendering = false;
-    
-    const endTime = performance.now();
-    if (endTime - startTime > 16) {
-      console.warn(`Slow batch render: ${(endTime - startTime).toFixed(2)}ms`);
-    }
   }
 
   // Virtual DOM-like diff for lists with virtualization
