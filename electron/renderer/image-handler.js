@@ -96,8 +96,6 @@ class ImageHandler {
       startConversionBtn.addEventListener('click', () => {
         this.startConversion();
       });
-    } else {
-      console.error('[INIT] Convert button NOT FOUND!');
     }
     
     // Select all button
@@ -298,6 +296,22 @@ class ImageHandler {
           this.selectImage(i);
         }
       });
+
+      // Open fullscreen viewer on thumbnail click
+      const origThumb = imgItem.querySelector('.image-list-thumb:first-child img');
+      const convThumb = imgItem.querySelector('.image-list-thumb:nth-child(2) img');
+      if (origThumb) {
+        origThumb.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.openFullscreenViewer(`file://${img.path}`, `${img.name} • Original`);
+        });
+      }
+      if (convThumb) {
+        convThumb.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.openFullscreenViewer(img.converted, `${img.name} • Converted`);
+        });
+      }
       
       // Add remove button handler
       const removeBtn = imgItem.querySelector('.image-list-remove');
@@ -396,6 +410,14 @@ class ImageHandler {
     this.updateImageDetails(img);
   }
   
+  openFullscreenViewer(src, title = '') {
+    try {
+      if (window.ImageViewer && typeof window.ImageViewer.open === 'function') {
+        window.ImageViewer.open({ src, title });
+      }
+    } catch (e) { }
+  }
+
   updateImageDetails(img) {
     const detailsContainer = document.getElementById('image-details-container');
     if (!detailsContainer) return;
@@ -468,6 +490,15 @@ class ImageHandler {
         }
       });
     });
+
+    // Fullscreen on main preview click
+    const mainPreview = detailsContainer.querySelector('.image-details-preview img');
+    if (mainPreview) {
+      mainPreview.addEventListener('click', () => {
+        const title = this.previewMode === 'converted' ? `${img.name} • Converted` : `${img.name} • Original`;
+        this.openFullscreenViewer(mainPreview.src, title);
+      });
+    }
   }
   
   async selectOutputDirectory() {
@@ -536,13 +567,6 @@ class ImageHandler {
   async startConversion() {
     const selectedImages = this.imageFiles.filter(img => img.selected);
     
-    console.log('[CONVERT] Starting conversion...', {
-      selectedCount: selectedImages.length,
-      outputDir: this.outputDir,
-      format: this.selectedFormat,
-      quality: this.quality
-    });
-    
     if (selectedImages.length === 0) {
       this.app.showToast('warning', 'No Images Selected', 'Please select at least one image to convert');
       return;
@@ -571,9 +595,6 @@ class ImageHandler {
       const processId = `img_${Date.now()}`;
       const imagePaths = selectedImages.map(img => img.path);
       
-      console.log('[CONVERT] Process ID:', processId);
-      console.log('[CONVERT] Image paths:', imagePaths);
-      
       // Mark selected images as processing
       selectedImages.forEach(img => {
         img.status = 'processing';
@@ -588,11 +609,7 @@ class ImageHandler {
         process_id: processId
       };
       
-      console.log('[CONVERT] Sending request:', payload);
-      
       const response = await this.app.apiRequest('POST', '/api/image/process-batch', payload);
-      
-      console.log('[CONVERT] Response:', response);
       
       if (response && response.success) {
         this.currentProcessId = processId;
@@ -602,7 +619,7 @@ class ImageHandler {
         throw new Error(response?.error || 'Failed to start conversion');
       }
     } catch (error) {
-      console.error('[CONVERT] Error:', error);
+      console.error('Conversion error:', error);
       this.app.showToast('error', 'Conversion Failed', error.message || 'Failed to start conversion');
       
       // Reset button state
