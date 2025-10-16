@@ -1,14 +1,14 @@
-/* Enhanced Emoji Modal - Success Theme (Green/Black) */
+/* Enhanced Emoji Modal - Dynamic Theme */
 .emoji-modal-enhanced {
   width: 900px !important;
   max-width: 95vw;
   max-height: 85vh;
   overflow: hidden;
-  background: linear-gradient(135deg, rgba(17, 24, 39, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%);
+  background: var(--bg-primary);
   border-radius: 16px;
   box-shadow: 0 25px 50px -12px rgba(16, 185, 129, 0.25),
              0 0 0 1px rgba(16, 185, 129, 0.15);
-  border: 1px solid rgba(16, 185, 129, 0.2);
+  border: 1px solid var(--border-color);
   animation: successModalAppear 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   z-index: 9000 !important; /* Ensure proper z-index stacking */
   position: fixed !important;
@@ -19,8 +19,8 @@
 }
 
 .emoji-modal-enhanced .modal-header {
-  background: linear-gradient(135deg, #065f46 0%, #064e3b 100%);
-  color: white;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
   padding: 24px;
   display: flex;
   justify-content: space-between;
@@ -35,7 +35,7 @@
   font-weight: 700;
   margin: 0;
   letter-spacing: 0.5px;
-  color: white;
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -146,11 +146,16 @@
   font-size: 3.5rem;
   margin-bottom: 0.5rem;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
-  color: #34d399;
+  font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+  line-height: 1;
+  display: inline-block;
+  color: inherit; /* Ensure native emoji color */
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .emoji-preview small {
-  color: #34d399;
   font-size: 0.8rem;
   font-weight: 600;
   text-transform: uppercase;

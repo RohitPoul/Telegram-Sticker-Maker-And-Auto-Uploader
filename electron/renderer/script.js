@@ -334,7 +334,6 @@ class TelegramUtilities {
       throw error;
     }
   }
-
   setupEventListeners() {
     // quiet
     
@@ -1120,7 +1119,6 @@ class TelegramUtilities {
     // Set up minimal monitoring only when needed
     // Removed excessive periodic checks to save resources
   }
-
   // Memory monitoring removed to save resources
 
   async checkBackendStatus() {
@@ -1815,8 +1813,6 @@ class TelegramUtilities {
     console.log(`🗋 [TEST] Triggering success modal with test link: ${testLink}`);
     this.showSuccessModal(testLink);
   }
-  
-
   createAnotherPack() {
     console.log('🔄 [RESET] Starting complete process reset...');
     
@@ -2570,7 +2566,6 @@ class TelegramUtilities {
       );
     }
   }
-
   async startVideoConversion() {
     
     // Basic validation
@@ -3364,7 +3359,6 @@ class TelegramUtilities {
       timestamp: new Date().toISOString()
     });
   }
-
   handleProgressError(error, consecutiveErrors) {
     if (RENDERER_DEBUG) console.error(`[PROGRESS ERROR #${consecutiveErrors}]`, {
       message: error.message,
@@ -3957,9 +3951,7 @@ class TelegramUtilities {
             'warning', 
             'Rate Limited', 
             `${response.error}
-
 Too many requests. Please wait ${waitTime} before trying again.
-
 Tip: Next time, the app will reuse your session automatically to avoid this!`,
             12000  // Show for 12 seconds
           );
@@ -3991,7 +3983,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       if (errorMsg.includes('rate limit') || errorMsg.includes('wait') || errorMsg.includes('FloodWaitError')) {
         this.showToast(
           'warning', 
-          'Rate Limited', 
+          'Rate Limited',
           'Too many requests to Telegram. Please wait before trying again.',
           8000
         );
@@ -4650,8 +4642,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     if (progress.current_stage && progress.current_stage.includes('process')) return 'processing';
     return 'processing';  // Default to processing for active states
   }
-  
-
   async showMediaInfo(index) {
     const file = this.mediaFiles[index];
     if (!file) return;
@@ -5117,7 +5107,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       }
     }
   }
-
   startStickerProgressMonitoring(processId) {
     if (this.stickerProgressInterval) {
       clearInterval(this.stickerProgressInterval);
@@ -5908,7 +5897,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     window.electronAPI.openExternal(link);
     this.showToast("info", "Opening", "Opening sticker pack in Telegram...");
   }
-
   showManualCompletionModal() {
     const modal = document.getElementById("info-modal");
     if (!modal) return;
@@ -6562,7 +6550,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       }
     }
   }
-
   async confirmIconUpload(retryCount = 0) {
     const maxRetries = 3;
     
@@ -7363,7 +7350,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       );
     }
   }
-
   clearApplicationData() {
     const confirmMessage = `
 This will permanently delete:
@@ -7826,6 +7812,18 @@ This action cannot be undone. Are you sure?
     });
   }
   
+  // Method to select a quick emoji from the emoji picker
+  selectQuickEmoji(emoji) {
+    // Update emoji input and preview
+    const emojiInput = document.getElementById('emoji-input');
+    const emojiPreview = document.getElementById('emoji-preview-icon');
+    
+    if (emojiInput && emojiPreview) {
+      emojiInput.value = emoji;
+      emojiPreview.textContent = emoji;
+    }
+  }
+  
   handleEmojiTabClick(tab) {
     const category = tab.getAttribute('data-category');
     
@@ -8134,7 +8132,6 @@ This action cannot be undone. Are you sure?
       });
     }
   }
-  
   showSupportModal(type, title, message) {
     // Create a simple modal for support options
     const modal = document.createElement('div');
@@ -8900,7 +8897,6 @@ This action cannot be undone. Are you sure?
       }
     });
   }
-
   // Clipboard and Visibility Handling for Sensitive Inputs
   setupInputActionListeners() {
     // Visibility Toggle Functionality with Enhanced Logic
