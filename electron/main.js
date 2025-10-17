@@ -61,8 +61,9 @@ function cleanupPythonProcess() {
         const { exec } = require('child_process');
         const pythonPath = path.join(__dirname, "..", "python");
         const killScript = path.join(pythonPath, "kill_python_processes.py");
+        const pythonCmd = process.platform === "win32" ? "python" : "python3";
         
-        exec(`python "${killScript}"`, { cwd: pythonPath }, (error, stdout, stderr) => {
+        exec(`${pythonCmd} "${killScript}"`, { cwd: pythonPath }, (error, stdout, stderr) => {
             if (error) {
                 console.log("Kill script error (expected if no processes to kill):", error.message);
             } else {
