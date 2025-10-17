@@ -1062,6 +1062,60 @@ html {
   flex-shrink: 0;
 }
 
+/* Media Preview Thumbnails */
+.media-preview {
+  width: 60px;
+  height: 60px;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--bg-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  border: 2px solid var(--border-color);
+}
+
+.media-preview:hover {
+  transform: scale(1.05);
+  border-color: var(--primary-color);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.media-preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.media-preview-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.media-preview-video-icon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 1.8rem;
+  color: rgba(255, 255, 255, 0.9);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.media-preview:hover .media-preview-video-icon {
+  color: var(--primary-color);
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
 .media-name {
   font-weight: 500;
   color: var(--text-primary);
@@ -1119,9 +1173,11 @@ html {
 .file-info,
 .media-info {
   display: flex;
-  align-items: center;
-  gap: 0.85rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
   flex: 1;
+  min-width: 0;
 }
 
 .file-icon,
@@ -1393,13 +1449,43 @@ html {
   border-radius: 8px;
   padding: 15px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-  display: block;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
   width: 100%;
   box-sizing: border-box;
   pointer-events: auto;
   cursor: pointer;
   transition: all 0.2s ease;
   animation: slideIn 0.3s ease;
+}
+
+.toast-content {
+  flex: 1;
+}
+
+.toast-close {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.toast-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 1);
+  transform: scale(1.1);
 }
 
 .toast.success {
@@ -1546,6 +1632,64 @@ html {
     transform: translate3d(0, 0, 0);
     opacity: 1;
   }
+}
+
+/* Emoji Modal Performance Optimizations */
+.emoji-modal-enhanced {
+  /* Hardware acceleration */
+  transform: translateZ(0);
+  will-change: auto;
+  /* Contain paint and layout */
+  contain: layout style paint;
+}
+
+.emoji-categories {
+  /* Only render visible category */
+  contain: strict;
+  /* Hardware accelerate scrolling */
+  transform: translateZ(0);
+  will-change: scroll-position;
+}
+
+.emoji-category {
+  /* Hide inactive categories completely */
+  display: none;
+  /* Contain when visible */
+  contain: layout style paint;
+}
+
+.emoji-category.active {
+  display: block;
+}
+
+.emoji-grid {
+  /* Grid optimization */
+  contain: layout style;
+  /* Reduce repaints */
+  backface-visibility: hidden;
+}
+
+.emoji-btn {
+  /* Optimize button rendering */
+  contain: layout style;
+  /* Smooth hover without repaints */
+  will-change: transform, background-color;
+}
+
+.emoji-btn:hover {
+  /* Use transform instead of changing dimensions */
+  transform: scale(1.1);
+}
+
+/* Optimize tab switching */
+.emoji-tabs-container {
+  contain: layout style;
+}
+
+.emoji-tab {
+  /* Smooth tab transitions */
+  transition: background-color 0.15s ease, transform 0.1s ease;
+  will-change: background-color;
 }
 
 @keyframes successModalAppear {
@@ -5614,6 +5758,157 @@ html {
   transform: translate(-50%, -50%) !important;
   margin: 0 !important;
   z-index: 10000 !important; /* Highest z-index for success modal */
+}
+
+/* Kill Processes Modal - Danger Theme (Red/Dark) */
+.kill-processes-modal-content {
+  max-width: 520px;
+  width: 90%;
+  background: linear-gradient(135deg, rgba(30, 20, 20, 0.98) 0%, rgba(25, 15, 15, 0.98) 100%);
+  border-radius: 16px;
+  box-shadow: 0 25px 50px -12px rgba(220, 53, 69, 0.25),
+             0 0 0 1px rgba(220, 53, 69, 0.15);
+  border: 1px solid rgba(220, 53, 69, 0.2);
+  overflow: hidden;
+  animation: successModalAppear 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  margin: 0 !important;
+  z-index: 9500 !important;
+}
+
+.kill-processes-modal-content .modal-header {
+  background: linear-gradient(135deg, #991b1b 0%, #7f1d1d 100%);
+  color: white;
+  padding: 24px;
+  text-align: center;
+  border-bottom: none;
+}
+
+.kill-processes-modal-content .modal-header h3 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+  letter-spacing: 0.5px;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.kill-processes-modal-content .modal-header h3 i {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+
+.kill-processes-modal-content .modal-header .info-details {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 400;
+  margin-top: 4px;
+}
+
+.kill-processes-modal-content .modal-header .status-badge {
+  font-size: 0.7rem;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.kill-warning-content {
+  padding: 24px;
+}
+
+.warning-section {
+  background: rgba(220, 53, 69, 0.1);
+  border: 2px solid rgba(220, 53, 69, 0.3);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.warning-icon {
+  font-size: 3rem;
+  color: #ff6b6b;
+  margin-bottom: 12px;
+}
+
+.warning-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #ff6b6b;
+  margin-bottom: 8px;
+}
+
+.warning-details {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+.affected-processes-section {
+  margin-bottom: 20px;
+}
+
+.affected-processes-section .section-label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.affected-processes-section .section-label i {
+  color: #ff6b6b;
+}
+
+.process-list {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.process-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.process-item i {
+  color: #ff6b6b;
+  font-size: 1rem;
+  width: 20px;
+  text-align: center;
+}
+
+.important-note {
+  background: rgba(255, 193, 7, 0.1);
+  border-left: 4px solid #ffc107;
+  padding: 12px 16px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.important-note i {
+  color: #ffc107;
+  font-size: 1.2rem;
+  flex-shrink: 0;
 }
 
 /* Enhanced Icon Modal Styling - Success Theme (Green/Black) */
