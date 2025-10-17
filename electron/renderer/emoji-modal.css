@@ -113,7 +113,7 @@
   margin-bottom: 0.5rem;
 }
 
-.emoji-display {
+ .emoji-display {
   font-size: 2.8rem !important;
   text-align: center;
   padding: 1rem !important;
@@ -123,6 +123,9 @@
   border-radius: 12px;
   background: var(--bg-card);
   transition: all 0.3s ease;
+  /* Ensure color emoji rendering across platforms (especially Windows) */
+  font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", "Twemoji Mozilla", "EmojiOne Color", "Segoe UI Symbol", sans-serif;
+  line-height: 1;
 }
 
 .emoji-display:focus {
@@ -334,6 +337,8 @@
   font-size: 1.1rem;
   line-height: 1;
   margin-right: 0.3rem;
+  /* Use emoji fonts for tab icons too */
+  font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", "Twemoji Mozilla", "EmojiOne Color", "Segoe UI Symbol", sans-serif;
 }
 
 .emoji-tab i {
@@ -399,7 +404,7 @@
 }
 
 /* Regular emoji buttons - simplified */
-.emoji-btn {
+ .emoji-btn {
   width: 50px;
   height: 50px;
   border: 1px solid rgba(16, 185, 129, 0.2);
@@ -411,6 +416,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Make sure picker buttons also use color emoji fonts */
+  font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", "Twemoji Mozilla", "EmojiOne Color", "Segoe UI Symbol", sans-serif;
+  line-height: 1;
 }
 
 .emoji-btn:hover {
@@ -513,7 +521,7 @@
   flex-shrink: 0;
 }
 
-.media-emoji-btn {
+ .media-emoji-btn {
   background: linear-gradient(135deg, #065f46 0%, #064e3b 100%);
   border: none;
   color: white;
@@ -524,6 +532,9 @@
   transition: all 0.3s ease;
   min-width: 45px;
   text-align: center;
+  /* Force emoji font to avoid monochrome glyphs on Windows */
+  font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", "Twemoji Mozilla", "EmojiOne Color", "Segoe UI Symbol", sans-serif;
+  line-height: 1;
 }
 
 .media-emoji-btn:hover {
