@@ -917,17 +917,35 @@ class TelegramUtilities {
       targetTab.classList.add("active");
     }
 
+    // Manage live System Info updates (incl. uptime)
+    const startSystemInfoTimer = () => {
+      if (!this.systemInfoInterval) {
+        // Refresh quickly for visible uptime; light work
+        this.systemInfoInterval = setInterval(() => this.updateSystemInfo(), 1000);
+      }
+      // Immediate refresh on tab switch
+      this.updateSystemInfo();
+    };
+    const stopSystemInfoTimer = () => {
+      if (this.systemInfoInterval) {
+        clearInterval(this.systemInfoInterval);
+        this.systemInfoInterval = null;
+      }
+    };
+
     switch (tabId) {
       case 'video-converter':
-        // Specific actions for video converter tab
+        stopSystemInfoTimer();
         break;
       case 'sticker-bot':
-        // Specific actions for sticker bot tab
+        stopSystemInfoTimer();
         break;
       case 'settings':
-        // Update system info every 5 seconds while on settings tab
+        // Live updates while on settings tab so uptime progresses
+        startSystemInfoTimer();
         break;
       case 'about':
+        stopSystemInfoTimer();
         // Initialize about section only once
         if (!this.aboutSectionInitialized) {
           this.initializeAboutSection();
@@ -935,7 +953,7 @@ class TelegramUtilities {
         }
         break;
       default:
-        // Unknown tab
+        stopSystemInfoTimer();
         break;
     }
   }
@@ -1750,9 +1768,13 @@ class TelegramUtilities {
       // Verify visibility after a short delay
       const computedStyle = getComputedStyle(modal);
       
-      // If modal is still not visible, log error
-      if (computedStyle.display === 'none' || computedStyle.opacity === '0') {
-        console.error(`Modal visibility issue detected`);
+      // If modal is still not visible, attempt to fix it
+      if (computedStyle.display === 'none' || parseFloat(computedStyle.opacity) < 0.5) {
+        console.warn(`Modal visibility issue detected - attempting to fix`);
+        // Force display and opacity
+        modal.style.display = "flex";
+        modal.style.opacity = "1";
+        modal.style.visibility = "visible";
       }
       
       // CRITICAL FIX: Scroll to modal if it's not in view
@@ -1771,7 +1793,7 @@ class TelegramUtilities {
       // CRITICAL FIX: Ensure modal is above all other elements
       modal.style.zIndex = "10000";
       overlay.style.zIndex = "9999";
-    }, 100);
+    }, 200);
     
     // Setup event listeners for modal buttons
     this.setupSuccessModalEventListeners(shareableLink);
@@ -6882,12 +6904,42 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       return;
     }
     
+    // PREVENT DUPLICATE TOASTS: Check if same toast already exists
+    const toastId = `${type}-${title}-${message}`.replace(/[^a-zA-Z0-9]/g, '');
+    const existingToast = toastContainer.querySelector(`[data-toast-id="${toastId}"]`);
+    if (existingToast) {
+      // Don't show duplicate - just flash the existing one
+      existingToast.style.animation = 'none';
+      setTimeout(() => {
+        existingToast.style.animation = 'slideIn 0.3s ease';
+      }, 10);
+      return;
+    }
+    
+    // Limit max toasts to prevent overflow
+    const existingToasts = toastContainer.querySelectorAll('.toast');
+    if (existingToasts.length >= 5) {
+      // Remove oldest toast
+      this.removeToast(existingToasts[0]);
+    }
+    
+    // Increase duration for longer messages
+    if (message.length > 50) {
+      duration = Math.max(duration, 8000);
+    }
+    
     const toast = document.createElement("div");
     toast.className = `toast ${type}`;
+    toast.setAttribute('data-toast-id', toastId);
     
     toast.innerHTML = `
-      <h4>${title}</h4>
-      <p>${message}</p>
+      <div class="toast-content">
+        <h4>${title}</h4>
+        <p>${message}</p>
+      </div>
+      <button class="toast-close" aria-label="Close">
+        <i class="fas fa-times"></i>
+      </button>
     `;
     
     // Append to container - CSS will handle stacking with gap
@@ -6898,7 +6950,17 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       this.removeToast(toast);
     }, duration);
     
-    // Click to dismiss immediately
+    // Close button handler
+    const closeBtn = toast.querySelector('.toast-close');
+    if (closeBtn) {
+      closeBtn.onclick = (e) => {
+        e.stopPropagation();
+        clearTimeout(autoRemoveTimer);
+        this.removeToast(toast);
+      };
+    }
+    
+    // Click anywhere to dismiss
     toast.onclick = () => {
       clearTimeout(autoRemoveTimer);
       this.removeToast(toast);
@@ -7767,38 +7829,73 @@ This action cannot be undone. Are you sure?
   }
   
   async killPythonProcesses() {
-    // Show custom confirmation modal
     this.showKillProcessesModal();
   }
 
   showKillProcessesModal() {
     const modalHtml = `
-      <div class="modal-overlay" id="kill-processes-modal">
-        <div class="modal-content">
+      <div class="modal-overlay active" id="kill-processes-modal">
+        <div class="modal kill-processes-modal-content">
           <div class="modal-header">
-            <h3><i class="fas fa-exclamation-triangle" style="color: #ff6b6b;"></i> Kill Python Processes</h3>
-            <button class="modal-close" onclick="window.app?.hideKillProcessesModal()">
-              <i class="fas fa-times"></i>
-            </button>
-          </div>
-          <div class="modal-body">
-            <div class="warning-box">
-              <p><strong>⚠️ WARNING:</strong> This will kill ALL Python processes on your system!</p>
-              <p>This includes:</p>
-              <ul>
-                <li>This app's backend</li>
-                <li>Any other Python scripts running</li>
-                <li>Jupyter notebooks</li>
-                <li>Python IDEs</li>
-              </ul>
-              <p><strong>You will need to restart this app after killing the processes.</strong></p>
+            <h3>
+              <i class="fas fa-skull-crossbones" style="color: #ff6b6b;"></i>
+              Kill Python Processes
+              <span class="status-badge" style="background: rgba(220, 53, 69, 0.2); color: #ff6b6b;">CRITICAL</span>
+            </h3>
+            <div class="info-details">
+              This will terminate all Python processes on your system
             </div>
           </div>
+          
+          <div class="modal-body">
+            <div class="kill-warning-content">
+              <div class="warning-section">
+                <div class="warning-icon">
+                  <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <div class="warning-title">⚠️ WARNING: Destructive Operation</div>
+                <div class="warning-details">
+                  This action will <strong>immediately terminate</strong> all active Python processes
+                </div>
+              </div>
+              
+              <div class="affected-processes-section">
+                <div class="section-label">
+                  <i class="fas fa-list"></i>
+                  Affected Processes:
+                </div>
+                <div class="process-list">
+                  <div class="process-item">
+                    <i class="fas fa-server"></i>
+                    <span>This app's backend server</span>
+                  </div>
+                  <div class="process-item">
+                    <i class="fas fa-code"></i>
+                    <span>Any running Python scripts</span>
+                  </div>
+                  <div class="process-item">
+                    <i class="fas fa-book"></i>
+                    <span>Jupyter notebooks</span>
+                  </div>
+                  <div class="process-item">
+                    <i class="fas fa-laptop-code"></i>
+                    <span>Python IDEs and debuggers</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="important-note">
+                <i class="fas fa-info-circle"></i>
+                <span><strong>Important:</strong> You will need to restart this application after killing processes</span>
+              </div>
+            </div>
+          </div>
+          
           <div class="modal-footer">
             <button class="btn btn-secondary" onclick="window.app?.hideKillProcessesModal()">
               <i class="fas fa-times"></i> Cancel
             </button>
-            <button class="btn btn-danger" onclick="window.app?.confirmKillProcesses()">
+            <button class="btn btn-danger" onclick="window.app?.confirmKillProcesses();">
               <i class="fas fa-skull-crossbones"></i> Kill All Processes
             </button>
           </div>
@@ -7837,16 +7934,11 @@ This action cannot be undone. Are you sure?
     
     try {
       const response = await this.apiRequest("POST", "/api/kill-python-processes");
+      
       if (response.success) {
         this.showToast("success", "Python Processes Killed", response.message);
         
-        // Show additional info if there were errors
-        if (response.errors && response.errors.length > 0) {
-          console.warn("Some processes couldn't be killed:", response.errors);
-        }
-        
-        // Note: The backend will be killed, so the app might become unresponsive
-        // User will need to restart the app
+        // Show backend termination notice after kill
         setTimeout(() => {
           this.showToast("info", "Backend Killed", "The backend has been terminated. Please restart the app.");
         }, 2000);
