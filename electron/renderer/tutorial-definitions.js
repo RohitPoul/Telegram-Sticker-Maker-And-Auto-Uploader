@@ -120,7 +120,76 @@ function registerAllTutorials() {
     ]
   });
 
-  // 3. Hex Edit Tutorial
+  // 3. Image Converter Tutorial
+  tutorialSystem.registerTutorial('image-converter', {
+    title: '🖼️ Image Converter',
+    description: 'Convert images to Telegram sticker format (512px, PNG/WEBP)',
+    icon: '🖼️',
+    steps: [
+      {
+        icon: '🖼️',
+        title: 'Image Converter',
+        content: 'Converts images to <strong>512×512 PNG or WEBP under 512KB</strong>. Perfect for static Telegram stickers.',
+        tip: 'Accepts: PNG, JPG, JPEG, WEBP images.',
+        target: '.nav-item[data-tab="image-converter"]',
+        position: 'bottom',
+        before: () => {
+          const tab = document.querySelector('.nav-item[data-tab="image-converter"]');
+          if (tab) tab.click();
+        }
+      },
+      {
+        icon: '📷',
+        title: 'Add Images',
+        content: 'Click "Add Images" or drag-and-drop files. Supports multiple images.',
+        tip: 'Batch conversion supported - add as many as needed.',
+        target: '#add-images',
+        position: 'bottom'
+      },
+      {
+        icon: '🎨',
+        title: 'Format Selection',
+        content: 'Choose output format: <strong>PNG</strong> (better quality) or <strong>WEBP</strong> (smaller size).',
+        tip: 'PNG recommended for stickers with transparency.',
+        target: '.format-toggle',
+        position: 'left'
+      },
+      {
+        icon: '⚙️',
+        title: 'Quality Control',
+        content: 'Adjust quality slider (50-100). Higher = better quality but larger file size.',
+        tip: 'Start at 95 for best results. Lower if files exceed 512KB.',
+        target: '#image-quality',
+        position: 'left'
+      },
+      {
+        icon: '💾',
+        title: 'Output Folder',
+        content: 'Pick where converted images save. Default: "converted" folder.',
+        tip: 'Files automatically resized to 512×512px.',
+        target: '#image-output-dir',
+        position: 'left'
+      },
+      {
+        icon: '🚀',
+        title: 'Start Conversion',
+        content: 'Click "Convert". Watch progress in the status section.',
+        tip: 'Super fast - processes multiple images instantly.',
+        target: '#start-image-conversion',
+        position: 'top'
+      },
+      {
+        icon: '✅',
+        title: 'Preview & Select',
+        content: 'Click any image to preview. Use checkboxes to select/deselect images for conversion.',
+        tip: 'Select All/Deselect All buttons at the top of image list.',
+        target: '#image-file-list',
+        position: 'right'
+      }
+    ]
+  });
+
+  // 4. Hex Edit Tutorial
   tutorialSystem.registerTutorial('hex-edit', {
     title: '🔧 Hex Editor',
     description: 'Trick Telegram into accepting >3sec videos',
@@ -164,9 +233,9 @@ function registerAllTutorials() {
       {
         icon: '⚡',
         title: 'Process',
-        content: 'Click "Start Hex Edit". Super fast - under 1 second per file.',
+        content: 'Click "Hex Edit". Super fast - under 1 second per file.',
         tip: 'Changes binary data only.',
-        target: '#start-hexedit',
+        target: '#start-hex-edit',
         position: 'top'
       }
     ]
@@ -280,17 +349,29 @@ function registerAllTutorials() {
         icon: '🎬',
         title: 'Step 1: Video Converter',
         content: 'Converts videos to <strong>WebM under 256KB, 512×512</strong>.',
-        tip: 'Start here - convert first.',
+        tip: 'For animated stickers - convert videos first.',
         target: '.nav-item[data-tab="video-converter"]',
         position: 'bottom'
       },
       {
+        icon: '🖼️',
+        title: 'Step 1B: Image Converter',
+        content: 'Converts images to <strong>PNG/WEBP, 512×512</strong>.',
+        tip: 'For static stickers - convert images here.',
+        target: '.nav-item[data-tab="image-converter"]',
+        position: 'bottom'
+      },
+      {
         icon: '🔧',
-        title: 'Step 2: Hex Editor',
+        title: 'Step 2: Hex Editor (Optional)',
         content: 'Tricks Telegram into accepting videos longer than 3 seconds.',
         tip: 'Optional. Only for >3sec videos.',
         target: '#start-hex-edit',
-        position: 'top'
+        position: 'top',
+        before: () => {
+          const tab = document.querySelector('.nav-item[data-tab="video-converter"]');
+          if (tab) tab.click();
+        }
       },
       {
         icon: '🎨',
