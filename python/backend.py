@@ -1571,22 +1571,87 @@ def kill_python_processes():
     if request.method == 'OPTIONS':
         return '', 200
     try:
+        import psutil
         # Import the kill script
         from kill_python_processes import kill_python_processes
         
-        logger.info("Kill Python processes requested")
+        # DEBUG: List all python processes BEFORE killing
+        logger.info("="*60)
+        logger.info("[KILL] Kill Python processes requested")
+        logger.info("[KILL] Current PID: %s", os.getpid())
+        
+        python_procs_before = []
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'cwd']):
+            try:
+                if proc.info['name'] and 'python' in proc.info['name'].lower():
+                    cmd = ' '.join((proc.info.get('cmdline') or [])[:3])
+                    python_procs_before.append({
+                        'pid': proc.info['pid'],
+                        'name': proc.info['name'],
+                        'cmd': cmd,
+                        'cwd': proc.info.get('cwd', 'N/A')
+                    })
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        
+        logger.info("[KILL] Python processes BEFORE kill: %d", len(python_procs_before))
+        for p in python_procs_before:
+            logger.info("[KILL]   - PID %s [%s]: %s (cwd: %s)", p['pid'], p['name'], p['cmd'], p['cwd'])
+        
+        # Actually kill the processes
         results = kill_python_processes()
         
+        # DEBUG: List all python processes AFTER killing
+        import time
+        time.sleep(0.5)  # Small delay to let processes die
+        python_procs_after = []
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                if proc.info['name'] and 'python' in proc.info['name'].lower():
+                    cmd = ' '.join((proc.info.get('cmdline') or [])[:3])
+                    python_procs_after.append({
+                        'pid': proc.info['pid'],
+                        'name': proc.info['name'],
+                        'cmd': cmd
+                    })
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        
+        logger.info("[KILL] Python processes AFTER kill: %d", len(python_procs_after))
+        for p in python_procs_after:
+            logger.info("[KILL]   - PID %s [%s]: %s", p['pid'], p['name'], p['cmd'])
+        
+        logger.info("[KILL] Kill results: success=%s, killed_count=%s, errors=%s", 
+                   results['success'], results['killed_count'], len(results.get('errors', [])))
+        logger.info("="*60)
+        
+        # Schedule backend self-termination AFTER response
+        def kill_self():
+            logger.info("[KILL] Self-terminating backend in 1 second...")
+            time.sleep(1)
+            logger.info("[KILL] Goodbye!")
+            os._exit(0)
+        
+        threading.Thread(target=kill_self, daemon=True).start()
+        
         if results['success']:
-            message = f"Killed {results['killed_count']} Python processes"
+            message = f"Killed {results['killed_count']} Python processes (+ backend)"
             if results['errors']:
                 message += f" (with {len(results['errors'])} warnings)"
             
             return jsonify({
                 "success": True,
                 "message": message,
-                "killed_count": results['killed_count'],
-                "errors": results['errors']
+                "killed_count": results['killed_count'] + 1,  # +1 for self
+                "errors": results['errors'],
+                "debug": {
+                    "before_count": len(python_procs_before),
+                    "after_count": len(python_procs_after),
+                    "before_pids": [p['pid'] for p in python_procs_before],
+                    "after_pids": [p['pid'] for p in python_procs_after],
+                    "survivors": [p for p in python_procs_after if p['pid'] != os.getpid()],
+                    "self_terminating": True
+                }
             })
         else:
             return jsonify({
@@ -1596,7 +1661,7 @@ def kill_python_processes():
             }), 500
             
     except Exception as e:
-        logger.error(f"Error killing Python processes: {e}")
+        logger.error(f"[KILL] Error killing Python processes: {e}", exc_info=True)
         return jsonify({
             "success": False,
             "error": str(e)
@@ -1636,12 +1701,61 @@ def kill_our_processes():
     if request.method == 'OPTIONS':
         return '', 200
     try:
-        logger.info("Kill our app processes requested")
+        import psutil
+        logger.info("="*60)
+        logger.info("[KILL_OUR] Kill our app processes requested")
+        logger.info("[KILL_OUR] Current PID: %s", os.getpid())
+        
+        # DEBUG: List our app's python processes BEFORE killing
+        from kill_python_processes import _is_python_process, _belongs_to_our_app
+        our_procs_before = []
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'cwd']):
+            try:
+                if _is_python_process(proc) and proc.pid != os.getpid():
+                    if _belongs_to_our_app(proc):
+                        cmd = ' '.join((proc.info.get('cmdline') or [])[:3])
+                        our_procs_before.append({
+                            'pid': proc.info['pid'],
+                            'name': proc.info['name'],
+                            'cmd': cmd,
+                            'cwd': proc.info.get('cwd', 'N/A')
+                        })
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        
+        logger.info("[KILL_OUR] Our app's processes BEFORE kill: %d", len(our_procs_before))
+        for p in our_procs_before:
+            logger.info("[KILL_OUR]   - PID %s [%s]: %s (cwd: %s)", p['pid'], p['name'], p['cmd'], p['cwd'])
         
         # Import the kill script
         from kill_python_processes import kill_our_app_processes
         
         results = kill_our_app_processes()
+        
+        # DEBUG: List our app's processes AFTER killing
+        import time
+        time.sleep(0.5)
+        our_procs_after = []
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                if _is_python_process(proc) and proc.pid != os.getpid():
+                    if _belongs_to_our_app(proc):
+                        cmd = ' '.join((proc.info.get('cmdline') or [])[:3])
+                        our_procs_after.append({
+                            'pid': proc.info['pid'],
+                            'name': proc.info['name'],
+                            'cmd': cmd
+                        })
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        
+        logger.info("[KILL_OUR] Our app's processes AFTER kill: %d", len(our_procs_after))
+        for p in our_procs_after:
+            logger.info("[KILL_OUR]   - PID %s [%s]: %s", p['pid'], p['name'], p['cmd'])
+        
+        logger.info("[KILL_OUR] Kill results: success=%s, killed_count=%s, errors=%s",
+                   results['success'], results['killed_count'], len(results.get('errors', [])))
+        logger.info("="*60)
         
         if results['success']:
             message = f"Killed {results['killed_count']} of our app's Python processes"
@@ -1652,7 +1766,14 @@ def kill_our_processes():
                 "success": True,
                 "message": message,
                 "killed_count": results['killed_count'],
-                "errors": results['errors']
+                "errors": results['errors'],
+                "debug": {
+                    "before_count": len(our_procs_before),
+                    "after_count": len(our_procs_after),
+                    "before_pids": [p['pid'] for p in our_procs_before],
+                    "after_pids": [p['pid'] for p in our_procs_after],
+                    "survivors": our_procs_after
+                }
             })
         else:
             return jsonify({
@@ -1662,7 +1783,7 @@ def kill_our_processes():
             }), 500
             
     except Exception as e:
-        logger.error(f"Error killing our app's processes: {e}")
+        logger.error(f"[KILL_OUR] Error killing our app's processes: {e}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 # Error handlers
