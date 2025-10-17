@@ -138,19 +138,36 @@ class ImageHandler {
       
       // The IPC handler returns an array directly (or empty array if canceled)
       if (filePaths && Array.isArray(filePaths) && filePaths.length > 0) {
-        // Add new images to the list
+        // Add new images to the list with immediate metadata loading
+        const newImages = [];
         for (const filePath of filePaths) {
           if (!this.imageFiles.some(img => img.path === filePath)) {
-            this.imageFiles.push({
+            const newImg = {
               path: filePath,
               name: filePath.split('/').pop().split('\\').pop(),
               thumbnail: null,
-              metadata: null
-            });
+              metadata: null,
+              selected: true // Auto-select new images
+            };
+            this.imageFiles.push(newImg);
+            newImages.push(newImg);
           }
         }
         
         await this.updateImageList();
+        
+        // Load metadata immediately for all new images
+        const metadataPromises = newImages.map((img, idx) => {
+          const globalIndex = this.imageFiles.indexOf(img);
+          return this.loadImageMetadata(globalIndex);
+        });
+        
+        // Wait for all metadata to load, then update list again
+        Promise.all(metadataPromises).then(() => {
+          this.updateImageList();
+          this.updateSelectionCount();
+        });
+        
         this.app.showToast('success', 'Images Added', `Added ${filePaths.length} image(s)`);
       }
     } catch (error) {
@@ -162,33 +179,32 @@ class ImageHandler {
   clearImages() {
     if (this.imageFiles.length === 0) return;
     
-    if (confirm(`Clear all ${this.imageFiles.length} image(s)?`)) {
-      // Clean up data URLs and object references
-      this.imageFiles.forEach(img => {
-        if (img.thumbnail && img.thumbnail.startsWith('blob:')) {
-          URL.revokeObjectURL(img.thumbnail);
-        }
-        if (img.converted && img.converted.startsWith('blob:')) {
-          URL.revokeObjectURL(img.converted);
-        }
-        // Clear references
-        img.thumbnail = null;
-        img.converted = null;
-        img.metadata = null;
-        img.convertedMetadata = null;
-      });
-      
-      this.imageFiles = [];
-      this.selectedImageIndex = null;
-      this.previewMode = 'original';
-      this.updateImageList();
-      this.updateImageDetails(null);
-      this.app.showToast('info', 'Images Cleared', 'All images have been removed');
-      this.resetConversionUI();
-      
-      // Force garbage collection hint
-      if (window.gc) window.gc();
-    }
+    // Clean up data URLs and object references
+    this.imageFiles.forEach(img => {
+      if (img.thumbnail && img.thumbnail.startsWith('blob:')) {
+        URL.revokeObjectURL(img.thumbnail);
+      }
+      if (img.converted && img.converted.startsWith('blob:')) {
+        URL.revokeObjectURL(img.converted);
+      }
+      // Clear references
+      img.thumbnail = null;
+      img.converted = null;
+      img.metadata = null;
+      img.convertedMetadata = null;
+    });
+    
+    const count = this.imageFiles.length;
+    this.imageFiles = [];
+    this.selectedImageIndex = null;
+    this.previewMode = 'original';
+    this.updateImageList();
+    this.updateImageDetails(null);
+    this.app.showToast('success', 'Images Cleared', `Removed ${count} image(s)`);
+    this.resetConversionUI();
+    
+    // Force garbage collection hint
+    if (window.gc) window.gc();
   }
   
   async updateImageList() {
@@ -267,6 +283,11 @@ class ImageHandler {
                 <i class="fas fa-arrow-right image-list-stat-icon"></i>
                 <span>${convertedSize}KB</span>
               </div>
+            ` : img.status === 'error' && img.errorMessage ? `
+              <div class="image-list-stat" style="color: var(--error-color);" title="${img.errorMessage}">
+                <i class="fas fa-exclamation-circle image-list-stat-icon"></i>
+                <span>Failed</span>
+              </div>
             ` : `
               <div class="image-list-stat" style="opacity: 0.5;">
                 <i class="fas fa-arrow-right image-list-stat-icon"></i>
@@ -321,11 +342,6 @@ class ImageHandler {
       });
       
       fragment.appendChild(imgItem);
-      
-      // Load metadata if not loaded
-      if (!img.metadata) {
-        this.loadImageMetadata(i);
-      }
     }
     
     // Clear and append all at once for better performance
@@ -347,18 +363,7 @@ class ImageHandler {
       
       if (response && response.success && response.metadata) {
         img.metadata = response.metadata;
-        
-        // Update the metadata display in the card
-        const metaEl = document.getElementById(`image-meta-${index}`);
-        if (metaEl) {
-          const meta = response.metadata;
-          metaEl.innerHTML = `${meta.width}x${meta.height} • ${meta.file_size_kb}KB`;
-          
-          // Add transparency indicator
-          if (meta.has_transparency) {
-            metaEl.innerHTML += ' • <i class="fas fa-check-circle" title="Has transparency"></i>';
-          }
-        }
+        // Metadata will be displayed on next list update
       }
     } catch (error) {
       console.error('Error loading metadata:', error);
@@ -651,6 +656,7 @@ class ImageHandler {
       
       try {
         const response = await this.app.apiRequest('GET', `/api/image/process-status/${processId}`);
+        console.log('[MONITOR] Progress check response:', response);
         
         if (response && response.success && response.process) {
           const proc = response.process;
@@ -695,16 +701,33 @@ class ImageHandler {
           
           // Check if completed or failed
           if (proc.status === 'completed') {
+            console.log('[MONITOR] Conversion completed', proc);
             this.handleConversionComplete(proc);
             return;
           } else if (proc.status === 'failed') {
-            this.app.showToast('error', 'Conversion Failed', proc.error || 'Unknown error');
+            console.error('[MONITOR] Conversion failed', proc);
+            const errorMsg = proc.error || proc.message || 'Conversion process failed';
+            this.app.showToast('error', 'Conversion Failed', errorMsg);
             if (statusEl) {
               const statusText = statusEl.querySelector('.status-text');
               if (statusText) statusText.textContent = 'Failed';
             }
-            // Still update what we have
+            // Still update what we have and extract specific error
             if (proc.results && proc.results.length > 0) {
+              console.log('[MONITOR] Updating results despite failure', proc.results);
+              
+              // Get the first error message for display
+              const firstError = proc.results.find(r => !r.success && r.error);
+              if (firstError && firstError.error) {
+                // Check for ImageMagick missing
+                if (firstError.error.includes('magick') || firstError.error.includes('ImageMagick')) {
+                  this.app.showToast('error', 'ImageMagick Not Found', 
+                    'Please install ImageMagick: sudo apt install imagemagick');
+                } else {
+                  this.app.showToast('error', 'Conversion Error', firstError.error);
+                }
+              }
+              
               proc.results.forEach(result => {
                 const img = this.imageFiles.find(img => img.path === result.input_path);
                 if (img) {
@@ -715,6 +738,7 @@ class ImageHandler {
                     img.status = result.final_metadata && result.final_metadata.file_size_kb <= 512 ? 'success' : 'warning';
                   } else {
                     img.status = 'error';
+                    img.errorMessage = result.error || 'Conversion failed';
                   }
                 }
               });
@@ -732,18 +756,36 @@ class ImageHandler {
           setTimeout(checkProgress, 300); // Faster polling for better responsiveness
         } else {
           // Handle case where process is not found or response is invalid
-          console.warn('[MONITOR] Invalid response or process not found');
+          console.warn('[MONITOR] Invalid response or process not found', response);
+          
+          // If we've polled too many times, give up
+          if (pollCount >= maxPolls) {
+            this.app.showToast('error', 'Conversion Timeout', 'Process monitoring timed out');
+            if (startBtn) {
+              startBtn.disabled = false;
+              startBtn.innerHTML = '<i class="fas fa-magic"></i> Convert';
+            }
+            return;
+          }
+          
+          // Otherwise, continue polling
+          setTimeout(checkProgress, 500);
+        }
+      } catch (error) {
+        console.error('[MONITOR] Error checking progress:', error);
+        
+        // If we've polled too many times, give up
+        if (pollCount >= maxPolls) {
+          this.app.showToast('error', 'Conversion Error', error.message || 'Failed to monitor conversion');
           if (startBtn) {
             startBtn.disabled = false;
             startBtn.innerHTML = '<i class="fas fa-magic"></i> Convert';
           }
+          return;
         }
-      } catch (error) {
-        console.error('Error checking progress:', error);
-        if (startBtn) {
-          startBtn.disabled = false;
-          startBtn.innerHTML = '<i class="fas fa-magic"></i> Convert';
-        }
+        
+        // Otherwise, retry
+        setTimeout(checkProgress, 500);
       }
     };
     
