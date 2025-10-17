@@ -2,9 +2,9 @@
 const RENDERER_DEBUG = false;
 
 // Global error handling to prevent white screen crashes
-window.addEventListener('error', (event) => {
-  console.error('🚫 [GLOBAL_ERROR] Unhandled error:', event.error);
-  console.error('🚫 [GLOBAL_ERROR] Error details:', {
+window.addEventListener("error", (event) => {
+  console.error("🚫 [GLOBAL_ERROR] Unhandled error:", event.error);
+  console.error("🚫 [GLOBAL_ERROR] Error details:", {
     message: event.message,
     filename: event.filename,
     lineno: event.lineno,
@@ -17,19 +17,19 @@ window.addEventListener('error', (event) => {
   
   // Show error toast if possible
   if (window.app && window.app.showToast) {
-    window.app.showToast('error', 'Application Error', `Error: ${event.message}`);
+    window.app.showToast("error", "Application Error", `Error: ${event.message}`);
   }
 });
 
-window.addEventListener('unhandledrejection', (event) => {
-  console.error('🚫 [GLOBAL_ERROR] Unhandled promise rejection:', event.reason);
+window.addEventListener("unhandledrejection", (event) => {
+  console.error("🚫 [GLOBAL_ERROR] Unhandled promise rejection:", event.reason);
   
   // Prevent app from crashing
   event.preventDefault();
   
   // Show error toast if possible
   if (window.app && window.app.showToast) {
-    window.app.showToast('error', 'Promise Error', `Promise rejection: ${event.reason}`);
+    window.app.showToast("error", "Promise Error", `Promise rejection: ${event.reason}`);
   }
 });
 
@@ -68,7 +68,7 @@ class TelegramUtilities {
       iconUploaded: false,
       urlNameSubmitted: false,
       packCompleted: false,
-      currentStep: 'initial' // initial, icon_upload, url_name, completed
+      currentStep: "initial" // initial, icon_upload, url_name, completed
     };
     this.progressInterval = null;
     this.stickerProgressInterval = null;
@@ -110,7 +110,8 @@ class TelegramUtilities {
     this.initializeTelegramForm(); // Add this to load saved Telegram credentials
     
     // Initialize Image Handler
-    if (typeof ImageHandler !== 'undefined') {
+    /* global ImageHandler */
+    if (typeof ImageHandler !== "undefined") {
       this.imageHandler = new ImageHandler(this);
     }
   }
@@ -140,27 +141,27 @@ class TelegramUtilities {
   // Properly preserves variation selectors (e.g., U+FE0F) and ZWJ sequences so hearts stay red on Windows
   normalizeEmoji(input) {
     try {
-      const str = String(input || '').trim();
-      if (!str) return this.defaultEmoji || '❤️';
+      const str = String(input || "").trim();
+      if (!str) return this.defaultEmoji || "❤️";
       
       // Primary: Use Intl.Segmenter for proper grapheme cluster handling (Chrome 87+)
-      if (typeof Intl !== 'undefined' && Intl.Segmenter) {
+      if (typeof Intl !== "undefined" && Intl.Segmenter) {
         try {
-          const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
+          const segmenter = new Intl.Segmenter("en", { granularity: "grapheme" });
           const segments = Array.from(segmenter.segment(str));
           if (segments.length > 0 && segments[0].segment) {
             // This properly preserves ALL variation selectors and ZWJ sequences
             return segments[0].segment;
           }
         } catch (e) {
-          console.warn('[EMOJI] Segmenter failed, using fallback:', e.message);
+          console.warn("[EMOJI] Segmenter failed, using fallback:", e.message);
         }
       }
       
       // Fallback for older browsers: Manual VS16 preservation
       // This is critical for Windows to show colored emojis (red heart instead of white)
       const codePoints = Array.from(str);
-      if (codePoints.length === 0) return this.defaultEmoji || '❤️';
+      if (codePoints.length === 0) return this.defaultEmoji || "❤️";
       
       let result = codePoints[0];
       let i = 1;
@@ -172,8 +173,8 @@ class TelegramUtilities {
         
         // Check if this is a modifier that should be preserved
         const isModifier = (
-          cp === '\uFE0F' ||  // VS16 (emoji style) - CRITICAL for Windows
-          cp === '\uFE0E' ||  // VS15 (text style)
+          cp === "\uFE0F" ||  // VS16 (emoji style) - CRITICAL for Windows
+          cp === "\uFE0E" ||  // VS15 (text style)
           code === 0x20E3 ||  // Combining enclosing keycap
           (code >= 0x1F3FB && code <= 0x1F3FF) ||  // Emoji skin tone modifiers
           code === 0x200D     // Zero-width joiner (for multi-char emojis)
@@ -196,14 +197,14 @@ class TelegramUtilities {
       // CRITICAL FIX: Ensure red heart on Windows by adding VS16 if missing
       // Check if the emoji is a heart or similar that needs VS16
       const needsVS16 = /^[\u2764\u2665\u2763\u2600-\u26FF\u2700-\u27BF]$/.test(result.charAt(0));
-      if (needsVS16 && !result.includes('\uFE0F')) {
-        result += '\uFE0F';  // Add VS16 to force emoji style
+      if (needsVS16 && !result.includes("\uFE0F")) {
+        result += "\uFE0F";  // Add VS16 to force emoji style
       }
       
       return result;
     } catch (e) {
-      console.error('[EMOJI] Normalization error:', e);
-      return this.defaultEmoji || '❤️';
+      console.error("[EMOJI] Normalization error:", e);
+      return this.defaultEmoji || "❤️";
     }
   }
 
@@ -240,7 +241,7 @@ class TelegramUtilities {
       // Initialize button states
       this.updateButtonStates();
     } catch (error) {
-      console.error('🚫 [APP] Critical error during initialization:', error);
+      console.error("🚫 [APP] Critical error during initialization:", error);
       // Show error to user
       document.body.innerHTML = `
         <div style="padding: 20px; background: #f44336; color: white; text-align: center;">
@@ -281,11 +282,11 @@ class TelegramUtilities {
           
           // Color code based on usage
           if (percent > 80) {
-            cpuUsage.style.color = '#ff4444';
+            cpuUsage.style.color = "#ff4444";
           } else if (percent > 50) {
-            cpuUsage.style.color = '#ffaa00';
+            cpuUsage.style.color = "#ffaa00";
           } else {
-            cpuUsage.style.color = '#44ff44';
+            cpuUsage.style.color = "#44ff44";
           }
         }
         
@@ -299,11 +300,11 @@ class TelegramUtilities {
           
           // Color code based on usage
           if (percent > 90) {
-            ramUsage.style.color = '#ff4444';
+            ramUsage.style.color = "#ff4444";
           } else if (percent > 70) {
-            ramUsage.style.color = '#ffaa00';
+            ramUsage.style.color = "#ffaa00";
           } else {
-            ramUsage.style.color = '#44ff44';
+            ramUsage.style.color = "#44ff44";
           }
         }
       }
@@ -321,7 +322,7 @@ class TelegramUtilities {
   // Debug warning method for detailed UI debugging
   debugWarn(label, payload = undefined) {
     // Debug logging removed for production - only log critical errors
-    if (label.includes('ERROR') || label.includes('CRITICAL')) {
+    if (label.includes("ERROR") || label.includes("CRITICAL")) {
       console.error(label, payload);
     }
   }
@@ -329,16 +330,16 @@ class TelegramUtilities {
   // OPTIMIZED apiRequest with better error handling and timeout
   async apiRequest(method, path, body = null) {
     // FIXED: Validate path to prevent [Errno 22] Invalid argument
-    if (!path || typeof path !== 'string') {
-      throw new Error('Invalid API path');
+    if (!path || typeof path !== "string") {
+      throw new Error("Invalid API path");
     }
     
     // ENHANCED: Sanitize path to prevent [Errno 22] Invalid argument
     // Remove all control characters which can cause OS errors
-    const sanitizedPath = path.replace(/[\x00-\x1f\x7f-\x9f]/g, '').trim();
+    const sanitizedPath = path.replace(/[\x00-\x1f\x7f-\x9f]/g, "").trim();
     
     if (!sanitizedPath || sanitizedPath.length === 0) {
-      throw new Error('Invalid API path after sanitization');
+      throw new Error("Invalid API path after sanitization");
     }
     
     // FIXED: Direct path usage - backend handles sanitization
@@ -347,7 +348,7 @@ class TelegramUtilities {
     // OPTIMIZED: Add timeout to prevent hanging requests
     // Use longer timeout for batch operations and status checks
     let timeoutDuration = 30000; // Default 30 seconds
-    if (sanitizedPath.includes('/process-batch') || sanitizedPath.includes('/process-status')) {
+    if (sanitizedPath.includes("/process-batch") || sanitizedPath.includes("/process-status")) {
       timeoutDuration = 120000; // 2 minutes for batch operations
     }
     
@@ -362,17 +363,17 @@ class TelegramUtilities {
           // Stringify and parse to ensure valid JSON
           const jsonString = JSON.stringify(body);
           // Remove all control characters which can cause OS errors
-          const sanitizedJsonString = jsonString.replace(/[\x00-\x1f\x7f-\x9f]/g, '');
+          const sanitizedJsonString = jsonString.replace(/[\x00-\x1f\x7f-\x9f]/g, "");
           sanitizedBody = sanitizedJsonString;
         } catch (jsonError) {
-          console.error('[API] Error serializing request body:', jsonError);
-          throw new Error('Invalid request data - unable to serialize. Please check your inputs.');
+          console.error("[API] Error serializing request body:", jsonError);
+          throw new Error("Invalid request data - unable to serialize. Please check your inputs.");
         }
       }
       
       const res = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { "Content-Type": "application/json" },
         body: sanitizedBody,
         signal: controller.signal
       });
@@ -397,18 +398,18 @@ class TelegramUtilities {
       clearTimeout(timeoutId);
       
       // FIXED: Better error handling for specific error types
-      if (error.name === 'AbortError') {
-        throw new Error('Request timeout - server may be overloaded. Please try again.');
+      if (error.name === "AbortError") {
+        throw new Error("Request timeout - server may be overloaded. Please try again.");
       }
       // Do not mask backend errors; surface original message for debugging
-      if (error.message && error.message.includes('timeout')) {
-        throw new Error('Request timeout - server may be overloaded. Please try again.');
+      if (error.message && error.message.includes("timeout")) {
+        throw new Error("Request timeout - server may be overloaded. Please try again.");
       }
       
       // ENHANCED: Handle [Errno 22] Invalid argument errors specifically
-      if (error.message && (error.message.includes('Invalid argument') || error.message.includes('Errno 22'))) {
-        console.error(`[API] Invalid argument error`);
-        throw new Error('Invalid request data - contains invalid characters. Please check your inputs and try again.');
+      if (error.message && (error.message.includes("Invalid argument") || error.message.includes("Errno 22"))) {
+        console.error("[API] Invalid argument error");
+        throw new Error("Invalid request data - contains invalid characters. Please check your inputs and try again.");
       }
       
       throw error;
@@ -650,32 +651,32 @@ class TelegramUtilities {
     }
     
     // Visibility Toggle Events for Credential Fields
-    document.querySelectorAll('.btn-toggle-visibility').forEach(button => {
-      button.addEventListener('click', (e) => {
+    document.querySelectorAll(".btn-toggle-visibility").forEach(button => {
+      button.addEventListener("click", (e) => {
         e.preventDefault();
-        const targetId = button.getAttribute('data-target');
+        const targetId = button.getAttribute("data-target");
         const targetInput = document.getElementById(targetId);
-        const icon = button.querySelector('i');
+        const icon = button.querySelector("i");
         
-        if (targetInput.type === 'password') {
-          targetInput.type = 'text';
-          icon.classList.remove('fa-eye-slash');
-          icon.classList.add('fa-eye');
-          button.title = 'Hide';
+        if (targetInput.type === "password") {
+          targetInput.type = "text";
+          icon.classList.remove("fa-eye-slash");
+          icon.classList.add("fa-eye");
+          button.title = "Hide";
         } else {
-          targetInput.type = 'password';
-          icon.classList.remove('fa-eye');
-          icon.classList.add('fa-eye-slash');
-          button.title = 'Show';
+          targetInput.type = "password";
+          icon.classList.remove("fa-eye");
+          icon.classList.add("fa-eye-slash");
+          button.title = "Show";
         }
       });
     });
     
     // Paste from Clipboard Events
-    document.querySelectorAll('.btn-paste').forEach(button => {
-      button.addEventListener('click', async (e) => {
+    document.querySelectorAll(".btn-paste").forEach(button => {
+      button.addEventListener("click", async (e) => {
         e.preventDefault();
-        const targetId = button.getAttribute('data-target');
+        const targetId = button.getAttribute("data-target");
         const targetInput = document.getElementById(targetId);
         
         try {
@@ -685,36 +686,36 @@ class TelegramUtilities {
             targetInput.focus();
             
             // Show temporary success feedback with smooth animation
-            const icon = button.querySelector('i');
+            const icon = button.querySelector("i");
             
             // Add success animation class
-            button.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
-            button.style.transform = 'scale(1.1)';
+            button.style.transition = "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)";
+            button.style.transform = "scale(1.1)";
             
-            icon.classList.remove('fa-paste');
-            icon.classList.add('fa-check');
-            button.style.color = '#28a745';
-            button.style.backgroundColor = 'rgba(40, 167, 69, 0.2)';
-            button.style.borderColor = 'rgba(40, 167, 69, 0.5)';
+            icon.classList.remove("fa-paste");
+            icon.classList.add("fa-check");
+            button.style.color = "#28a745";
+            button.style.backgroundColor = "rgba(40, 167, 69, 0.2)";
+            button.style.borderColor = "rgba(40, 167, 69, 0.5)";
             
             // Reset after animation
             setTimeout(() => {
-              button.style.transform = 'scale(1)';
+              button.style.transform = "scale(1)";
             }, 200);
             
             setTimeout(() => {
-              icon.classList.remove('fa-check');
-              icon.classList.add('fa-paste');
-              button.style.color = '';
-              button.style.backgroundColor = '';
-              button.style.borderColor = '';
+              icon.classList.remove("fa-check");
+              icon.classList.add("fa-paste");
+              button.style.color = "";
+              button.style.backgroundColor = "";
+              button.style.borderColor = "";
             }, 1500);
             
             // Save settings after paste
             this.saveSettings();
           }
         } catch (err) {
-          this.showToast('error', 'Clipboard Error', 'Failed to read from clipboard');
+          this.showToast("error", "Clipboard Error", "Failed to read from clipboard");
         }
       });
     });
@@ -799,20 +800,20 @@ class TelegramUtilities {
         
         const modalId = activeModal.id;
         
-        const isCritical = activeModal.hasAttribute('data-critical');
+        const isCritical = activeModal.hasAttribute("data-critical");
         
         // Critical modals that should NOT close on overlay click
-        const criticalModals = ['success-modal', 'url-name-modal', 'icon-modal'];
+        const criticalModals = ["success-modal", "url-name-modal", "icon-modal"];
         
         if (criticalModals.includes(modalId) || isCritical) {
           // Add shake animation to indicate modal cannot be dismissed
-          activeModal.classList.add('modal-shake');
+          activeModal.classList.add("modal-shake");
           setTimeout(() => {
-            activeModal.classList.remove('modal-shake');
+            activeModal.classList.remove("modal-shake");
           }, 500);
           
           // Show helpful toast for success modal
-          if (modalId === 'success-modal') {
+          if (modalId === "success-modal") {
             this.showToast("info", "Modal Protected", "Use the buttons to interact with your sticker pack!");
           }
           return;
@@ -821,7 +822,7 @@ class TelegramUtilities {
         // Allow other modals to close on overlay click
         if (e.target === e.currentTarget) {
           // Check if we should prevent closure for emoji modal
-          if (this.modalState.preventEmojiClosure && modalId === 'emoji-modal') {
+          if (this.modalState.preventEmojiClosure && modalId === "emoji-modal") {
             return;
           }
           
@@ -934,17 +935,17 @@ class TelegramUtilities {
     };
 
     switch (tabId) {
-      case 'video-converter':
+      case "video-converter":
         stopSystemInfoTimer();
         break;
-      case 'sticker-bot':
+      case "sticker-bot":
         stopSystemInfoTimer();
         break;
-      case 'settings':
+      case "settings":
         // Live updates while on settings tab so uptime progresses
         startSystemInfoTimer();
         break;
-      case 'about':
+      case "about":
         stopSystemInfoTimer();
         // Initialize about section only once
         if (!this.aboutSectionInitialized) {
@@ -976,18 +977,18 @@ class TelegramUtilities {
       if (!zone.element) return;
       
       // Prevent default drag behaviors
-      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+      ["dragenter", "dragover", "dragleave", "drop"].forEach(eventName => {
         zone.element.addEventListener(eventName, this.preventDefaults, false);
       });
       
-      zone.element.addEventListener('dragover', () => zone.element.classList.add('drag-over'));
-      zone.element.addEventListener('dragleave', () => zone.element.classList.remove('drag-over'));
+      zone.element.addEventListener("dragover", () => zone.element.classList.add("drag-over"));
+      zone.element.addEventListener("dragleave", () => zone.element.classList.remove("drag-over"));
       
-      zone.element.addEventListener('drop', (e) => {
-        zone.element.classList.remove('drag-over');
+      zone.element.addEventListener("drop", (e) => {
+        zone.element.classList.remove("drag-over");
         const files = Array.from(e.dataTransfer.files)
           .filter(file => {
-            const extension = file.name.split('.').pop().toLowerCase();
+            const extension = file.name.split(".").pop().toLowerCase();
             return zone.validExtensions.includes(extension);
           });
         
@@ -1064,7 +1065,7 @@ class TelegramUtilities {
         
         if (!this.mediaFiles.some((f) => f.file_path === filePath)) {
           // Sanitize default emoji while preserving variation selectors (Windows color fix)
-          const cleanDefaultEmoji = this.normalizeEmoji(this.defaultEmoji || '❤️');
+          const cleanDefaultEmoji = this.normalizeEmoji(this.defaultEmoji || "❤️");
           
           this.mediaFiles.push({
             file_path: filePath,
@@ -1281,8 +1282,8 @@ class TelegramUtilities {
           if (connectBtnOk) {
             connectBtnOk.disabled = false;
             connectBtnOk.innerHTML = '<i class="fas fa-unlink"></i> Disconnect';
-            connectBtnOk.classList.remove('btn-primary');
-            connectBtnOk.classList.add('btn-secondary');
+            connectBtnOk.classList.remove("btn-primary");
+            connectBtnOk.classList.add("btn-secondary");
             // Update click handler for disconnect
             connectBtnOk.onclick = () => this.disconnectTelegram();
           }
@@ -1312,8 +1313,8 @@ class TelegramUtilities {
           if (connectBtnIdle) {
             connectBtnIdle.disabled = false;
             connectBtnIdle.innerHTML = '<i class="fas fa-plug"></i> Connect to Telegram';
-            connectBtnIdle.classList.remove('btn-secondary');
-            connectBtnIdle.classList.add('btn-primary');
+            connectBtnIdle.classList.remove("btn-secondary");
+            connectBtnIdle.classList.add("btn-primary");
             // Reset click handler for connect
             connectBtnIdle.onclick = () => this.connectTelegram();
           }
@@ -1488,12 +1489,12 @@ class TelegramUtilities {
         `;
         
         // Inject the modal into the overlay
-        overlay.insertAdjacentHTML('beforeend', successModalHTML);
+        overlay.insertAdjacentHTML("beforeend", successModalHTML);
         
         // Add CSS animations if not already present
-        if (!document.getElementById('success-modal-animations')) {
-          const style = document.createElement('style');
-          style.id = 'success-modal-animations';
+        if (!document.getElementById("success-modal-animations")) {
+          const style = document.createElement("style");
+          style.id = "success-modal-animations";
           style.textContent = `
             .success-modal-enhanced {
               animation: successModalSlideIn 0.3s ease-out;
@@ -1538,11 +1539,11 @@ class TelegramUtilities {
         
         if (injectedModal) {
           // Apply centering styles immediately after injection
-          injectedModal.style.position = 'fixed';
-          injectedModal.style.top = '50%';
-          injectedModal.style.left = '50%';
-          injectedModal.style.transform = 'translate(-50%, -50%)';
-          injectedModal.style.zIndex = '10000';
+          injectedModal.style.position = "fixed";
+          injectedModal.style.top = "50%";
+          injectedModal.style.left = "50%";
+          injectedModal.style.transform = "translate(-50%, -50%)";
+          injectedModal.style.zIndex = "10000";
           
           this.displaySuccessModal(injectedModal, overlay, linkInput, shareableLink);
           return;
@@ -1553,16 +1554,16 @@ class TelegramUtilities {
     // Wait for DOM to be ready if necessary
     const ensureDOMReady = () => {
       return new Promise((resolve) => {
-        if (document.readyState === 'complete') {
+        if (document.readyState === "complete") {
           resolve();
         } else {
           const handler = () => {
-            if (document.readyState === 'complete') {
-              document.removeEventListener('readystatechange', handler);
+            if (document.readyState === "complete") {
+              document.removeEventListener("readystatechange", handler);
               resolve();
             }
           };
-          document.addEventListener('readystatechange', handler);
+          document.addEventListener("readystatechange", handler);
           // Fallback timeout
           setTimeout(resolve, 100);
         }
@@ -1644,18 +1645,18 @@ class TelegramUtilities {
             `;
             
             // Inject the modal into the document
-            const tempDiv = document.createElement('div');
+            const tempDiv = document.createElement("div");
             tempDiv.innerHTML = modalHTML.trim();
             const fallbackModal = tempDiv.firstChild;
             document.body.appendChild(fallbackModal);
             
             // Add event listener for the fallback open button to prevent double opening
-            const fallbackOpenBtn = document.getElementById('open-telegram-btn-fallback');
+            const fallbackOpenBtn = document.getElementById("open-telegram-btn-fallback");
             if (fallbackOpenBtn) {
               fallbackOpenBtn.onclick = (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                window.open(shareableLink, '_blank');
+                window.open(shareableLink, "_blank");
                 this.showToast("success", "Opening Telegram", "Opening your sticker pack in Telegram!");
               };
             }
@@ -1684,7 +1685,7 @@ class TelegramUtilities {
                   window.electronAPI.shell.openExternal(shareableLink);
                 }
               } catch (error) {
-                console.error('🎉 [SUCCESS_MODAL] Error opening URL:', error);
+                console.error("🎉 [SUCCESS_MODAL] Error opening URL:", error);
               }
             }
           }, 50 * retryCount); // Increasing delay: 50ms, 100ms, 150ms
@@ -1702,12 +1703,12 @@ class TelegramUtilities {
   displaySuccessModal(modal, overlay, linkInput, shareableLink) {
     // Validate required elements
     if (!modal) {
-      console.error(`🎉 [SUCCESS_MODAL] Cannot display modal - modal element is null`);
+      console.error("🎉 [SUCCESS_MODAL] Cannot display modal - modal element is null");
       return;
     }
     
     if (!overlay) {
-      console.error(`🎉 [SUCCESS_MODAL] Cannot display modal - overlay element is null`);
+      console.error("🎉 [SUCCESS_MODAL] Cannot display modal - overlay element is null");
       return;
     }
     
@@ -1730,7 +1731,7 @@ class TelegramUtilities {
     modal.style.margin = "0";
     
     // Ensure modal is brought to front
-    modal.style.setProperty('z-index', '10000', 'important');
+    modal.style.setProperty("z-index", "10000", "important");
     
     modal.style.maxWidth = "700px";
     modal.style.width = "90%";
@@ -1756,7 +1757,7 @@ class TelegramUtilities {
     });
     
     // Add critical modal protection (prevent outside click dismissal)
-    modal.setAttribute('data-critical', 'true');
+    modal.setAttribute("data-critical", "true");
     
     // CRITICAL FIX: Ensure modal stays in view by recalculating position
     setTimeout(() => {
@@ -1769,8 +1770,8 @@ class TelegramUtilities {
       const computedStyle = getComputedStyle(modal);
       
       // If modal is still not visible, attempt to fix it
-      if (computedStyle.display === 'none' || parseFloat(computedStyle.opacity) < 0.5) {
-        console.warn(`Modal visibility issue detected - attempting to fix`);
+      if (computedStyle.display === "none" || parseFloat(computedStyle.opacity) < 0.5) {
+        console.warn("Modal visibility issue detected - attempting to fix");
         // Force display and opacity
         modal.style.display = "flex";
         modal.style.opacity = "1";
@@ -1787,7 +1788,7 @@ class TelegramUtilities {
       );
       
       if (!isInViewport) {
-        modal.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+        modal.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
       }
       
       // CRITICAL FIX: Ensure modal is above all other elements
@@ -1814,7 +1815,7 @@ class TelegramUtilities {
     if (modal) {
       modal.style.display = "none";
       modal.style.opacity = "0";
-      modal.removeAttribute('data-critical');
+      modal.removeAttribute("data-critical");
       // Reset positioning styles
       modal.style.position = "";
       modal.style.top = "";
@@ -1831,7 +1832,7 @@ class TelegramUtilities {
     
     // Clean up keyboard event listeners
     if (this.successModalKeyHandler) {
-      document.removeEventListener('keydown', this.successModalKeyHandler);
+      document.removeEventListener("keydown", this.successModalKeyHandler);
       this.successModalKeyHandler = null;
     }
   }
@@ -1863,15 +1864,15 @@ class TelegramUtilities {
     
     // Add keyboard support
     const keyHandler = (e) => {
-      if (e.key === 'c' && (e.ctrlKey || e.metaKey)) {
+      if (e.key === "c" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         this.copyShareableLink();
-      } else if (e.key === 'Enter') {
+      } else if (e.key === "Enter") {
         this.openTelegramLink();
       }
     };
     
-    document.addEventListener('keydown', keyHandler);
+    document.addEventListener("keydown", keyHandler);
     
     // Store handler for cleanup
     this.successModalKeyHandler = keyHandler;
@@ -1886,7 +1887,7 @@ class TelegramUtilities {
       } catch (err) {
         // Fallback for older browsers
         linkInput.select();
-        document.execCommand('copy');
+        document.execCommand("copy");
         this.showToast("success", "Link Copied", "Shareable link copied to clipboard!");
       }
     }
@@ -1895,7 +1896,7 @@ class TelegramUtilities {
   openTelegramLink() {
     const linkInput = document.getElementById("shareable-link");
     if (linkInput && linkInput.value) {
-      window.open(linkInput.value, '_blank');
+      window.open(linkInput.value, "_blank");
       this.showToast("success", "Opening Telegram", "Opening your sticker pack in Telegram!");
     } else {
       this.showToast("error", "No Link", "Shareable link not available");
@@ -1909,7 +1910,7 @@ class TelegramUtilities {
     this.showSuccessModal(testLink);
   }
   createAnotherPack() {
-    console.log('🔄 [RESET] Starting complete process reset...');
+    console.log("🔄 [RESET] Starting complete process reset...");
     
     this.hideSuccessModal();
     
@@ -1930,15 +1931,15 @@ class TelegramUtilities {
     const urlNameValidation = document.getElementById("pack-url-name-validation");
     
     if (packNameInput && packNameValidation) {
-      packNameInput.classList.remove('valid', 'invalid');
-      packNameValidation.classList.remove('valid', 'invalid');
-      packNameValidation.textContent = '';
+      packNameInput.classList.remove("valid", "invalid");
+      packNameValidation.classList.remove("valid", "invalid");
+      packNameValidation.textContent = "";
     }
     
     if (urlNameInput && urlNameValidation) {
-      urlNameInput.classList.remove('valid', 'invalid');
-      urlNameValidation.classList.remove('valid', 'invalid');
-      urlNameValidation.textContent = '';
+      urlNameInput.classList.remove("valid", "invalid");
+      urlNameValidation.classList.remove("valid", "invalid");
+      urlNameValidation.textContent = "";
     }
     
     // STEP 4: Reset progress monitoring and UI state
@@ -1996,7 +1997,7 @@ class TelegramUtilities {
       iconUploaded: false,
       urlNameSubmitted: false,
       packCompleted: false,
-      currentStep: 'initial'
+      currentStep: "initial"
     };
     
     // STEP 10: Focus on pack name input and update button state (preserve telegram connection)
@@ -2009,10 +2010,10 @@ class TelegramUtilities {
         packNameInput.focus();
       }
       
-      console.log('🔄 [RESET] Form reset completed - Telegram connection preserved');
+      console.log("🔄 [RESET] Form reset completed - Telegram connection preserved");
     }, 100);
     
-    console.log('🔄 [RESET] Complete process reset finished!');
+    console.log("🔄 [RESET] Complete process reset finished!");
     this.showToast("success", "Ready for New Pack", "Form cleared - ready to create another sticker pack!");
     this.addStatusItem("🔄 Ready to create new sticker pack", "ready");
   }
@@ -2030,7 +2031,7 @@ class TelegramUtilities {
       }
     }
     
-    console.log('🔄 [MANUAL_RESET] User initiated form reset...');
+    console.log("🔄 [MANUAL_RESET] User initiated form reset...");
     
     // Optional: Clear any active sticker processes in the backend
     this.clearActiveProcesses();
@@ -2044,11 +2045,11 @@ class TelegramUtilities {
       // This is optional - clear any running sticker processes
       const response = await this.apiRequest("POST", "/api/clear-sticker-processes");
       if (response.success) {
-        console.log('🔄 [RESET] Backend sticker processes cleared');
+        console.log("🔄 [RESET] Backend sticker processes cleared");
       }
     } catch (error) {
       // Don't block reset if this fails
-      console.log('🔄 [RESET] Backend process clearing skipped:', error.message);
+      console.log("🔄 [RESET] Backend process clearing skipped:", error.message);
     }
   }
 
@@ -2118,18 +2119,18 @@ class TelegramUtilities {
     if (!input || !validationDiv) return;
 
     // Remove existing validation classes
-    input.classList.remove('valid', 'invalid');
-    validationDiv.classList.remove('valid', 'invalid');
-    validationDiv.textContent = '';
+    input.classList.remove("valid", "invalid");
+    validationDiv.classList.remove("valid", "invalid");
+    validationDiv.textContent = "";
 
     if (validation.valid) {
-      input.classList.add('valid');
-      validationDiv.classList.add('valid');
-      validationDiv.textContent = '✓ Valid';
+      input.classList.add("valid");
+      validationDiv.classList.add("valid");
+      validationDiv.textContent = "✓ Valid";
     } else if (input.value.length > 0) {
       // Only show invalid state if user has typed something
-      input.classList.add('invalid');
-      validationDiv.classList.add('invalid');
+      input.classList.add("invalid");
+      validationDiv.classList.add("invalid");
       validationDiv.textContent = validation.error;
     }
     // If input is empty, don't show any validation state
@@ -2242,9 +2243,9 @@ class TelegramUtilities {
     }
     
     // Clear any status messages
-    const statusElement = document.querySelector('.status');
+    const statusElement = document.querySelector(".status");
     if (statusElement) {
-      statusElement.textContent = 'Ready';
+      statusElement.textContent = "Ready";
     }
     
     // Reset virtual list container completely
@@ -2252,7 +2253,7 @@ class TelegramUtilities {
     if (container) {
       // Remove scroll event listeners
       if (container._virtualScrollHandler) {
-        container.removeEventListener('scroll', container._virtualScrollHandler);
+        container.removeEventListener("scroll", container._virtualScrollHandler);
         container._virtualScrollHandler = null;
       }
       if (container._scrollTimeout) {
@@ -2265,13 +2266,13 @@ class TelegramUtilities {
       delete container._virtualItemHeight;
       
       // Reset container styles
-      container.style.height = '';
-      container.style.overflowY = '';
-      container.style.overflowX = '';
-      container.style.position = '';
+      container.style.height = "";
+      container.style.overflowY = "";
+      container.style.overflowX = "";
+      container.style.position = "";
       
       // Clear all content
-      container.innerHTML = '';
+      container.innerHTML = "";
     }
     
     // Force a complete UI refresh
@@ -2338,7 +2339,7 @@ class TelegramUtilities {
     });
     
     // Clear and append in one operation for better performance
-    container.innerHTML = '';
+    container.innerHTML = "";
     container.appendChild(fragment);
   }
   
@@ -2349,22 +2350,22 @@ class TelegramUtilities {
     const totalHeight = this.videoFiles.length * itemHeight;
     
     // Setup container
-    container.innerHTML = '';
-    container.style.height = visibleHeight + 'px';
-    container.style.overflowY = 'auto';
-    container.style.position = 'relative';
+    container.innerHTML = "";
+    container.style.height = visibleHeight + "px";
+    container.style.overflowY = "auto";
+    container.style.position = "relative";
     
     // Create spacer for scrollbar
-    const spacer = document.createElement('div');
-    spacer.style.height = totalHeight + 'px';
-    spacer.style.position = 'relative';
+    const spacer = document.createElement("div");
+    spacer.style.height = totalHeight + "px";
+    spacer.style.position = "relative";
     
     // Create items container
-    const itemsContainer = document.createElement('div');
-    itemsContainer.style.position = 'absolute';
-    itemsContainer.style.top = '0';
-    itemsContainer.style.left = '0';
-    itemsContainer.style.right = '0';
+    const itemsContainer = document.createElement("div");
+    itemsContainer.style.position = "absolute";
+    itemsContainer.style.top = "0";
+    itemsContainer.style.left = "0";
+    itemsContainer.style.right = "0";
     
     spacer.appendChild(itemsContainer);
     container.appendChild(spacer);
@@ -2389,21 +2390,21 @@ class TelegramUtilities {
       
       for (let i = startIndex; i < endIndex; i++) {
         const element = this.createVideoFileElement(this.videoFiles[i], i);
-        element.style.position = 'absolute';
-        element.style.top = (i * itemHeight) + 'px';
-        element.style.left = '0';
-        element.style.right = '0';
-        element.style.height = itemHeight + 'px';
+        element.style.position = "absolute";
+        element.style.top = (i * itemHeight) + "px";
+        element.style.left = "0";
+        element.style.right = "0";
+        element.style.height = itemHeight + "px";
         fragment.appendChild(element);
       }
       
-      itemsContainer.innerHTML = '';
+      itemsContainer.innerHTML = "";
       itemsContainer.appendChild(fragment);
     };
     
     // Debounced scroll handler
     let scrollTimeout;
-    container.addEventListener('scroll', () => {
+    container.addEventListener("scroll", () => {
       if (scrollTimeout) clearTimeout(scrollTimeout);
       scrollTimeout = setTimeout(renderVisibleItems, 16);
     });
@@ -2418,11 +2419,11 @@ class TelegramUtilities {
     const progressWidth = file.progress || 0;
     const statusIcon = this.getStatusIcon(file.status);
     
-    const fileElement = document.createElement('div');
+    const fileElement = document.createElement("div");
     fileElement.className = `file-item ${statusClass}`;
-    fileElement.setAttribute('data-index', index);
+    fileElement.setAttribute("data-index", index);
     
-    const progressText = progressWidth === 100 ? '✔' : `${progressWidth}%`;
+    const progressText = progressWidth === 100 ? "✔" : `${progressWidth}%`;
     const statusText = file.stage || "Ready to convert";
     
     fileElement.innerHTML = `
@@ -2434,7 +2435,7 @@ class TelegramUtilities {
           <div class="file-name" title="${file.path}">${file.name}</div>
           <div class="file-status">
             ${statusText}
-            ${file.hexEdited ? '<span class="hex-edited-badge" title="Hex edited">🔧</span>' : ''}
+            ${file.hexEdited ? '<span class="hex-edited-badge" title="Hex edited">🔧</span>' : ""}
           </div>
           <div class="file-progress-container">
             <div class="file-progress-bar">
@@ -2495,24 +2496,24 @@ class TelegramUtilities {
     // Get detailed file metadata from backend
     let fileInfo = {
       name: file.name,
-      size: 'Unknown',
-      duration: 'Unknown',
-      format: 'Unknown',
-      dimensions: 'Unknown'
+      size: "Unknown",
+      duration: "Unknown",
+      format: "Unknown",
+      dimensions: "Unknown"
     };
     
     try {
-      const result = await this.apiRequest('POST', '/api/get-file-info', { 
+      const result = await this.apiRequest("POST", "/api/get-file-info", { 
         path: file.path 
       });
       
       if (result && result.success && result.data) {
         fileInfo = {
           name: result.data.name || file.name,
-          size: result.data.size_formatted || 'Unknown',
-          duration: result.data.duration_formatted || 'Unknown',
-          format: result.data.format ? result.data.format.toUpperCase() : 'Unknown',
-          dimensions: result.data.dimensions || 'Unknown',
+          size: result.data.size_formatted || "Unknown",
+          duration: result.data.duration_formatted || "Unknown",
+          format: result.data.format ? result.data.format.toUpperCase() : "Unknown",
+          dimensions: result.data.dimensions || "Unknown",
           codec: result.data.codec || null,
           fps: result.data.fps || null
         };
@@ -2522,7 +2523,7 @@ class TelegramUtilities {
     }
     
     // Format additional info
-    let additionalInfo = '';
+    let additionalInfo = "";
     if (fileInfo.codec) {
       additionalInfo += `<strong style="color: #667eea;">Codec:</strong> <span style="color: #ccc;">${fileInfo.codec}</span><br>`;
     }
@@ -2566,7 +2567,7 @@ class TelegramUtilities {
         <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.1);">
           <div style="margin-bottom: 0.5rem;">
             <strong style="color: #667eea;">🔄 Status:</strong> 
-            <span style="color: ${this.getStatusColor(file.status)};">${file.status || 'Ready'}</span>
+            <span style="color: ${this.getStatusColor(file.status)};">${file.status || "Ready"}</span>
           </div>
           
           <div style="margin-bottom: 0.5rem;">
@@ -2577,7 +2578,7 @@ class TelegramUtilities {
           ${file.stage ? `<div style="margin-bottom: 0.5rem;">
             <strong style="color: #667eea;">⚙️ Stage:</strong> 
             <span style="color: #ccc;">${file.stage}</span>
-          </div>` : ''}
+          </div>` : ""}
         </div>
         
         <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.1);">
@@ -2613,9 +2614,9 @@ class TelegramUtilities {
       }
       
       // Clear any status messages
-      const statusElement = document.querySelector('.status');
+      const statusElement = document.querySelector(".status");
       if (statusElement) {
-        statusElement.textContent = 'Ready';
+        statusElement.textContent = "Ready";
       }
     }
     
@@ -2680,7 +2681,7 @@ class TelegramUtilities {
     }
     }
     
-    if (this.currentOperation === 'converting') {
+    if (this.currentOperation === "converting") {
       this.showToast("warning", "Operation in Progress", "A conversion is already running.");
       return;
     }
@@ -2703,7 +2704,7 @@ class TelegramUtilities {
     const filesToConvert = this.videoFiles.map(f => f.path);
     
     // Check if any file paths are invalid
-    const invalidFiles = filesToConvert.filter(path => !path || path === 'undefined');
+    const invalidFiles = filesToConvert.filter(path => !path || path === "undefined");
     if (invalidFiles.length > 0) {
       console.error("Invalid file paths found:", invalidFiles);
       this.showToast("error", "Invalid Files", "Some files have invalid paths. Please re-add them.");
@@ -2711,7 +2712,7 @@ class TelegramUtilities {
     }
     
     // Set operation state
-    this.currentOperation = 'converting';
+    this.currentOperation = "converting";
     this.isPaused = false;
     
     // Update UI - Disable conversion button, enable pause, disable hex edit
@@ -2723,22 +2724,22 @@ class TelegramUtilities {
     if (startBtn) {
       startBtn.disabled = true;
       startBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Converting...';
-      startBtn.style.display = 'inline-flex';
+      startBtn.style.display = "inline-flex";
     }
     
     if (hexBtn) {
       hexBtn.disabled = true;
-      hexBtn.style.opacity = '0.5';
-      hexBtn.style.display = 'inline-flex';
+      hexBtn.style.opacity = "0.5";
+      hexBtn.style.display = "inline-flex";
     }
     
     if (pauseBtn) {
-      pauseBtn.style.display = 'inline-block';
+      pauseBtn.style.display = "inline-block";
       pauseBtn.disabled = false;
     }
     
     if (resumeBtn) {
-      resumeBtn.style.display = 'none';
+      resumeBtn.style.display = "none";
     }
     
     // Force update button states
@@ -2777,7 +2778,7 @@ class TelegramUtilities {
           this.activeProcesses.set(this.currentProcessId, {
             startTime: Date.now(),
             files: this.videoFiles,
-            type: 'conversion'
+            type: "conversion"
           });
           
           // Start progress monitoring
@@ -2809,7 +2810,7 @@ class TelegramUtilities {
       if (startBtn) {
         startBtn.disabled = false;
         startBtn.innerHTML = '<i class="fas fa-play"></i> Start Conversion';
-        startBtn.style.display = 'inline-flex';
+        startBtn.style.display = "inline-flex";
       }
       
       // Force update button states
@@ -2834,7 +2835,7 @@ class TelegramUtilities {
     this.activeProcesses.set(processId, {
       startTime: Date.now(),
       files: this.videoFiles,
-      type: 'video'
+      type: "video"
     });
     
     this.progressInterval = setInterval(async () => {
@@ -2883,7 +2884,7 @@ class TelegramUtilities {
               const oldProgress = file.progress;
               file.status = fileStatus.status;
               file.progress = fileStatus.progress || 0;
-              file.stage = fileStatus.stage || 'Processing';
+              file.stage = fileStatus.stage || "Processing";
               
               // Check for any change
               if (oldStatus !== file.status || oldProgress !== file.progress) {
@@ -2910,7 +2911,7 @@ class TelegramUtilities {
         }
         
         // Check if process is complete
-        if (progress && (progress.status === 'completed' || progress.status === 'error')) {
+        if (progress && (progress.status === "completed" || progress.status === "error")) {
           this.stopProgressMonitoring();
           await this.handleProcessCompletion(progress);
         }
@@ -2953,7 +2954,7 @@ class TelegramUtilities {
     }
     
     // Determine overall success based on process status
-    const isSuccessful = processData.status === 'completed';
+    const isSuccessful = processData.status === "completed";
     
     // Update all file statuses based on results
     if (processData.file_statuses) {
@@ -2968,15 +2969,15 @@ class TelegramUtilities {
           
           file.status = fileStatus.status;
           // Ensure progress shows 100% for completed files
-          if (fileStatus.status === 'completed') {
+          if (fileStatus.status === "completed") {
             file.progress = 100;
-            file.stage = 'Conversion completed';
-          } else if (fileStatus.status === 'error') {
+            file.stage = "Conversion completed";
+          } else if (fileStatus.status === "error") {
             file.progress = 0;
-            file.stage = fileStatus.stage || 'Conversion failed';
+            file.stage = fileStatus.stage || "Conversion failed";
           } else {
             file.progress = fileStatus.progress || 0;
-            file.stage = fileStatus.stage || 'Processing';
+            file.stage = fileStatus.stage || "Processing";
           }
           
           if (RENDERER_DEBUG) console.log(`📁 File ${index} (${file.name}):`);
@@ -2995,8 +2996,8 @@ class TelegramUtilities {
     this.updateVideoFileList();
     
     // Check if ALL files are completed
-    const allFilesCompleted = this.videoFiles.every(file => file.status === 'completed');
-    const anyFilesFailed = this.videoFiles.some(file => file.status === 'error');
+    const allFilesCompleted = this.videoFiles.every(file => file.status === "completed");
+    const anyFilesFailed = this.videoFiles.some(file => file.status === "error");
     
     if (RENDERER_DEBUG) console.log("🎯 All files completed:", allFilesCompleted);
     if (RENDERER_DEBUG) console.log("🎯 Any files failed:", anyFilesFailed);
@@ -3004,23 +3005,23 @@ class TelegramUtilities {
     // Show toast notification
     if (allFilesCompleted) {
       this.showToast(
-        'success',
-        'Conversion Completed',
+        "success",
+        "Conversion Completed",
         `Successfully converted ${processData.completed_files}/${processData.total_files} files`
       );
     } else if (anyFilesFailed) {
       this.showToast(
-        'error',
-        'Conversion Failed',
-        `Conversion failed: ${processData.current_stage || 'Unknown error'}`
+        "error",
+        "Conversion Failed",
+        `Conversion failed: ${processData.current_stage || "Unknown error"}`
       );
     } else {
       this.showToast(
-        isSuccessful ? 'success' : 'error',
-        `Conversion ${isSuccessful ? 'Completed' : 'Failed'}`,
+        isSuccessful ? "success" : "error",
+        `Conversion ${isSuccessful ? "Completed" : "Failed"}`,
         isSuccessful 
           ? `Successfully converted ${processData.completed_files}/${processData.total_files} files` 
-          : `Conversion failed: ${processData.current_stage || 'Unknown error'}`
+          : `Conversion failed: ${processData.current_stage || "Unknown error"}`
       );
     }
     
@@ -3033,7 +3034,7 @@ class TelegramUtilities {
       this.resetOperationState();
     } else {
       if (RENDERER_DEBUG) console.log("🎯 Not all files completed, keeping operation state active");
-      if (RENDERER_DEBUG) console.log("🎯 Remaining files:", this.videoFiles.filter(f => f.status !== 'completed').map(f => f.name));
+      if (RENDERER_DEBUG) console.log("🎯 Remaining files:", this.videoFiles.filter(f => f.status !== "completed").map(f => f.name));
     }
     
     if (RENDERER_DEBUG) console.log("=== PROCESS COMPLETION END ===");
@@ -3064,28 +3065,28 @@ class TelegramUtilities {
     if (startBtn) {
       startBtn.disabled = false;
       startBtn.innerHTML = '<i class="fas fa-play"></i> Start Conversion';
-      startBtn.style.display = 'inline-flex';
+      startBtn.style.display = "inline-flex";
     }
     
     if (hexBtn) {
       hexBtn.disabled = false;
-      hexBtn.style.opacity = '1';
-      hexBtn.style.display = 'inline-flex';
+      hexBtn.style.opacity = "1";
+      hexBtn.style.display = "inline-flex";
     }
     
     if (pauseBtn) {
-      pauseBtn.style.display = 'none';
+      pauseBtn.style.display = "none";
       pauseBtn.disabled = true;
     }
     
     if (resumeBtn) {
-      resumeBtn.style.display = 'none';
+      resumeBtn.style.display = "none";
       resumeBtn.disabled = true;
     }
     
     // Reset progress bars to 100% if completed
     this.videoFiles.forEach(file => {
-      if (file.status === 'completed') {
+      if (file.status === "completed") {
         file.progress = 100;
       }
     });
@@ -3123,12 +3124,12 @@ class TelegramUtilities {
     
     // Validate that all files are WebM
     const nonWebmFiles = this.videoFiles.filter(file => 
-      !file.name.toLowerCase().endsWith('.webm')
+      !file.name.toLowerCase().endsWith(".webm")
     );
     
     if (nonWebmFiles.length > 0) {
-      const fileNames = nonWebmFiles.map(f => f.name).slice(0, 3).join(', ');
-      const moreText = nonWebmFiles.length > 3 ? ` and ${nonWebmFiles.length - 3} more` : '';
+      const fileNames = nonWebmFiles.map(f => f.name).slice(0, 3).join(", ");
+      const moreText = nonWebmFiles.length > 3 ? ` and ${nonWebmFiles.length - 3} more` : "";
       this.showToast(
         "error", 
         "Invalid Files for Hex Edit", 
@@ -3149,7 +3150,7 @@ class TelegramUtilities {
       
       if (startBtn) {
         startBtn.disabled = true;
-        startBtn.style.opacity = '0.5';
+        startBtn.style.opacity = "0.5";
       }
       
       if (hexBtn) {
@@ -3158,12 +3159,12 @@ class TelegramUtilities {
       }
       
       if (pauseBtn) {
-        pauseBtn.style.display = 'inline-block';
+        pauseBtn.style.display = "inline-block";
         pauseBtn.disabled = false;
       }
       
       if (resumeBtn) {
-        resumeBtn.style.display = 'none';
+        resumeBtn.style.display = "none";
       }
       
       this.updateButtonStates();
@@ -3208,7 +3209,7 @@ class TelegramUtilities {
   }
 
   // Conversion progress monitor (video conversion only)
-  startProgressMonitoring(processId, type = 'video') {
+  startProgressMonitoring(processId, type = "video") {
     const MAX_CONSECUTIVE_ERRORS = 5;
     const RETRY_DELAY = 2000; // 2 seconds
     const LONG_OPERATION_TIMEOUT = 5 * 60 * 1000; // 5 minutes
@@ -3218,12 +3219,12 @@ class TelegramUtilities {
     
     let consecutiveErrors = 0;
     let operationStartTime = Date.now();
-    this.debugWarn('poll:start', { processId, type });
+    this.debugWarn("poll:start", { processId, type });
     
     this.progressInterval = setInterval(async () => {
       // Check for long-running operation
       if (Date.now() - operationStartTime > LONG_OPERATION_TIMEOUT) {
-        if (RENDERER_DEBUG) console.warn(`[PROGRESS] Operation exceeded maximum time limit`);
+        if (RENDERER_DEBUG) console.warn("[PROGRESS] Operation exceeded maximum time limit");
         this.stopProgressMonitoring();
         this.resetOperationState();
         this.showToast("warning", "Operation Timeout", "Operation took too long and was stopped");
@@ -3232,7 +3233,7 @@ class TelegramUtilities {
       
       try {
         const progress = await this.getConversionProgress(processId);
-        this.debugWarn('poll:data', { processId, type, progress });
+        this.debugWarn("poll:data", { processId, type, progress });
         
         if (!progress) {
           consecutiveErrors++;
@@ -3250,14 +3251,14 @@ class TelegramUtilities {
         // Update pause state if changed
         if (progress.paused !== this.isPaused) {
           this.isPaused = progress.paused;
-          this.updateConversionButtons(this.currentOperation === 'converting', this.currentOperation === 'hexediting');
+          this.updateConversionButtons(this.currentOperation === "converting", this.currentOperation === "hexediting");
         }
         
         // Update overall progress display if needed
         this.updateOverallProgress(progress);
         
         // For hex edit, ensure the UI is refreshed after progress updates
-        if (type === 'hex_edit') {
+        if (type === "hex_edit") {
           // The files have already been updated in getConversionProgress
           // Just refresh the UI to show the changes
           this.updateVideoFileList();
@@ -3265,16 +3266,16 @@ class TelegramUtilities {
 
         // Check if operation is complete
         if (progress.status === "completed" || progress.status === "error") {
-          this.debugWarn('poll:complete', { processId, type, status: progress.status });
+          this.debugWarn("poll:complete", { processId, type, status: progress.status });
           
           // For hex edit completion, only update files that haven't been updated yet
-          if (type === 'hex_edit' && progress.status === "completed") {
+          if (type === "hex_edit" && progress.status === "completed") {
             // Only update files that are still pending or processing
             this.videoFiles.forEach((file) => {
-              if (file.status === 'pending' || file.status === 'processing') {
-                file.status = 'completed';
+              if (file.status === "pending" || file.status === "processing") {
+                file.status = "completed";
                 file.progress = 100;
-                file.stage = 'Hex edit completed!';
+                file.stage = "Hex edit completed!";
               }
             });
             
@@ -3286,7 +3287,7 @@ class TelegramUtilities {
         }
       } catch (error) {
         consecutiveErrors++;
-        this.debugWarn('poll:error', { processId, type, error: error?.message });
+        this.debugWarn("poll:error", { processId, type, error: error?.message });
         this.handleProgressError(error, consecutiveErrors);
       }
     }, RETRY_DELAY);
@@ -3305,7 +3306,7 @@ class TelegramUtilities {
     
     let consecutiveErrors = 0;
     const startTs = Date.now();
-    if (RENDERER_DEBUG) console.log(`[HEX] monitor:start`, { processId, files: this.videoFiles.length });
+    if (RENDERER_DEBUG) console.log("[HEX] monitor:start", { processId, files: this.videoFiles.length });
     
     // For hex edit, check progress immediately since it's very fast
     this.checkHexProgressImmediately(processId);
@@ -3315,7 +3316,7 @@ class TelegramUtilities {
       
       // Timeout guard
       if (Date.now() - startTs > LONG_OPERATION_TIMEOUT) {
-        if (RENDERER_DEBUG) console.warn(`[HEX] monitor:timeout - stopping polling`);
+        if (RENDERER_DEBUG) console.warn("[HEX] monitor:timeout - stopping polling");
         clearInterval(this.progressInterval);
         this.progressInterval = null;
         this.resetOperationState();
@@ -3325,7 +3326,7 @@ class TelegramUtilities {
       
       try {
         const progress = await this.getHexEditProgress(processId);
-        if (RENDERER_DEBUG) console.log(`[HEX] monitor:data`, progress);
+        if (RENDERER_DEBUG) console.log("[HEX] monitor:data", progress);
         
         // Update overall UI for hex edit
         this.updateHexOverallProgress(progress);
@@ -3333,15 +3334,15 @@ class TelegramUtilities {
         // Refresh list each tick (lightweight, uses fragment)
         this.updateVideoFileList();
         
-        if (progress.status === 'completed' || progress.status === 'error') {
-          if (RENDERER_DEBUG) console.log(`[HEX] monitor:complete`, { status: progress.status });
+        if (progress.status === "completed" || progress.status === "error") {
+          if (RENDERER_DEBUG) console.log("[HEX] monitor:complete", { status: progress.status });
           clearInterval(this.progressInterval);
           this.progressInterval = null;
           await this.handleConversionComplete(progress); // Reuse completion UI with wasHexEdit detection inside
         }
       } catch (err) {
         consecutiveErrors += 1;
-        if (RENDERER_DEBUG) console.warn(`[HEX] monitor:error`, { consecutiveErrors, err: err?.message });
+        if (RENDERER_DEBUG) console.warn("[HEX] monitor:error", { consecutiveErrors, err: err?.message });
         if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
           clearInterval(this.progressInterval);
           this.progressInterval = null;
@@ -3357,12 +3358,12 @@ class TelegramUtilities {
   // Immediate progress check for hex edit since it's very fast
   async checkHexProgressImmediately(processId) {
     try {
-      if (RENDERER_DEBUG) console.log(`[HEX] immediate:check`, { processId });
+      if (RENDERER_DEBUG) console.log("[HEX] immediate:check", { processId });
       const progress = await this.getHexEditProgress(processId);
       
       // If hex edit is already completed (very fast operation)
-      if (progress.status === 'completed') {
-        if (RENDERER_DEBUG) console.log(`[HEX] immediate:completed`, progress);
+      if (progress.status === "completed") {
+        if (RENDERER_DEBUG) console.log("[HEX] immediate:completed", progress);
         clearInterval(this.progressInterval);
         this.progressInterval = null;
         await this.handleConversionComplete(progress);
@@ -3374,7 +3375,7 @@ class TelegramUtilities {
       this.updateVideoFileList();
       
     } catch (err) {
-      if (RENDERER_DEBUG) console.warn(`[HEX] immediate:error`, err?.message);
+      if (RENDERER_DEBUG) console.warn("[HEX] immediate:error", err?.message);
       // Continue with normal polling if immediate check fails
     }
   }
@@ -3387,7 +3388,7 @@ class TelegramUtilities {
     const data = resp.data || {};
     const fileStatuses = data.file_statuses || {};
     const keys = Object.keys(fileStatuses);
-    if (RENDERER_DEBUG) console.log(`[HEX] progress:raw`, { keysCount: keys.length, keys });
+    if (RENDERER_DEBUG) console.log("[HEX] progress:raw", { keysCount: keys.length, keys });
     
     // Apply statuses to our local videoFiles array
     keys.forEach((k) => {
@@ -3397,34 +3398,34 @@ class TelegramUtilities {
       if (!file) return;
       
       const before = { s: file.status, p: file.progress, st: file.stage };
-      file.status = fs.status || file.status || 'processing';
-      file.progress = typeof fs.progress === 'number' ? fs.progress : (file.progress || 0);
-      file.stage = fs.stage || file.stage || 'Processing hex edit...';
+      file.status = fs.status || file.status || "processing";
+      file.progress = typeof fs.progress === "number" ? fs.progress : (file.progress || 0);
+      file.stage = fs.stage || file.stage || "Processing hex edit...";
       // For hex edit, ensure completed files show 100% progress
-      if (file.status === 'completed') {
+      if (file.status === "completed") {
         file.progress = 100;
         // Check if this is a hex edit completion
-        if (file.stage && file.stage.includes('Hex edit completed')) {
+        if (file.stage && file.stage.includes("Hex edit completed")) {
           file.hexEdited = true; // Mark as hex edited
         }
       }
       
       if (before.s !== file.status || before.p !== file.progress || before.st !== file.stage) {
-        if (RENDERER_DEBUG) console.log(`[HEX] file:update`, { idx, before, after: { s: file.status, p: file.progress, st: file.stage } });
+        if (RENDERER_DEBUG) console.log("[HEX] file:update", { idx, before, after: { s: file.status, p: file.progress, st: file.stage } });
       }
     });
     
     // Enhanced completion detection for hex edit
     const allCompleted = keys.every(k => {
       const fs = fileStatuses[k] || {};
-      return fs.status === 'completed';
+      return fs.status === "completed";
     });
     
     // Return normalized progress shape
     return {
-      status: allCompleted ? 'completed' : (data.status || 'running'),
+      status: allCompleted ? "completed" : (data.status || "running"),
       progress: allCompleted ? 100 : (data.progress || 0),
-      currentStage: data.current_stage || '',
+      currentStage: data.current_stage || "",
       totalFiles: data.total_files || this.videoFiles.length,
       completedFiles: data.completed_files || 0,
       failedFiles: data.failed_files || 0,
@@ -3437,7 +3438,7 @@ class TelegramUtilities {
     const bar = document.getElementById("sticker-progress-fill") || document.getElementById("conversion-progress-fill");
     if (bar) {
       bar.style.width = `${progress.progress}%`;
-      bar.setAttribute('aria-valuenow', progress.progress);
+      bar.setAttribute("aria-valuenow", progress.progress);
     }
     
     // Text status line (reuse conversion-status element)
@@ -3449,7 +3450,7 @@ class TelegramUtilities {
   }
 
   logProgressDetails(progress) {
-    if (RENDERER_DEBUG) console.log(`[PROGRESS DETAILS]`, {
+    if (RENDERER_DEBUG) console.log("[PROGRESS DETAILS]", {
       processId: this.currentProcessId,
       progress: progress.progress,
       status: progress.status,
@@ -3476,7 +3477,7 @@ class TelegramUtilities {
     if (RENDERER_DEBUG) console.log(`[COMPLETE] Operation finished with status: ${progress.status}`);
     
     this.stopProgressMonitoring();
-    const wasHexEdit = this.currentOperation === 'hexediting';
+    const wasHexEdit = this.currentOperation === "hexediting";
     this.currentOperation = null;
     this.currentProcessId = null;
     
@@ -3527,7 +3528,7 @@ class TelegramUtilities {
     }
     
     // Update file statuses with final values
-    this.debugWarn('🔥 COMPLETION DEBUG - Updating Final File Statuses', {
+    this.debugWarn("🔥 COMPLETION DEBUG - Updating Final File Statuses", {
       wasHexEdit: wasHexEdit,
       progressStatus: progress.status,
       hasFileStatuses: !!(progress.file_statuses && Object.keys(progress.file_statuses).length > 0),
@@ -3537,14 +3538,14 @@ class TelegramUtilities {
     });
     
     if (progress.file_statuses && Object.keys(progress.file_statuses).length > 0) {
-      this.debugWarn('🔥 COMPLETION DEBUG - Using file_statuses data');
+      this.debugWarn("🔥 COMPLETION DEBUG - Using file_statuses data");
       this.videoFiles.forEach((file, index) => {
         const fileStatus = progress.file_statuses[index];
         if (fileStatus) {
           file.status = fileStatus.status;
           file.progress = fileStatus.progress;
           file.stage = fileStatus.stage || progress.currentStage;
-          this.debugWarn('🔥 COMPLETION DEBUG - Updated file from file_statuses', {
+          this.debugWarn("🔥 COMPLETION DEBUG - Updated file from file_statuses", {
             index: index,
             filename: file.name,
             status: file.status,
@@ -3557,7 +3558,7 @@ class TelegramUtilities {
           file.stage = progress.status === "completed" ? 
             (wasHexEdit ? "Hex edit successful" : "Conversion successful") : 
             (wasHexEdit ? "Hex edit failed" : "Conversion failed");
-          this.debugWarn('🔥 COMPLETION DEBUG - Updated file with fallback', {
+          this.debugWarn("🔥 COMPLETION DEBUG - Updated file with fallback", {
             index: index,
             filename: file.name,
             status: file.status,
@@ -3567,14 +3568,14 @@ class TelegramUtilities {
       });
     } else {
       // If no file_statuses at all, update all files with the overall status
-      this.debugWarn('🔥 COMPLETION DEBUG - No file_statuses, using overall status');
+      this.debugWarn("🔥 COMPLETION DEBUG - No file_statuses, using overall status");
       this.videoFiles.forEach((file, index) => {
         file.status = progress.status === "completed" ? "completed" : "error";
         file.progress = progress.status === "completed" ? 100 : file.progress || 0;
         file.stage = progress.status === "completed" ? 
           (wasHexEdit ? "Hex edit successful" : "Conversion successful") : 
           (wasHexEdit ? "Hex edit failed" : "Conversion failed");
-        this.debugWarn('🔥 COMPLETION DEBUG - Updated file with overall status', {
+        this.debugWarn("🔥 COMPLETION DEBUG - Updated file with overall status", {
           index: index,
           filename: file.name,
           status: file.status,
@@ -3583,7 +3584,7 @@ class TelegramUtilities {
       });
     }
     
-    this.debugWarn('🔥 COMPLETION DEBUG - Final File States', {
+    this.debugWarn("🔥 COMPLETION DEBUG - Final File States", {
       videoFiles: this.videoFiles.map((f, i) => ({
         index: i,
         name: f.name,
@@ -3604,7 +3605,7 @@ class TelegramUtilities {
     const progressElement = document.getElementById("overall-progress");
     if (progressElement) {
       progressElement.style.width = `${progress.progress}%`;
-      progressElement.setAttribute('aria-valuenow', progress.progress);
+      progressElement.setAttribute("aria-valuenow", progress.progress);
     }
     
     const statusElement = document.getElementById("conversion-status");
@@ -3618,7 +3619,7 @@ class TelegramUtilities {
   async getConversionProgress(processId) {
     try {
       const response = await this.apiRequest("GET", `/api/conversion-progress/${processId}`);
-      this.debugWarn('🔍 DETAILED DEBUG - Raw API Response', {
+      this.debugWarn("🔍 DETAILED DEBUG - Raw API Response", {
         processId: processId,
         responseSuccess: response?.success,
         responseData: response?.data,
@@ -3636,11 +3637,11 @@ class TelegramUtilities {
       }
       
       const progressData = response.data;
-      this.debugWarn('🔍 DETAILED DEBUG - Progress Data Extracted', {
+      this.debugWarn("🔍 DETAILED DEBUG - Progress Data Extracted", {
         progressData: progressData,
         fileStatusesRaw: progressData.file_statuses,
         fileStatusesType: typeof progressData.file_statuses,
-        fileStatusesIsObject: progressData.file_statuses && typeof progressData.file_statuses === 'object',
+        fileStatusesIsObject: progressData.file_statuses && typeof progressData.file_statuses === "object",
         fileStatusesKeys: Object.keys(progressData.file_statuses || {})
       });
       
@@ -3650,7 +3651,7 @@ class TelegramUtilities {
       
       // Debug log to see what we're getting
       if (Object.keys(fileStatuses).length > 0) {
-        this.debugWarn('🔍 DETAILED DEBUG - File Statuses Processing', { 
+        this.debugWarn("🔍 DETAILED DEBUG - File Statuses Processing", { 
           operation: this.currentOperation, 
           count: Object.keys(fileStatuses).length,
           statuses: fileStatuses,
@@ -3658,7 +3659,7 @@ class TelegramUtilities {
           videoFiles: this.videoFiles.map((f, i) => ({ index: i, name: f.name, currentStatus: f.status, currentProgress: f.progress }))
         });
       } else {
-        this.debugWarn('🚨 DETAILED DEBUG - NO FILE STATUSES FOUND', {
+        this.debugWarn("🚨 DETAILED DEBUG - NO FILE STATUSES FOUND", {
           operation: this.currentOperation,
           progressDataKeys: Object.keys(progressData),
           fileStatusesValue: progressData.file_statuses,
@@ -3667,7 +3668,7 @@ class TelegramUtilities {
       }
       
       // Update the videoFiles array immediately for both conversion and hex edit
-      if ((this.currentOperation === 'converting' || this.currentOperation === 'hexediting') && Object.keys(fileStatuses).length > 0) {
+      if ((this.currentOperation === "converting" || this.currentOperation === "hexediting") && Object.keys(fileStatuses).length > 0) {
         if (RENDERER_DEBUG) console.log(`[PROGRESS] Updating ${Object.keys(fileStatuses).length} file statuses for ${this.currentOperation}`);
         
         Object.entries(fileStatuses).forEach(([idx, fs]) => {
@@ -3710,7 +3711,7 @@ class TelegramUtilities {
         file_statuses: fileStatuses  // Pass the actual file_statuses object
       };
       
-      this.debugWarn('🔍 DETAILED DEBUG - Returning Progress Data', {
+      this.debugWarn("🔍 DETAILED DEBUG - Returning Progress Data", {
         returnData: returnData,
         fileStatusesInReturn: returnData.file_statuses,
         fileStatusesKeysInReturn: Object.keys(returnData.file_statuses || {})
@@ -3725,8 +3726,8 @@ class TelegramUtilities {
 
   updateFileStatuses(fileStatuses) {
     // Handle both object and array-like structures
-    if (!fileStatuses || typeof fileStatuses !== 'object') {
-      this.debugWarn('🚨 CRITICAL ERROR - Invalid File Statuses', {
+    if (!fileStatuses || typeof fileStatuses !== "object") {
+      this.debugWarn("🚨 CRITICAL ERROR - Invalid File Statuses", {
         fileStatuses: fileStatuses,
         type: typeof fileStatuses
       });
@@ -3738,7 +3739,7 @@ class TelegramUtilities {
     fileStatusKeys.forEach(index => {
       const fileStatus = fileStatuses[index];
       if (!fileStatus) {
-        this.debugWarn('🚨 CRITICAL ERROR - Empty File Status', { index, fileStatus });
+        this.debugWarn("🚨 CRITICAL ERROR - Empty File Status", { index, fileStatus });
         return;
       }
       
@@ -3748,20 +3749,20 @@ class TelegramUtilities {
       if (fileElement) {
         // Update file item class based on status
         const oldClassName = fileElement.className;
-        fileElement.className = `file-item ${fileStatus.status || 'pending'}`;
+        fileElement.className = `file-item ${fileStatus.status || "pending"}`;
         
-        this.debugWarn('🎯 DETAILED DEBUG - Updated Element Class', {
+        this.debugWarn("🎯 DETAILED DEBUG - Updated Element Class", {
           index: index,
           oldClassName: oldClassName,
           newClassName: fileElement.className
         });
         
         // Update progress bar
-        const progressBar = fileElement.querySelector('.file-progress-fill');
-        const progressText = fileElement.querySelector('.file-progress-text');
-        const statusElement = fileElement.querySelector('.file-status');
+        const progressBar = fileElement.querySelector(".file-progress-fill");
+        const progressText = fileElement.querySelector(".file-progress-text");
+        const statusElement = fileElement.querySelector(".file-status");
         
-        this.debugWarn('🎯 DETAILED DEBUG - DOM Elements Found', {
+        this.debugWarn("🎯 DETAILED DEBUG - DOM Elements Found", {
           index: index,
           hasProgressBar: !!progressBar,
           hasProgressText: !!progressText,
@@ -3771,33 +3772,33 @@ class TelegramUtilities {
         if (progressBar) {
           const oldWidth = progressBar.style.width;
           progressBar.style.width = `${fileStatus.progress}%`;
-          this.debugWarn('🎯 DETAILED DEBUG - Updated Progress Bar', {
+          this.debugWarn("🎯 DETAILED DEBUG - Updated Progress Bar", {
             index: index,
             oldWidth: oldWidth,
             newWidth: progressBar.style.width,
             progress: fileStatus.progress
           });
         } else {
-          this.debugWarn('🚨 DETAILED DEBUG - Progress Bar Not Found', { index });
+          this.debugWarn("🚨 DETAILED DEBUG - Progress Bar Not Found", { index });
         }
         
         if (progressText) {
           const oldText = progressText.textContent;
-          progressText.textContent = `${fileStatus.progress === 100 ? '✔' : fileStatus.progress + '%'}`;
-          this.debugWarn('🎯 DETAILED DEBUG - Updated Progress Text', {
+          progressText.textContent = `${fileStatus.progress === 100 ? "✔" : fileStatus.progress + "%"}`;
+          this.debugWarn("🎯 DETAILED DEBUG - Updated Progress Text", {
             index: index,
             oldText: oldText,
             newText: progressText.textContent,
             progress: fileStatus.progress
           });
         } else {
-          this.debugWarn('🚨 DETAILED DEBUG - Progress Text Not Found', { index });
+          this.debugWarn("🚨 DETAILED DEBUG - Progress Text Not Found", { index });
         }
         
         if (statusElement) {
           const oldStatus = statusElement.textContent;
           statusElement.textContent = fileStatus.stage || fileStatus.status;
-          this.debugWarn('🎯 DETAILED DEBUG - Updated Status Element', {
+          this.debugWarn("🎯 DETAILED DEBUG - Updated Status Element", {
             index: index,
             oldStatus: oldStatus,
             newStatus: statusElement.textContent,
@@ -3805,16 +3806,16 @@ class TelegramUtilities {
             status: fileStatus.status
           });
         } else {
-          this.debugWarn('🚨 DETAILED DEBUG - Status Element Not Found', { index });
+          this.debugWarn("🚨 DETAILED DEBUG - Status Element Not Found", { index });
         }
       } else {
-        this.debugWarn('🚨 DETAILED DEBUG - File Element Not Found in DOM', {
+        this.debugWarn("🚨 DETAILED DEBUG - File Element Not Found in DOM", {
           index: index,
           selector: `[data-index="${index}"]`,
-          availableElements: Array.from(document.querySelectorAll('[data-index]')).map(el => ({
-            index: el.getAttribute('data-index'),
+          availableElements: Array.from(document.querySelectorAll("[data-index]")).map(el => ({
+            index: el.getAttribute("data-index"),
             className: el.className,
-            innerHTML: el.innerHTML.substring(0, 100) + '...'
+            innerHTML: el.innerHTML.substring(0, 100) + "..."
           }))
         });
       }
@@ -3830,7 +3831,7 @@ class TelegramUtilities {
   // TELEGRAM STICKER BOT METHODS
   // =============================================
   async disconnectTelegram() {
-    if (RENDERER_DEBUG) console.log('[DEBUG] disconnectTelegram called');
+    if (RENDERER_DEBUG) console.log("[DEBUG] disconnectTelegram called");
     
     try {
       this.updateTelegramStatus("connecting"); // Show as connecting/processing
@@ -3839,16 +3840,16 @@ class TelegramUtilities {
       const response = await this.apiRequest("POST", "/api/telegram/cleanup-session");
       
       if (response && response.success) {
-        this.showToast('success', 'Disconnected', 'Successfully disconnected from Telegram');
+        this.showToast("success", "Disconnected", "Successfully disconnected from Telegram");
         this.updateTelegramStatus("disconnected");
       } else {
-        this.showToast('warning', 'Disconnect Warning', 'Session may not be fully cleaned');
+        this.showToast("warning", "Disconnect Warning", "Session may not be fully cleaned");
         this.updateTelegramStatus("disconnected"); // Still update UI
       }
       
     } catch (error) {
-      if (RENDERER_DEBUG) console.error('[DEBUG] Disconnect error:', error);
-      this.showToast('error', 'Disconnect Error', 'Error during disconnect, but session should be invalid');
+      if (RENDERER_DEBUG) console.error("[DEBUG] Disconnect error:", error);
+      this.showToast("error", "Disconnect Error", "Error during disconnect, but session should be invalid");
       this.updateTelegramStatus("disconnected"); // Still update UI
     }
   }
@@ -3865,7 +3866,7 @@ class TelegramUtilities {
     try {
       // Check if there's already a valid session first when user wants to connect
       try {
-        if (RENDERER_DEBUG) console.log('[DEBUG] User wants to connect - checking for existing session...');
+        if (RENDERER_DEBUG) console.log("[DEBUG] User wants to connect - checking for existing session...");
         
         const sessionResponse = await this.apiRequest("GET", "/api/telegram/session-status");
         
@@ -3873,21 +3874,21 @@ class TelegramUtilities {
           const { session_exists, session_valid } = sessionResponse.data;
           
           if (session_exists && session_valid) {
-            if (RENDERER_DEBUG) console.log('[DEBUG] Found valid existing session - using it');
+            if (RENDERER_DEBUG) console.log("[DEBUG] Found valid existing session - using it");
             this.updateTelegramStatus("connected");
-            this.showToast('success', 'Already Connected', 'Using existing Telegram session');
+            this.showToast("success", "Already Connected", "Using existing Telegram session");
             return;
           } else if (session_exists && !session_valid) {
-            if (RENDERER_DEBUG) console.log('[DEBUG] Found invalid session - cleaning up before new connection');
+            if (RENDERER_DEBUG) console.log("[DEBUG] Found invalid session - cleaning up before new connection");
             try {
               await this.cleanupTelegramSession();
             } catch (cleanupError) {
-              console.warn('[DEBUG] Could not clean up invalid session:', cleanupError);
+              console.warn("[DEBUG] Could not clean up invalid session:", cleanupError);
             }
           }
         }
       } catch (error) {
-        if (RENDERER_DEBUG) console.warn('[DEBUG] Could not check existing session, proceeding with new connection:', error);
+        if (RENDERER_DEBUG) console.warn("[DEBUG] Could not check existing session, proceeding with new connection:", error);
       }
       
       // ... rest of connection logic ...
@@ -3897,19 +3898,19 @@ class TelegramUtilities {
       const apiHashInput = document.getElementById("telegram-api-hash");
       const phoneInput = document.getElementById("telegram-phone");
       
-      if (RENDERER_DEBUG) console.log('[DEBUG] connectTelegram called - checking inputs:', {
+      if (RENDERER_DEBUG) console.log("[DEBUG] connectTelegram called - checking inputs:", {
         apiIdInput: !!apiIdInput,
         apiHashInput: !!apiHashInput, 
         phoneInput: !!phoneInput
       });
       
       if (!apiIdInput || !apiHashInput || !phoneInput) {
-        if (RENDERER_DEBUG) console.error('[DEBUG] Missing input elements:', {
+        if (RENDERER_DEBUG) console.error("[DEBUG] Missing input elements:", {
           apiIdInput: !!apiIdInput,
           apiHashInput: !!apiHashInput,
           phoneInput: !!phoneInput
         });
-        this.showToast('error', 'Input Error', 'Telegram connection inputs not found');
+        this.showToast("error", "Input Error", "Telegram connection inputs not found");
         return;
       }
       
@@ -3917,23 +3918,23 @@ class TelegramUtilities {
       const apiHash = apiHashInput.value.trim();
       const phoneNumber = phoneInput.value.trim();
       
-      if (RENDERER_DEBUG) console.log('[DEBUG] Input values:', {
-        apiId: apiId ? 'provided' : 'empty',
-        apiHash: apiHash ? 'provided' : 'empty', 
-        phoneNumber: phoneNumber ? 'provided' : 'empty'
+      if (RENDERER_DEBUG) console.log("[DEBUG] Input values:", {
+        apiId: apiId ? "provided" : "empty",
+        apiHash: apiHash ? "provided" : "empty", 
+        phoneNumber: phoneNumber ? "provided" : "empty"
       });
       
       // Validate inputs
       if (!apiId || !apiHash || !phoneNumber) {
-        if (RENDERER_DEBUG) console.error('[DEBUG] Validation failed - missing inputs');
+        if (RENDERER_DEBUG) console.error("[DEBUG] Validation failed - missing inputs");
         
         // Show specific field errors
         const missingFields = [];
-        if (!apiId) missingFields.push('API ID');
-        if (!apiHash) missingFields.push('API Hash');
-        if (!phoneNumber) missingFields.push('Phone Number');
+        if (!apiId) missingFields.push("API ID");
+        if (!apiHash) missingFields.push("API Hash");
+        if (!phoneNumber) missingFields.push("Phone Number");
         
-        this.showToast('error', 'Invalid Input', `Please fill in: ${missingFields.join(', ')}`);
+        this.showToast("error", "Invalid Input", `Please fill in: ${missingFields.join(", ")}`);
         return;
       }
       
@@ -3952,7 +3953,7 @@ class TelegramUtilities {
       
       this.showLoadingOverlay("Connecting to Telegram...");
       
-      if (RENDERER_DEBUG) console.log('[DEBUG] Sending connection request to backend');
+      if (RENDERER_DEBUG) console.log("[DEBUG] Sending connection request to backend");
       
       let response;
       let retryCount = 0;
@@ -3967,14 +3968,14 @@ class TelegramUtilities {
             process_id: "connect_" + Date.now(),
           });
           
-          if (RENDERER_DEBUG) console.log('[DEBUG] Connection response received:', response);
+          if (RENDERER_DEBUG) console.log("[DEBUG] Connection response received:", response);
           break; // Success, exit retry loop
           
         } catch (error) {
           if (RENDERER_DEBUG) console.error(`[DEBUG] Connection attempt ${retryCount + 1} failed:`, error);
           
           // Check for database lock error
-          if (error.message && error.message.includes('database is locked') && retryCount < maxRetries - 1) {
+          if (error.message && error.message.includes("database is locked") && retryCount < maxRetries - 1) {
             await new Promise(resolve => setTimeout(resolve, (retryCount + 1) * 1000));
             retryCount++;
             continue;
@@ -3986,7 +3987,7 @@ class TelegramUtilities {
       
       this.hideLoadingOverlay();
       
-      const resOk = response && typeof response === 'object' && response.success === true;
+      const resOk = response && typeof response === "object" && response.success === true;
       if (resOk) {
         const result = (response.data !== undefined && response.data !== null) ? response.data : response;
         const needsCode = !!(result && result.needs_code);
@@ -3994,7 +3995,9 @@ class TelegramUtilities {
         
         if (needsCode) {
           this.pendingCode = true;
-            try { this.hideIconModal(); } catch {}
+            try { this.hideIconModal(); } catch (_e) {
+              // Ignore errors when hiding icon modal
+            }
           this.showModal("code-modal");
           this.showToast(
             "info",
@@ -4007,7 +4010,9 @@ class TelegramUtilities {
           }, 500);
         } else if (needsPassword) {
           this.pendingPassword = true;
-            try { this.hideIconModal(); } catch {}
+            try { this.hideIconModal(); } catch (_e) {
+              // Ignore errors when hiding icon modal  
+            }
           this.showModal("password-modal");
           this.showToast(
             "info",
@@ -4020,35 +4025,35 @@ class TelegramUtilities {
           }, 500);
         } else {
           // Successful connection
-          if (RENDERER_DEBUG) console.log('[DEBUG] Connection successful - updating UI');
+          if (RENDERER_DEBUG) console.log("[DEBUG] Connection successful - updating UI");
           
           // Show session reuse information
-          let successMessage = 'Successfully connected to Telegram';
+          let successMessage = "Successfully connected to Telegram";
           if (result && result.reused_session) {
-            successMessage += ' (Reused existing session - no rate limits!)';
-            this.showToast('success', 'Session Reused', 'Used existing session to avoid rate limiting', 6000);
-            this.addStatusItem('✅ Session reused successfully', 'success');
+            successMessage += " (Reused existing session - no rate limits!)";
+            this.showToast("success", "Session Reused", "Used existing session to avoid rate limiting", 6000);
+            this.addStatusItem("✅ Session reused successfully", "success");
           } else if (result && result.existing_session) {
-            successMessage += ' (Used existing authorized session)';
-            this.showToast('success', 'Session Found', 'Found existing authorized session', 5000);
-            this.addStatusItem('✅ Existing session found and used', 'success');
+            successMessage += " (Used existing authorized session)";
+            this.showToast("success", "Session Found", "Found existing authorized session", 5000);
+            this.addStatusItem("✅ Existing session found and used", "success");
           } else {
-            successMessage += ' (Created new session)';
-            this.showToast('success', 'Connected', successMessage);
-            this.addStatusItem('✅ New session created', 'success');
+            successMessage += " (Created new session)";
+            this.showToast("success", "Connected", successMessage);
+            this.addStatusItem("✅ New session created", "success");
           }
           
           this.updateTelegramStatus("connected");
         }
       } else {
-        if (RENDERER_DEBUG) console.error('[DEBUG] Connection failed - response not successful:', response);
+        if (RENDERER_DEBUG) console.error("[DEBUG] Connection failed - response not successful:", response);
         
         // Handle rate limiting specifically
         if (response && response.rate_limited) {
-          const waitTime = response.wait_time_human || 'some time';
+          const waitTime = response.wait_time_human || "some time";
           this.showToast(
-            'warning', 
-            'Rate Limited', 
+            "warning", 
+            "Rate Limited", 
             `${response.error}
 Too many requests. Please wait ${waitTime} before trying again.
 Tip: Next time, the app will reuse your session automatically to avoid this!`,
@@ -4057,7 +4062,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           
           // Show detailed rate limit info
           this.addStatusItem(`⚠️ Telegram rate limit: Wait ${waitTime}`, "warning");
-          this.addStatusItem(`💡 Next connection will reuse session to avoid limits`, "info");
+          this.addStatusItem("💡 Next connection will reuse session to avoid limits", "info");
           
           // Reset UI state before returning
           this.hideLoadingOverlay();
@@ -4065,35 +4070,35 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           return; // Don't proceed further
         }
         
-        const errorMsg = (response && response.error) || 'Unknown error occurred';
-        this.showToast('error', 'Connection Failed', errorMsg);
+        const errorMsg = (response && response.error) || "Unknown error occurred";
+        this.showToast("error", "Connection Failed", errorMsg);
         
         // Reset UI state for general connection failure
         this.hideLoadingOverlay();
         this.updateTelegramStatus("disconnected");
       }
     } catch (error) {
-      if (RENDERER_DEBUG) console.error('[DEBUG] Connection error caught:', error);
+      if (RENDERER_DEBUG) console.error("[DEBUG] Connection error caught:", error);
       this.hideLoadingOverlay();
       
-      let errorMsg = error.message || 'Failed to connect';
+      let errorMsg = error.message || "Failed to connect";
       
       // Handle specific error types
-      if (errorMsg.includes('rate limit') || errorMsg.includes('wait') || errorMsg.includes('FloodWaitError')) {
+      if (errorMsg.includes("rate limit") || errorMsg.includes("wait") || errorMsg.includes("FloodWaitError")) {
         this.showToast(
-          'warning', 
-          'Rate Limited',
-          'Too many requests to Telegram. Please wait before trying again.',
+          "warning", 
+          "Rate Limited",
+          "Too many requests to Telegram. Please wait before trying again.",
           8000
         );
-      } else if (errorMsg.includes('database is locked')) {
-        errorMsg = 'Database is locked. Please try again in a moment.';
-        this.showToast('error', 'Connection Error', errorMsg);
-      } else if (errorMsg.includes('connect_telegram')) {
-        errorMsg = 'Connection service unavailable. Please restart the application.';
-        this.showToast('error', 'Connection Error', errorMsg);
+      } else if (errorMsg.includes("database is locked")) {
+        errorMsg = "Database is locked. Please try again in a moment.";
+        this.showToast("error", "Connection Error", errorMsg);
+      } else if (errorMsg.includes("connect_telegram")) {
+        errorMsg = "Connection service unavailable. Please restart the application.";
+        this.showToast("error", "Connection Error", errorMsg);
       } else {
-        this.showToast('error', 'Connection Error', errorMsg);
+        this.showToast("error", "Connection Error", errorMsg);
       }
       
       // Reset UI state after error
@@ -4157,14 +4162,14 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       
       const response = await this.apiRequest("POST", "/api/sticker/verify-code", { code });
       
-      const resOk = response && typeof response === 'object' && response.success === true;
+      const resOk = response && typeof response === "object" && response.success === true;
       if (resOk) {
         const result = (response.data !== undefined && response.data !== null) ? response.data : response;
         // Check if 2FA password is needed
         const needsPassword = !!(result && result.needs_password);
-        if (RENDERER_DEBUG) console.debug('[verify-code] response:', response, 'computed needsPassword=', needsPassword);
-        if (RENDERER_DEBUG) console.debug('[verify-code] result object:', result);
-        if (RENDERER_DEBUG) console.debug('[verify-code] needs_password field:', result?.needs_password);
+        if (RENDERER_DEBUG) console.debug("[verify-code] response:", response, "computed needsPassword=", needsPassword);
+        if (RENDERER_DEBUG) console.debug("[verify-code] result object:", result);
+        if (RENDERER_DEBUG) console.debug("[verify-code] needs_password field:", result?.needs_password);
         if (needsPassword) {
           this.pendingCode = false;
           this.pendingPassword = true;
@@ -4256,7 +4261,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       
       const response = await this.apiRequest("POST", "/api/sticker/verify-password", { password });
       
-      const resOk = response && typeof response === 'object' && response.success === true;
+      const resOk = response && typeof response === "object" && response.success === true;
       if (resOk) {
         const result = (response.data !== undefined && response.data !== null) ? response.data : response;
         this.pendingPassword = false;
@@ -4301,6 +4306,12 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   }
 
   async addImages() {
+    // Check if video type is selected and prevent image upload
+    if (this.selectedMediaType === "video" && this.mediaFiles.some(f => f.type === "video")) {
+      this.showToast("error", "Type Mismatch", "Cannot add images to a video sticker pack. Clear media or switch to image type.");
+      return;
+    }
+    
     try {
       const files = await window.electronAPI.selectFiles({
         filters: [
@@ -4316,8 +4327,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       
       // Validate files before processing
       const validFiles = files.filter(file => {
-        if (!file || typeof file !== 'string') {
-          console.warn('Invalid file path:', file);
+        if (!file || typeof file !== "string") {
+          console.warn("Invalid file path:", file);
           return false;
         }
         return true;
@@ -4339,7 +4350,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         
         if (!this.mediaFiles.some((f) => f.file_path === file)) {
           // Sanitize default emoji while preserving variation selectors (Windows color fix)
-          const cleanDefaultEmoji = this.normalizeEmoji(this.defaultEmoji || '❤️');
+          const cleanDefaultEmoji = this.normalizeEmoji(this.defaultEmoji || "❤️");
           
           this.mediaFiles.push({
             file_path: file,
@@ -4376,7 +4387,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       if (RENDERER_DEBUG) console.error("Error adding images:", error);
       
       // Handle specific Windows file system errors
-      if (error.message && error.message.includes('Errno 22')) {
+      if (error.message && error.message.includes("Errno 22")) {
         this.showToast(
           "error",
           "File Selection Error",
@@ -4393,6 +4404,12 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   }
 
   async addStickerVideos() {
+    // Check if image type is selected and prevent video upload
+    if (this.selectedMediaType === "image" && this.mediaFiles.some(f => f.type === "image")) {
+      this.showToast("error", "Type Mismatch", "Cannot add videos to an image sticker pack. Clear media or switch to video type.");
+      return;
+    }
+    
     try {
       const files = await window.electronAPI.selectFiles({
         filters: [
@@ -4408,8 +4425,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       
       // Validate files before processing
       const validFiles = files.filter(file => {
-        if (!file || typeof file !== 'string') {
-          console.warn('Invalid file path:', file);
+        if (!file || typeof file !== "string") {
+          console.warn("Invalid file path:", file);
           return false;
         }
         return true;
@@ -4431,7 +4448,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         
         if (!this.mediaFiles.some((f) => f.file_path === file)) {
           // Sanitize default emoji while preserving variation selectors (Windows color fix)
-          const cleanDefaultEmoji = this.normalizeEmoji(this.defaultEmoji || '❤️');
+          const cleanDefaultEmoji = this.normalizeEmoji(this.defaultEmoji || "❤️");
           
           this.mediaFiles.push({
             file_path: file,
@@ -4468,7 +4485,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       if (RENDERER_DEBUG) console.error("Error adding videos:", error);
       
       // Handle specific Windows file system errors
-      if (error.message && error.message.includes('Errno 22')) {
+      if (error.message && error.message.includes("Errno 22")) {
         this.showToast(
           "error",
           "File Selection Error",
@@ -4499,7 +4516,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   updateMediaFileList() {
     const container = document.getElementById("sticker-media-list");
     if (!container) {
-      if (RENDERER_DEBUG) console.warn('⚠️ sticker-media-list container not found');
+      if (RENDERER_DEBUG) console.warn("⚠️ sticker-media-list container not found");
       // Try again after a short delay in case DOM is still loading
       setTimeout(() => {
         const retryContainer = document.getElementById("sticker-media-list");
@@ -4523,20 +4540,25 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     
     container.innerHTML = this.mediaFiles
       .map((file, index) => {
-        const icon = file.type === "video" ? "fas fa-video" : "fas fa-image";
         const statusClass = file.status || "pending";
         const statusIcon = this.getMediaStatusIcon(file.status);
+        const fileUrl = this.pathToFileUrl(file.file_path);
+        const preview = file.type === "image"
+          ? `<div class="media-preview" onclick="window.openMediaPreview(${index})" title="Click to preview">
+               <img class="media-preview-img" src="${fileUrl}" alt="${file.name}">
+             </div>`
+          : `<div class="media-preview" onclick="window.openMediaPreview(${index})" title="Click to preview">
+               <video class="media-preview-video" src="${fileUrl}" muted preload="metadata"></video>
+               <i class="fas fa-play-circle media-preview-video-icon"></i>
+             </div>`;
         
         return `
           <div class="media-item ${statusClass} new-item" data-index="${index}">
             <div class="media-info">
-              <div class="media-icon">
-                <i class="${icon}"></i>
-              </div>
+              ${preview}
               <div class="media-details">
                 <div class="media-name" title="${file.file_path}">${file.name}</div>
                 <div class="media-meta">
-                  <span><i class="fas fa-file"></i> ${file.type.toUpperCase()}</span>
                   ${file.status && file.status !== "pending"
                     ? `<span class="media-status"><i class="${statusIcon}"></i> ${this.getStatusText(file.status)}</span>`
                     : ""
@@ -4595,6 +4617,77 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     };
     return textMap[status] || status;
   }
+
+  // Convert a local file path to a file:// URL safe for <img>/<video>
+  pathToFileUrl(p) {
+    try {
+      if (!p) return "";
+      if (/^(https?:|data:|file:)/i.test(p)) return p;
+      let norm = String(p).replace(/\\/g, "/");
+      if (!norm.startsWith("/")) norm = "/" + norm; // Ensure leading slash for Windows paths
+      return "file://" + encodeURI(norm);
+    } catch (_) {
+      return "";
+    }
+  }
+
+  // Open full preview for image/video
+  openMediaPreview(index) {
+    const file = this.mediaFiles[index];
+    if (!file) return;
+    const url = this.pathToFileUrl(file.file_path);
+    if (file.type === "image") {
+      if (window.ImageViewer && typeof window.ImageViewer.open === "function") {
+        window.ImageViewer.open({ src: url, title: file.name });
+      } else {
+        window.open(url, "_blank");
+      }
+    } else {
+      this.showVideoViewer({ src: url, title: file.name });
+    }
+  }
+
+  showVideoViewer({ src, title = "" }) {
+    // If an overlay already exists, remove it first
+    const existing = document.querySelector(".video-viewer-overlay");
+    if (existing) existing.parentNode.removeChild(existing);
+
+    const overlay = document.createElement("div");
+    overlay.className = "video-viewer-overlay";
+
+    const container = document.createElement("div");
+    container.className = "video-viewer-container";
+
+    const video = document.createElement("video");
+    video.className = "video-viewer-player";
+    video.src = src;
+    video.controls = true;
+    video.autoplay = true;
+    video.title = title;
+
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "video-viewer-close";
+    closeBtn.innerHTML = '<i class="fas fa-times"></i>';
+
+    container.appendChild(video);
+    container.appendChild(closeBtn);
+    overlay.appendChild(container);
+    document.body.appendChild(overlay);
+
+    requestAnimationFrame(() => overlay.classList.add("active"));
+
+    const onClose = () => this.closeVideoViewer(overlay, video);
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) onClose(); });
+    closeBtn.addEventListener("click", onClose);
+    const keyHandler = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", keyHandler, { once: true });
+  }
+
+  closeVideoViewer(overlay, video) {
+    try { if (video) { video.pause(); video.src = ""; } } catch (_) {}
+    if (!overlay) overlay = document.querySelector(".video-viewer-overlay");
+    if (overlay) overlay.parentNode.removeChild(overlay);
+  }
   
   // Enhanced media status update with real-time sync
   updateMediaFileStatus(fileIndex, status, progress = null, stage = null) {
@@ -4629,26 +4722,26 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     const statusText = this.getStatusText(file.status);
     
     // Update status display
-    const statusElement = mediaItem.querySelector('.media-status');
+    const statusElement = mediaItem.querySelector(".media-status");
     if (statusElement) {
       statusElement.innerHTML = `<i class="${statusIcon}"></i> ${statusText}`;
     } else if (file.status && file.status !== "pending") {
       // Add status element if it doesn't exist
-      const metaElement = mediaItem.querySelector('.media-meta');
+      const metaElement = mediaItem.querySelector(".media-meta");
       if (metaElement) {
         metaElement.innerHTML += `<span class="media-status"><i class="${statusIcon}"></i> ${statusText}</span>`;
       }
     }
     
     // Update item class for styling
-    mediaItem.className = `media-item ${file.status || 'pending'} new-item`;
+    mediaItem.className = `media-item ${file.status || "pending"} new-item`;
     
     // Add progress indicator for processing status
-    if (file.status === 'processing' && file.progress !== undefined) {
-      let progressBar = mediaItem.querySelector('.progress-indicator');
+    if (file.status === "processing" && file.progress !== undefined) {
+      let progressBar = mediaItem.querySelector(".progress-indicator");
       if (!progressBar) {
-        progressBar = document.createElement('div');
-        progressBar.className = 'progress-indicator';
+        progressBar = document.createElement("div");
+        progressBar.className = "progress-indicator";
         mediaItem.appendChild(progressBar);
       }
       progressBar.innerHTML = `
@@ -4659,7 +4752,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       `;
     } else {
       // Remove progress indicator if not processing
-      const progressBar = mediaItem.querySelector('.progress-indicator');
+      const progressBar = mediaItem.querySelector(".progress-indicator");
       if (progressBar) {
         progressBar.remove();
       }
@@ -4679,7 +4772,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     
     // Count statuses
     this.mediaFiles.forEach(file => {
-      const status = file.status || 'pending';
+      const status = file.status || "pending";
       if (Object.prototype.hasOwnProperty.call(statusCounts, status)) {
         statusCounts[status]++;
       }
@@ -4689,12 +4782,12 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     const progressPercent = Math.round((statusCounts.completed / totalFiles) * 100);
     
     // Update any progress displays
-    const progressElements = document.querySelectorAll('.sticker-progress-percentage');
+    const progressElements = document.querySelectorAll(".sticker-progress-percentage");
     progressElements.forEach(el => {
       if (el) el.textContent = `${progressPercent}%`;
     });
     
-    const statusElements = document.querySelectorAll('.sticker-progress-stats');
+    const statusElements = document.querySelectorAll(".sticker-progress-stats");
     statusElements.forEach(el => {
       if (el) el.textContent = `${statusCounts.completed} / ${totalFiles} stickers processed`;
     });
@@ -4711,7 +4804,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         if (index >= 0 && index < this.mediaFiles.length) {
           this.updateMediaFileStatus(
             index, 
-            fileStatus.status || 'processing',
+            fileStatus.status || "processing",
             fileStatus.progress,
             fileStatus.stage
           );
@@ -4721,7 +4814,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       // Fallback: update all files based on overall progress
       const overallStatus = this.getStatusFromProgress(progress);
       this.mediaFiles.forEach((file, index) => {
-        if (file.status !== 'completed' && file.status !== 'error') {
+        if (file.status !== "completed" && file.status !== "error") {
           this.updateMediaFileStatus(index, overallStatus, progress.progress);
         }
       });
@@ -4729,11 +4822,11 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   }
   
   getStatusFromProgress(progress) {
-    if (progress.status === 'completed') return 'completed';
-    if (progress.status === 'error' || progress.status === 'failed') return 'error';
-    if (progress.current_stage && progress.current_stage.includes('upload')) return 'uploading';
-    if (progress.current_stage && progress.current_stage.includes('process')) return 'processing';
-    return 'processing';  // Default to processing for active states
+    if (progress.status === "completed") return "completed";
+    if (progress.status === "error" || progress.status === "failed") return "error";
+    if (progress.current_stage && progress.current_stage.includes("upload")) return "uploading";
+    if (progress.current_stage && progress.current_stage.includes("process")) return "processing";
+    return "processing";  // Default to processing for active states
   }
   async showMediaInfo(index) {
     const file = this.mediaFiles[index];
@@ -4742,37 +4835,37 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     // Get detailed file metadata from backend
     let fileInfo = {
       name: file.name,
-      size: 'Unknown',
-      duration: 'N/A',
-      format: 'Unknown',
-      dimensions: 'Unknown',
-      dateModified: 'Unknown'
+      size: "Unknown",
+      duration: "N/A",
+      format: "Unknown",
+      dimensions: "Unknown",
+      dateModified: "Unknown"
     };
     
     try {
-      const result = await this.apiRequest('POST', '/api/get-file-info', { 
+      const result = await this.apiRequest("POST", "/api/get-file-info", { 
         path: file.file_path 
       });
       
       if (result && result.success && result.data) {
         fileInfo = {
           name: result.data.name || file.name,
-          size: result.data.size_formatted || 'Unknown',
-          duration: result.data.duration_formatted || 'N/A',
-          format: result.data.format ? result.data.format.toUpperCase() : 'Unknown',
-          dimensions: result.data.dimensions || 'Unknown',
-          dateModified: result.data.modified ? new Date(result.data.modified * 1000).toLocaleDateString() : 'Unknown',
-          type: result.data.type || 'unknown',
+          size: result.data.size_formatted || "Unknown",
+          duration: result.data.duration_formatted || "N/A",
+          format: result.data.format ? result.data.format.toUpperCase() : "Unknown",
+          dimensions: result.data.dimensions || "Unknown",
+          dateModified: result.data.modified ? new Date(result.data.modified * 1000).toLocaleDateString() : "Unknown",
+          type: result.data.type || "unknown",
           codec: result.data.codec || null,
           fps: result.data.fps || null
         };
       }
     } catch (error) {
-      if (RENDERER_DEBUG) console.error('Failed to get file info:', error);
+      if (RENDERER_DEBUG) console.error("Failed to get file info:", error);
     }
     
     // Format additional technical info
-    let technicalInfo = '';
+    let technicalInfo = "";
     if (fileInfo.codec) {
       technicalInfo += `<div style="margin-bottom: 0.5rem;">
         <strong style="color: #667eea;">🎬 Codec:</strong> 
@@ -4787,8 +4880,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     }
     
     // Get file type icon
-    const typeIcon = fileInfo.type === 'video' ? '🎥' : fileInfo.type === 'image' ? '🖼️' : '📄';
-    const typeLabel = fileInfo.type === 'video' ? 'Video' : fileInfo.type === 'image' ? 'Image' : 'File';
+    const typeIcon = fileInfo.type === "video" ? "🎥" : fileInfo.type === "image" ? "🖼️" : "📄";
+    const typeLabel = fileInfo.type === "video" ? "Video" : fileInfo.type === "image" ? "Image" : "File";
     
     const info = `
       <div style="font-size: 0.9rem; line-height: 1.8; max-width: 400px;">
@@ -4811,10 +4904,10 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           <span style="color: #ccc;">${fileInfo.dimensions}</span>
         </div>
         
-        ${file.type === 'video' ? `<div style="margin-bottom: 0.5rem;">
+        ${file.type === "video" ? `<div style="margin-bottom: 0.5rem;">
           <strong style="color: #667eea;">⏱️ Duration:</strong> 
           <span style="color: #ccc;">${fileInfo.duration}</span>
-        </div>` : ''}
+        </div>` : ""}
         
         <div style="margin-bottom: 0.5rem;">
           <strong style="color: #667eea;">🎬 Format:</strong> 
@@ -4831,12 +4924,12 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.1);">
           <div style="margin-bottom: 0.5rem;">
             <strong style="color: #667eea;">🎉 Emoji:</strong> 
-            <span style="font-size: 1.5rem;">${file.emoji || '😀'}</span>
+            <span style="font-size: 1.5rem;">${file.emoji || "😀"}</span>
           </div>
           
           <div style="margin-bottom: 0.5rem;">
             <strong style="color: #667eea;">🔄 Status:</strong> 
-            <span style="color: ${this.getStatusColor(file.status)};">${file.status || 'Ready'}</span>
+            <span style="color: ${this.getStatusColor(file.status)};">${file.status || "Ready"}</span>
           </div>
         </div>
         
@@ -4957,11 +5050,11 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
 
   async createStickerPack() {
     const packNameEl = document.getElementById("pack-name");
-    const packName = (packNameEl && typeof packNameEl.value === 'string') ? packNameEl.value.trim() : "";
+    const packName = (packNameEl && typeof packNameEl.value === "string") ? packNameEl.value.trim() : "";
     const packUrlNameEl = document.getElementById("pack-url-name");
-    const packUrlName = (packUrlNameEl && typeof packUrlNameEl.value === 'string') ? packUrlNameEl.value.trim() : "";
+    const packUrlName = (packUrlNameEl && typeof packUrlNameEl.value === "string") ? packUrlNameEl.value.trim() : "";
     const stickerTypeEl = document.querySelector('input[name="sticker-type"]:checked');
-    const stickerType = stickerTypeEl ? stickerTypeEl.value : 'image';
+    const stickerType = stickerTypeEl ? stickerTypeEl.value : "image";
 
     // 🔒 CRITICAL: Check Telegram connection first
     // Primary check: Use frontend connection status first
@@ -4987,12 +5080,12 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         try {
           await this.apiRequest("GET", "/api/health");
         } catch (healthError) {
-          console.error(`Health check failed:`, healthError);
+          console.error("Health check failed:", healthError);
           this.showToast("warning", "Connection Issue", "Backend connection issue detected, but proceeding anyway...");
         }
       }
     } catch (error) {
-      console.error(`Session check failed:`, error);
+      console.error("Session check failed:", error);
       // Don't block creation on session check failure - frontend status takes precedence
     }
 
@@ -5058,7 +5151,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       // ENHANCED: Better sanitization to prevent [Errno 22] Invalid argument
       let processId = ("sticker_" + Date.now()).replace(/[^a-zA-Z0-9_-]/g, "_");
       // Ensure it's not too long and doesn't contain invalid characters
-      processId = processId.substring(0, 50).replace(/[\x00-\x1f\x7f-\x9f]/g, '');
+      processId = processId.substring(0, 50).replace(/[\x00-\x1f\x7f-\x9f]/g, "");
       if (!processId || processId.length === 0) {
         processId = "sticker_" + Date.now();
       }
@@ -5081,8 +5174,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       const filteredMedia = this.mediaFiles
         .filter((f) => (stickerType === "video" ? f.type === "video" : f.type === "image"))
         .map((f) => ({
-          file_path: String(f.file_path || "").replace(/[\x00-\x1f\x7f-\x9f]/g, '').trim(),
-          emoji: typeof f.emoji === "string" && f.emoji.replace(/[\x00-\x1f\x7f-\x9f]/g, '').length > 0 
+          file_path: String(f.file_path || "").replace(/[\x00-\x1f\x7f-\x9f]/g, "").trim(),
+          emoji: typeof f.emoji === "string" && f.emoji.replace(/[\x00-\x1f\x7f-\x9f]/g, "").length > 0 
             ? this.normalizeEmoji(f.emoji)
             : this.normalizeEmoji(this.defaultEmoji),
           type: f.type === "video" ? "video" : "image",
@@ -5092,17 +5185,17 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       // Additional validation for file paths and emoji data
       for (const media of filteredMedia) {
         // Ensure file_path is properly sanitized
-        if (typeof media.file_path === 'string') {
+        if (typeof media.file_path === "string") {
           // Remove any remaining invalid characters
-          media.file_path = media.file_path.replace(/[\x00-\x1f\x7f-\x9f]/g, '').trim();
+          media.file_path = media.file_path.replace(/[\x00-\x1f\x7f-\x9f]/g, "").trim();
           // Ensure it's not empty
           if (media.file_path.length === 0) {
-            throw new Error('Invalid file path');
+            throw new Error("Invalid file path");
           }
         }
         
         // Ensure emoji is a single valid character
-        if (typeof media.emoji === 'string' && media.emoji.length > 0) {
+        if (typeof media.emoji === "string" && media.emoji.length > 0) {
           media.emoji = this.normalizeEmoji(media.emoji);
         } else {
           media.emoji = this.normalizeEmoji(this.defaultEmoji);
@@ -5111,21 +5204,21 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
 
       // ENHANCED: Validate and sanitize all request data to prevent [Errno 22] Invalid argument
       // Remove any control characters that could cause issues
-      const sanitizedPackName = String(packName || '').replace(/[\x00-\x1f\x7f-\x9f]/g, '').trim().substring(0, 64);
-      const sanitizedPackUrlName = String(packUrlName || '').replace(/[\x00-\x1f\x7f-\x9f]/g, '').trim().substring(0, 32);
-      const sanitizedProcessId = String(processId || '').replace(/[\x00-\x1f\x7f-\x9f]/g, '').replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 50);
+      const sanitizedPackName = String(packName || "").replace(/[\x00-\x1f\x7f-\x9f]/g, "").trim().substring(0, 64);
+      const sanitizedPackUrlName = String(packUrlName || "").replace(/[\x00-\x1f\x7f-\x9f]/g, "").trim().substring(0, 32);
+      const sanitizedProcessId = String(processId || "").replace(/[\x00-\x1f\x7f-\x9f]/g, "").replace(/[^a-zA-Z0-9_-]/g, "_").substring(0, 50);
       
       // Validate that we have valid data after sanitization
       if (!sanitizedPackName || sanitizedPackName.length === 0) {
-        throw new Error('Invalid pack name');
+        throw new Error("Invalid pack name");
       }
       
       if (!sanitizedPackUrlName || sanitizedPackUrlName.length === 0) {
-        throw new Error('Invalid URL name');
+        throw new Error("Invalid URL name");
       }
       
       if (!sanitizedProcessId || sanitizedProcessId.length === 0) {
-        throw new Error('Invalid process ID');
+        throw new Error("Invalid process ID");
       }
       
       const requestData = {
@@ -5178,12 +5271,12 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       }
     } catch (error) {
       this.hideLoadingOverlay();
-      console.error(`Error creating sticker pack:`, error);
+      console.error("Error creating sticker pack:", error);
       
       // ENHANCED: Better error handling for [Errno 22] Invalid argument
       let errorMessage = error.message;
-      if (error.message && (error.message.includes('Invalid argument') || error.message.includes('Errno 22'))) {
-        errorMessage = 'Invalid request data - contains invalid characters. Please check your inputs and try again.';
+      if (error.message && (error.message.includes("Invalid argument") || error.message.includes("Errno 22"))) {
+        errorMessage = "Invalid request data - contains invalid characters. Please check your inputs and try again.";
       }
       
       this.addStatusItem(`❌ Error: Failed to create sticker pack - ${errorMessage}`, "error");
@@ -5262,7 +5355,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           // CRITICAL FIX: Handle backend bug where both icon_request and url_name_taken are set
           // Priority: Icon request comes FIRST, then URL conflict
           if (isIconRequest && isUrlConflict) {
-            console.warn(`[MONITORING] Backend bug: Both icon_request and url_name_taken are set! Prioritizing icon request.`);
+            console.warn("[MONITORING] Backend bug: Both icon_request and url_name_taken are set! Prioritizing icon request.");
             // Force isUrlConflict to false to handle icon first
             isUrlConflict = false;
           }
@@ -5346,7 +5439,9 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
                                 || progress.waiting_for_url_name
                                 || false;
               if (urlPrompt) {
-                try { this.hideIconModal(); } catch {}
+                try { this.hideIconModal(); } catch (_e) {
+                  // Ignore errors when hiding icon modal
+                }
                 
                 // Check if auto-skip is enabled - if so, automatically submit the URL name
                 const autoSkipIcon = document.getElementById("auto-skip-icon");
@@ -5359,7 +5454,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
                   this.addStatusItem("Auto-skip enabled, automatically submitting URL name...", "info");
                   try {
                     const urlInput = document.getElementById("pack-url-name");
-                    const urlName = (urlInput && typeof urlInput.value === 'string') ? urlInput.value.trim() : '';
+                    const urlName = (urlInput && typeof urlInput.value === "string") ? urlInput.value.trim() : "";
                     if (urlName) {
                       const submitRes = await this.apiRequest("POST", "/api/sticker/submit-url-name", {
                         process_id: processId,
@@ -5387,7 +5482,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
                 }
                 
                 const urlInput = document.getElementById("pack-url-name");
-                const urlName = (urlInput && typeof urlInput.value === 'string') ? urlInput.value.trim() : '';
+                const urlName = (urlInput && typeof urlInput.value === "string") ? urlInput.value.trim() : "";
                 if (urlName) {
                   try {
                     const submitRes = await this.apiRequest("POST", "/api/sticker/submit-url-name", {
@@ -5407,7 +5502,9 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
                       this.showUrlNameModal(urlName, (submitRes.attempt || 1), (submitRes.max_attempts || 3), processId);
                       return;
                     }
-                  } catch {}
+                  } catch (_e) {
+                    // Ignore errors when submitting URL
+                  }
                 }
                 // Fallback: show URL modal to collect the name
                 // Only add to urlPromptHandledProcesses when URL modal is shown
@@ -5422,14 +5519,16 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
               }
               // DOM-based guard as a fallback
               try {
-                const codeModal = document.getElementById('code-modal');
-                const passModal = document.getElementById('password-modal');
-                const codeVisible = codeModal && codeModal.style && codeModal.style.display && codeModal.style.display !== 'none';
-                const passVisible = passModal && passModal.style && passModal.style.display && passModal.style.display !== 'none';
+                const codeModal = document.getElementById("code-modal");
+                const passModal = document.getElementById("password-modal");
+                const codeVisible = codeModal && codeModal.style && codeModal.style.display && codeModal.style.display !== "none";
+                const passVisible = passModal && passModal.style && passModal.style.display && passModal.style.display !== "none";
                 if (codeVisible || passVisible) {
                   return;
                 }
-              } catch {}
+              } catch (_e) {
+                // Ignore DOM check errors
+              }
               
               this.showIconModal(processId, progress.icon_request_message);
               this.iconHandledProcesses.add(processId);
@@ -5464,7 +5563,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
               }
             }
           } else if (progress.status === "error" || progress.status === "failed") {
-            this.addStatusItem(`❌ Sticker pack creation failed: ${progress.current_stage || 'Unknown error'}`, "error");
+            this.addStatusItem(`❌ Sticker pack creation failed: ${progress.current_stage || "Unknown error"}`, "error");
             this.stopStickerProgressMonitoring();
             this.onStickerProcessCompleted(false, progress);
             return;
@@ -5479,17 +5578,17 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           if (progress.current_stage && progress.current_stage !== this.lastStage) {
             // Filter out excessive logging - only show essential messages
             const isEssentialMessage = 
-              progress.current_stage.includes('START') ||
-              progress.current_stage.includes('COMPLETE') ||
-              progress.current_stage.includes('ERROR') ||
-              progress.current_stage.includes('FAILED') ||
-              progress.current_stage.includes('SUCCESS') ||
-              progress.current_stage.includes('created successfully') ||
-              progress.current_stage.includes('URL name') ||
-              progress.current_stage.includes('icon');
+              progress.current_stage.includes("START") ||
+              progress.current_stage.includes("COMPLETE") ||
+              progress.current_stage.includes("ERROR") ||
+              progress.current_stage.includes("FAILED") ||
+              progress.current_stage.includes("SUCCESS") ||
+              progress.current_stage.includes("created successfully") ||
+              progress.current_stage.includes("URL name") ||
+              progress.current_stage.includes("icon");
               
             // Show queue messages only once
-            const isQueueMessage = progress.current_stage.includes('waiting in queue');
+            const isQueueMessage = progress.current_stage.includes("waiting in queue");
             const shouldShow = isEssentialMessage || (!isQueueMessage || !this.lastStageWasQueue);
             
             if (shouldShow) {
@@ -5514,8 +5613,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           
           // Show essential file status updates only
           if (progress.file_statuses) {
-            const failedFiles = Object.values(progress.file_statuses).filter(status => status.status === 'failed').length;
-            const completedFiles = Object.values(progress.file_statuses).filter(status => status.status === 'completed').length;
+            const failedFiles = Object.values(progress.file_statuses).filter(status => status.status === "failed").length;
+            const completedFiles = Object.values(progress.file_statuses).filter(status => status.status === "completed").length;
             
             if (failedFiles > 0) {
               this.addStatusItem(`⚠️ ${failedFiles} files failed during processing. Check logs for details.`, "warning");
@@ -5550,7 +5649,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           }
           
           // Show detailed error information
-          this.addStatusItem(`⚠️ Monitoring error ${consecutiveErrors}/3: ${response.error || 'Unknown error'}`, "warning");
+          this.addStatusItem(`⚠️ Monitoring error ${consecutiveErrors}/3: ${response.error || "Unknown error"}`, "warning");
           
           // OPTIMIZED: Reduced from 5 to 3 for faster failure detection
           if (consecutiveErrors >= 3) {
@@ -5645,28 +5744,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     }
   }
   
-  updateFileStatuses(fileStatuses) {
-    // Update the UI with individual file statuses
-    const statusList = document.getElementById("sticker-status-list");
-    if (!statusList) return;
-    
-    // Add detailed file status information - only log once per file
-    for (const [filename, statusInfo] of Object.entries(fileStatuses)) {
-      // Create unique key for this file's status
-      const statusKey = `${filename}:${statusInfo.status}`;
-      
-      // Only log if we haven't logged this file status before
-      if (!this.loggedFileStatuses.has(statusKey)) {
-        if (statusInfo.status === 'failed') {
-          this.addStatusItem(`❌ Failed to process ${filename}: ${statusInfo.error}`, "error");
-          this.loggedFileStatuses.add(statusKey);
-        } else if (statusInfo.status === 'completed') {
-          this.addStatusItem(`✅ Completed ${filename} with emoji ${statusInfo.emoji}`, "completed");
-          this.loggedFileStatuses.add(statusKey);
-        }
-      }
-    }
-  }
+  // Method removed - duplicate definition exists earlier in the file
 
   // OPTIMIZED status list functionality with rate limiting
   addStatusItem(message, type = "info", timestamp = null) {
@@ -5684,7 +5762,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     const time = timestamp || new Date();
     const timeString = time.toLocaleTimeString();
     
-    const statusItem = document.createElement('div');
+    const statusItem = document.createElement("div");
     statusItem.className = `status-item ${type}`;
     
     const iconClass = this.getStatusIconClass(type);
@@ -5699,7 +5777,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     statusList.appendChild(statusItem);
     
     // OPTIMIZED: Limit to 100 items to show more progress history
-    const items = statusList.querySelectorAll('.status-item');
+    const items = statusList.querySelectorAll(".status-item");
     if (items.length > 100) {
       statusList.removeChild(items[0]); // Remove the oldest item (first child)
     }
@@ -5721,10 +5799,10 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     }
     
     // Similar message check (for progress updates)
-    if (type === 'info' && this.lastStatusType === 'info') {
+    if (type === "info" && this.lastStatusType === "info") {
       // Check if both messages are progress updates
-      const isProgressUpdate1 = message.includes('PROGRESS') || message.includes('Completed') || message.includes('files processed');
-      const isProgressUpdate2 = this.lastStatusMessage.includes('PROGRESS') || this.lastStatusMessage.includes('Completed') || this.lastStatusMessage.includes('files processed');
+      const isProgressUpdate1 = message.includes("PROGRESS") || message.includes("Completed") || message.includes("files processed");
+      const isProgressUpdate2 = this.lastStatusMessage.includes("PROGRESS") || this.lastStatusMessage.includes("Completed") || this.lastStatusMessage.includes("files processed");
       
       if (isProgressUpdate1 && isProgressUpdate2) {
         // Extract file numbers to compare
@@ -5751,19 +5829,19 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     }
     
     return false;
-  };
+  }
   
-  getStatusIconClass = (type) => {
+  getStatusIconClass(type) {
     const iconMap = {
-      'ready': 'fas fa-check-circle',
-      'processing': 'fas fa-spinner fa-spin',
-      'completed': 'fas fa-check-circle',
-      'error': 'fas fa-exclamation-circle',
-      'warning': 'fas fa-exclamation-triangle',
-      'info': 'fas fa-info-circle'
+      "ready": "fas fa-check-circle",
+      "processing": "fas fa-spinner fa-spin",
+      "completed": "fas fa-check-circle",
+      "error": "fas fa-exclamation-circle",
+      "warning": "fas fa-exclamation-triangle",
+      "info": "fas fa-info-circle"
     };
-    return iconMap[type] || 'fas fa-info-circle';
-  };
+    return iconMap[type] || "fas fa-info-circle";
+  }
 
   clearStatusHistory() {
     const statusList = document.getElementById("sticker-status-list");
@@ -5783,13 +5861,13 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     if (!statusList) return;
     
     // Get all status items
-    const items = statusList.querySelectorAll('.status-item');
-    let logText = '';
+    const items = statusList.querySelectorAll(".status-item");
+    let logText = "";
     
     // Extract text from each status item in chronological order
     items.forEach(item => {
-      const timeElement = item.querySelector('.status-time');
-      const messageElement = item.querySelector('.status-message');
+      const timeElement = item.querySelector(".status-time");
+      const messageElement = item.querySelector(".status-message");
       
       if (timeElement && messageElement) {
         const time = timeElement.textContent;
@@ -5800,7 +5878,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     
     // Copy to clipboard
     navigator.clipboard.writeText(logText).catch(err => {
-      console.error('Failed to copy log to clipboard:', err);
+      console.error("Failed to copy log to clipboard:", err);
       this.showToast("error", "Copy Failed", "Failed to copy log to clipboard");
     });
   }
@@ -5843,7 +5921,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     if (success && !this.workflowState.packCompleted) {
       // Update workflow state to mark as completed
       this.workflowState.packCompleted = true;
-      this.workflowState.currentStep = 'completed';
+      this.workflowState.currentStep = "completed";
       
       this.sessionStats.totalStickers += this.mediaFiles.length;
       
@@ -5933,14 +6011,14 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       });
       
       if (response.success) {
-        console.log(`✅ [STATS] Successfully updated sticker stats`);
+        console.log("✅ [STATS] Successfully updated sticker stats");
         // Force refresh database stats display
         this.updateDatabaseStats();
       } else {
-        console.warn(`⚠️ [STATS] Failed to update sticker stats:`, response.error);
+        console.warn("⚠️ [STATS] Failed to update sticker stats:", response.error);
       }
     } catch (error) {
-      console.error(`❌ [STATS] Error updating sticker creation stats:`, error);
+      console.error("❌ [STATS] Error updating sticker creation stats:", error);
     }
   }
 
@@ -6044,8 +6122,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       
       if (overlay && modal) {
         // Use GPU-accelerated transforms for better performance
-        overlay.style.willChange = 'opacity';
-        modal.style.willChange = 'transform, opacity';
+        overlay.style.willChange = "opacity";
+        modal.style.willChange = "transform, opacity";
         
         // Use the CSS class-based approach for proper centering
         overlay.classList.add("active");
@@ -6098,8 +6176,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         
         // Clean up GPU acceleration hints after animation
         setTimeout(() => {
-          overlay.style.willChange = 'auto';
-          modal.style.willChange = 'auto';
+          overlay.style.willChange = "auto";
+          modal.style.willChange = "auto";
         }, 250);
       }
     });
@@ -6143,17 +6221,17 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     console.log(`🖼️ [ICON_MODAL] Showing icon modal with message: ${iconRequestMessage}`);
     // Guard: suppress icon modal if verification flow is active
     if (this.pendingCode || this.pendingPassword) {
-      console.warn('[ICON_MODAL] Skipped because verification modal is active');
+      console.warn("[ICON_MODAL] Skipped because verification modal is active");
       return;
     }
     // DOM-based guard: if code/password modal is visible, skip
     try {
-      const codeModal = document.getElementById('code-modal');
-      const passModal = document.getElementById('password-modal');
-      const codeVisible = codeModal && codeModal.style && codeModal.style.display && codeModal.style.display !== 'none';
-      const passVisible = passModal && passModal.style && passModal.style.display && passModal.style.display !== 'none';
+      const codeModal = document.getElementById("code-modal");
+      const passModal = document.getElementById("password-modal");
+      const codeVisible = codeModal && codeModal.style && codeModal.style.display && codeModal.style.display !== "none";
+      const passVisible = passModal && passModal.style && passModal.style.display && passModal.style.display !== "none";
       if (codeVisible || passVisible) {
-        console.warn('[ICON_MODAL] Skipped due to verification modal visible (DOM)');
+        console.warn("[ICON_MODAL] Skipped due to verification modal visible (DOM)");
         return;
       }
     } catch {}
@@ -6239,7 +6317,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     const submitBtn = document.getElementById("submit-new-url");
     if (submitBtn) {
       submitBtn.disabled = false;
-      submitBtn.classList.remove('loading');
+      submitBtn.classList.remove("loading");
       submitBtn.innerHTML = '<i class="fas fa-check"></i> Try This Name';
     }
     
@@ -6260,11 +6338,11 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   generateUrlSuggestions(baseName, container) {
     if (!container) return;
     
-    const cleanBase = baseName.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().substring(0, 15);
+    const cleanBase = baseName.replace(/[^a-zA-Z0-9]/g, "").toLowerCase().substring(0, 15);
     const random = () => Math.floor(Math.random() * 999) + 100;
     const currentYear = new Date().getFullYear();
-    const month = String(new Date().getMonth() + 1).padStart(2, '0');
-    const day = String(new Date().getDate()).padStart(2, '0');
+    const month = String(new Date().getMonth() + 1).padStart(2, "0");
+    const day = String(new Date().getDate()).padStart(2, "0");
     
     // Advanced smart suggestion categories
     const creativeCategories = {
@@ -6283,14 +6361,14 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     // Select one from each category, avoiding repetitive patterns
     categories.forEach(category => {
       const options = creativeCategories[category].filter(suggestion => {
-        const prefix = suggestion.split('_')[1];
+        const prefix = suggestion.split("_")[1];
         return !usedPrefixes.has(prefix) && suggestion.length >= 5 && suggestion.length <= 32;
       });
       
       if (options.length > 0) {
         const selected = options[Math.floor(Math.random() * options.length)];
         smartSuggestions.push(selected);
-        usedPrefixes.add(selected.split('_')[1]);
+        usedPrefixes.add(selected.split("_")[1]);
       }
     });
     
@@ -6308,14 +6386,14 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     
     container.innerHTML = finalSuggestions.map(suggestion => 
       `<button class="suggestion-btn" onclick="window.app?.applySuggestion('${suggestion}')">${suggestion}</button>`
-    ).join('');
+    ).join("");
   }
   
   applySuggestion(suggestion) {
     const input = document.getElementById("new-url-name");
     if (input) {
       input.value = suggestion;
-      input.dispatchEvent(new Event('input')); // Trigger validation
+      input.dispatchEvent(new Event("input")); // Trigger validation
       input.focus();
     }
   }
@@ -6348,7 +6426,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     
     const newUrlNameInput = document.getElementById("new-url-name");
     if (!newUrlNameInput) {
-      console.error('new-url-name input not found');
+      console.error("new-url-name input not found");
       return;
     }
     
@@ -6396,7 +6474,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       const submitBtn = document.getElementById("submit-new-url");
       if (submitBtn) {
         submitBtn.disabled = true;
-        submitBtn.classList.add('loading');
+        submitBtn.classList.add("loading");
         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
       }
       
@@ -6410,7 +6488,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       if (response.success) {
         // CRITICAL FIX: Update workflow state when URL name is submitted
         this.workflowState.urlNameSubmitted = true;
-        this.workflowState.currentStep = 'url_name';
+        this.workflowState.currentStep = "url_name";
         
         // DON'T clear process info when hiding modal on success - we may need it for monitoring
         this.hideUrlNameModal(false); // Preserve process info
@@ -6451,7 +6529,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           } else {
             // Exhausted all retries - mark as completed with manual instruction
             this.addStatusItem(`❌ All ${maxAttempts} retry attempts exhausted. Please add sticker pack manually in Telegram bot.`, "error");
-            this.showToast("warning", "Manual Setup Required", `Please complete the sticker pack creation manually in the Telegram bot (@Stickers)`); 
+            this.showToast("warning", "Manual Setup Required", "Please complete the sticker pack creation manually in the Telegram bot (@Stickers)"); 
             
             // Mark process as completed (user needs to complete manually)
             this.stopStickerProgressMonitoring();
@@ -6468,7 +6546,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         
         if (submitBtn) {
           submitBtn.disabled = false;
-          submitBtn.classList.remove('loading');
+          submitBtn.classList.remove("loading");
           submitBtn.innerHTML = '<i class="fas fa-check"></i> Try This Name';
         }
       }
@@ -6480,7 +6558,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       const submitBtn = document.getElementById("submit-new-url");
       if (submitBtn) {
         submitBtn.disabled = false;
-        submitBtn.classList.remove('loading');
+        submitBtn.classList.remove("loading");
         submitBtn.innerHTML = '<i class="fas fa-check"></i> Try This Name';
       }
     }
@@ -6622,7 +6700,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       console.error("Error skipping icon:", error);
       
       // Handle timeout or server overload errors
-      if (error.message && error.message.includes('timeout')) {
+      if (error.message && error.message.includes("timeout")) {
         this.addStatusItem("Skip request timeout - assuming success", "warning");
         this.showToast("success", "Pack Created", "Sticker pack likely created successfully");
         this.hideIconModal();
@@ -6657,7 +6735,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     }
     
     try {
-      this.addStatusItem(`Uploading icon file${retryCount > 0 ? ` (attempt ${retryCount + 1}/${maxRetries + 1})` : ''}...`, "info");
+      this.addStatusItem(`Uploading icon file${retryCount > 0 ? ` (attempt ${retryCount + 1}/${maxRetries + 1})` : ""}...`, "info");
       const confirmBtn = document.getElementById("confirm-icon-upload");
       if (confirmBtn) {
         confirmBtn.disabled = true;
@@ -6681,7 +6759,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           
           // CRITICAL FIX: Update workflow state to prevent premature completion
           this.workflowState.iconUploaded = true;
-          this.workflowState.currentStep = 'url_name';
+          this.workflowState.currentStep = "url_name";
         }
         
         if (confirmBtn) {
@@ -6712,17 +6790,17 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           // Continue monitoring for remaining steps (URL name step)
           // CRITICAL FIX: Ensure we follow the same flow as skip button
           this.workflowState.iconUploaded = true;
-          this.workflowState.currentStep = 'url_name';
+          this.workflowState.currentStep = "url_name";
           this.startStickerProgressMonitoring(this.currentIconProcessId);
         }
       } else {
         // Detect Telegram size error and mark as manual continuation allowed
-        const errorText = String(response.error || '').toLowerCase();
-        if (errorText.includes('too big') || errorText.includes('maximum file size') || 
-            errorText.includes('invalid file') || errorText.includes('file type') || 
+        const errorText = String(response.error || "").toLowerCase();
+        if (errorText.includes("too big") || errorText.includes("maximum file size") || 
+            errorText.includes("invalid file") || errorText.includes("file type") || 
             response.manual_completion_required) {
           // CRITICAL FIX: Handle both size and format errors with appropriate messages
-          const isSizeError = errorText.includes('too big') || errorText.includes('maximum file size');
+          const isSizeError = errorText.includes("too big") || errorText.includes("maximum file size");
           const errorMessage = isSizeError ? 
             "Icon rejected: file too big (max 32 KB). You can continue manually in Telegram." : 
             "Icon rejected: invalid file format. You can continue manually in Telegram.";
@@ -6742,7 +6820,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         }
         
         // Handle timeout errors specifically
-        if (response.error && (response.error.includes('timeout') || response.error.includes('Request timeout'))) {
+        if (response.error && (response.error.includes("timeout") || response.error.includes("Request timeout"))) {
           if (retryCount < maxRetries) {
             this.addStatusItem(`Icon upload timed out. Retrying in 3 seconds... (attempt ${retryCount + 1}/${maxRetries})`, "warning");
             this.showToast("warning", "Upload Timeout", `Icon upload timed out. Retrying... (attempt ${retryCount + 1}/${maxRetries})`);
@@ -6771,8 +6849,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           }
         } else {
           // Surface common readiness error clearly
-          const friendly = response.error && response.error.includes('not waiting for user')
-            ? 'Icon step not ready yet. Please wait for the bot to request the icon and try again.'
+          const friendly = response.error && response.error.includes("not waiting for user")
+            ? "Icon step not ready yet. Please wait for the bot to request the icon and try again."
             : response.error;
           this.addStatusItem(`Error uploading icon: ${friendly}`, "error");
         }
@@ -6788,7 +6866,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       console.error("Error uploading icon:", error);
       
       // Handle timeout or server overload errors
-      if (error.message && (error.message.includes('timeout') || error.message.includes('Request timeout'))) {
+      if (error.message && (error.message.includes("timeout") || error.message.includes("Request timeout"))) {
         const maxRetries = 3;
         if (retryCount < maxRetries) {
           this.addStatusItem(`Icon upload timed out. Retrying in 3 seconds... (attempt ${retryCount + 1}/${maxRetries})`, "warning");
@@ -6822,7 +6900,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         this.addStatusItem(`Error uploading icon: ${error.message}`, "error");
         
         // CRITICAL FIX: Better error handling for network issues
-        if (error.message && (error.message.includes('timeout') || error.message.includes('network') || error.message.includes('fetch'))) {
+        if (error.message && (error.message.includes("timeout") || error.message.includes("network") || error.message.includes("fetch"))) {
           this.showToast("warning", "Network Issue", "Network connection issue during icon upload. Please check your connection and try again.");
           this.addStatusItem("Network issue detected. Please check your connection and try again.", "warning");
         } else {
@@ -6897,27 +6975,27 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     const toastContainer = document.getElementById("toast-container");
     if (!toastContainer) {
       // Only show error in development mode
-      if (typeof RENDERER_DEBUG !== 'undefined' && RENDERER_DEBUG) {
-        console.error('❌ Toast container not found!');
+      if (typeof RENDERER_DEBUG !== "undefined" && RENDERER_DEBUG) {
+        console.error("❌ Toast container not found!");
       }
       alert(`${type.toUpperCase()}: ${title} - ${message}`);
       return;
     }
     
     // PREVENT DUPLICATE TOASTS: Check if same toast already exists
-    const toastId = `${type}-${title}-${message}`.replace(/[^a-zA-Z0-9]/g, '');
+    const toastId = `${type}-${title}-${message}`.replace(/[^a-zA-Z0-9]/g, "");
     const existingToast = toastContainer.querySelector(`[data-toast-id="${toastId}"]`);
     if (existingToast) {
       // Don't show duplicate - just flash the existing one
-      existingToast.style.animation = 'none';
+      existingToast.style.animation = "none";
       setTimeout(() => {
-        existingToast.style.animation = 'slideIn 0.3s ease';
+        existingToast.style.animation = "slideIn 0.3s ease";
       }, 10);
       return;
     }
     
     // Limit max toasts to prevent overflow
-    const existingToasts = toastContainer.querySelectorAll('.toast');
+    const existingToasts = toastContainer.querySelectorAll(".toast");
     if (existingToasts.length >= 5) {
       // Remove oldest toast
       this.removeToast(existingToasts[0]);
@@ -6930,7 +7008,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     
     const toast = document.createElement("div");
     toast.className = `toast ${type}`;
-    toast.setAttribute('data-toast-id', toastId);
+    toast.setAttribute("data-toast-id", toastId);
     
     toast.innerHTML = `
       <div class="toast-content">
@@ -6951,7 +7029,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     }, duration);
     
     // Close button handler
-    const closeBtn = toast.querySelector('.toast-close');
+    const closeBtn = toast.querySelector(".toast-close");
     if (closeBtn) {
       closeBtn.onclick = (e) => {
         e.stopPropagation();
@@ -6971,7 +7049,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     if (!toast || !toast.parentNode) return;
     
     // Add slide-out animation
-    toast.style.animation = 'slideOut 0.3s ease';
+    toast.style.animation = "slideOut 0.3s ease";
     
     // Remove after animation completes
     setTimeout(() => {
@@ -6986,7 +7064,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     const toastContainer = document.getElementById("toast-container");
     if (!toastContainer) return;
     
-    const toasts = toastContainer.querySelectorAll('.toast');
+    const toasts = toastContainer.querySelectorAll(".toast");
     toasts.forEach((toast, index) => {
       // Ensure proper stacking order
       toast.style.zIndex = 1000 + index;
@@ -7036,7 +7114,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
 
   showDetailedMessage(title, htmlContent) {
     // Create a modal-like overlay
-    const overlay = document.createElement('div');
+    const overlay = document.createElement("div");
     overlay.style.cssText = `
       position: fixed;
       top: 0;
@@ -7051,7 +7129,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       animation: fadeIn 0.2s ease;
     `;
     
-    const modal = document.createElement('div');
+    const modal = document.createElement("div");
     modal.style.cssText = `
       background: #2a2a2a;
       border-radius: 8px;
@@ -7105,9 +7183,9 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     `;
     
     // Add animations if not already present
-    if (!document.getElementById('modal-animations')) {
-      const style = document.createElement('style');
-      style.id = 'modal-animations';
+    if (!document.getElementById("modal-animations")) {
+      const style = document.createElement("style");
+      style.id = "modal-animations";
       style.textContent = `
         @keyframes fadeIn {
           from { opacity: 0; }
@@ -7125,7 +7203,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     document.body.appendChild(overlay);
     
     // Close on overlay click
-    overlay.addEventListener('click', (e) => {
+    overlay.addEventListener("click", (e) => {
       if (e.target === overlay) {
         overlay.remove();
       }
@@ -7133,12 +7211,12 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     
     // Close on Escape key
     const escHandler = (e) => {
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         overlay.remove();
-        document.removeEventListener('keydown', escHandler);
+        document.removeEventListener("keydown", escHandler);
       }
     };
-    document.addEventListener('keydown', escHandler);
+    document.addEventListener("keydown", escHandler);
   }
 
   applyTheme(theme) {
@@ -7163,7 +7241,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       // More robust backend status detection
       const isBackendHealthy = health && 
         (health.success === true || 
-         (health.status && health.status.toLowerCase().includes('connected')));
+         (health.status && health.status.toLowerCase().includes("connected")));
       
       
       if (backendStatusEl && backendStatusContainer) {
@@ -7284,25 +7362,25 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   async updateDatabaseStats() {
     try {
       const res = await window.electronAPI.readStats();
-      if (!res?.success || !res?.data) throw new Error(res?.error || 'readStats failed');
+      if (!res?.success || !res?.data) throw new Error(res?.error || "readStats failed");
       const s = res.data;
       const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = String(val ?? 0); };
 
-      setText('total-conversions', s.total_conversions);
-      setText('successful-conversions', s.successful_conversions);
-      setText('failed-conversions', s.failed_conversions);
-      setText('total-images-converted', s.total_images_converted);
-      setText('successful-images', s.successful_images);
-      setText('failed-images', s.failed_images);
-      setText('total-hexedits', s.total_hexedits);
-      setText('successful-hexedits', s.successful_hexedits);
-      setText('failed-hexedits', s.failed_hexedits);
-      setText('total-stickers-created', s.total_stickers_created);
+      setText("total-conversions", s.total_conversions);
+      setText("successful-conversions", s.successful_conversions);
+      setText("failed-conversions", s.failed_conversions);
+      setText("total-images-converted", s.total_images_converted);
+      setText("successful-images", s.successful_images);
+      setText("failed-images", s.failed_images);
+      setText("total-hexedits", s.total_hexedits);
+      setText("successful-hexedits", s.successful_hexedits);
+      setText("failed-hexedits", s.failed_hexedits);
+      setText("total-stickers-created", s.total_stickers_created);
 
-      const ses = document.getElementById('session-start') || document.getElementById('session-started');
+      const ses = document.getElementById("session-start") || document.getElementById("session-started");
       if (ses && s.session_started) ses.textContent = new Date(s.session_started * 1000).toLocaleString();
     } catch (e) {
-      console.error('❌ updateDatabaseStats (preload) failed:', e);
+      console.error("❌ updateDatabaseStats (preload) failed:", e);
     }
   }
 
@@ -7310,16 +7388,16 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   async forceUpdateDatabaseStats() {
     try {
       await this.updateDatabaseStats();
-      if (RENDERER_DEBUG) console.log('🔄 Database stats force updated');
+      if (RENDERER_DEBUG) console.log("🔄 Database stats force updated");
     } catch (e) {
-      console.error('❌ forceUpdateDatabaseStats failed:', e);
+      console.error("❌ forceUpdateDatabaseStats failed:", e);
     }
   }
 
   updateStats() {
     // Do NOT touch database info fields here to avoid overwriting with zeros
     // Keep only non-database UI refresh (e.g., local cache size)
-    const cacheSizeEl = document.getElementById('cache-size');
+    const cacheSizeEl = document.getElementById("cache-size");
     if (cacheSizeEl) {
       const cacheSize = Math.round(JSON.stringify(localStorage).length / 1024);
       cacheSizeEl.textContent = `${cacheSize} KB`;
@@ -7329,7 +7407,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   async exportStats() {
     try {
       const res = await window.electronAPI.readStats();
-      if (!res?.success || !res?.data) throw new Error(res?.error || 'readStats failed');
+      if (!res?.success || !res?.data) throw new Error(res?.error || "readStats failed");
       const d = res.data;
       const payload = {
         total_conversions: d.total_conversions ?? 0,
@@ -7345,17 +7423,17 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         session_started: d.session_started ?? null,
         exported_at: new Date().toISOString()
       };
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
       a.download = `database-stats-${Date.now()}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      this.showToast('Database stats exported', 'success');
+      this.showToast("Database stats exported", "success");
     } catch (e) {
-      console.error('Export stats failed:', e);
-      this.showToast('Failed to export stats', 'error');
+      console.error("Export stats failed:", e);
+      this.showToast("Failed to export stats", "error");
     }
   }
 
@@ -7592,7 +7670,7 @@ This action cannot be undone. Are you sure?
         startHexEditBtn.style.display = "inline-flex";
         startHexEditBtn.disabled = false;
         startHexEditBtn.innerHTML = '<i class="fas fa-edit"></i> Hex Edit';
-        startHexEditBtn.style.opacity = '1';
+        startHexEditBtn.style.opacity = "1";
       }
     } else if (this.currentOperation === "converting") {
       // Conversion running
@@ -7637,11 +7715,11 @@ This action cannot be undone. Are you sure?
         const resumeBtn = document.getElementById("resume-conversion");
         
         if (pauseBtn) {
-          pauseBtn.style.display = 'none';
+          pauseBtn.style.display = "none";
         }
         
         if (resumeBtn) {
-          resumeBtn.style.display = 'inline-block';
+          resumeBtn.style.display = "inline-block";
           resumeBtn.disabled = false;
         }
         
@@ -7670,12 +7748,12 @@ This action cannot be undone. Are you sure?
         const resumeBtn = document.getElementById("resume-conversion");
         
         if (pauseBtn) {
-          pauseBtn.style.display = 'inline-block';
+          pauseBtn.style.display = "inline-block";
           pauseBtn.disabled = false;
         }
         
         if (resumeBtn) {
-          resumeBtn.style.display = 'none';
+          resumeBtn.style.display = "none";
         }
         
         this.updateButtonStates();
@@ -7701,20 +7779,20 @@ This action cannot be undone. Are you sure?
       
       if (hexBtn) {
         hexBtn.disabled = true;
-        hexBtn.style.opacity = '0.5';
+        hexBtn.style.opacity = "0.5";
       }
       
       if (this.isPaused) {
-        if (pauseBtn) pauseBtn.style.display = 'none';
-        if (resumeBtn) resumeBtn.style.display = 'inline-block';
+        if (pauseBtn) pauseBtn.style.display = "none";
+        if (resumeBtn) resumeBtn.style.display = "inline-block";
       } else {
-        if (pauseBtn) pauseBtn.style.display = 'inline-block';
-        if (resumeBtn) resumeBtn.style.display = 'none';
+        if (pauseBtn) pauseBtn.style.display = "inline-block";
+        if (resumeBtn) resumeBtn.style.display = "none";
       }
     } else if (isHexEditing) {
       if (startBtn) {
         startBtn.disabled = true;
-        startBtn.style.opacity = '0.5';
+        startBtn.style.opacity = "0.5";
       }
       
       if (hexBtn) {
@@ -7723,11 +7801,11 @@ This action cannot be undone. Are you sure?
       }
       
       if (this.isPaused) {
-        if (pauseBtn) pauseBtn.style.display = 'none';
-        if (resumeBtn) resumeBtn.style.display = 'inline-block';
+        if (pauseBtn) pauseBtn.style.display = "none";
+        if (resumeBtn) resumeBtn.style.display = "inline-block";
       } else {
-        if (pauseBtn) pauseBtn.style.display = 'inline-block';
-        if (resumeBtn) resumeBtn.style.display = 'none';
+        if (pauseBtn) pauseBtn.style.display = "inline-block";
+        if (resumeBtn) resumeBtn.style.display = "none";
       }
     }
   }
@@ -7736,7 +7814,7 @@ This action cannot be undone. Are you sure?
   async clearCache() {
     try {
       // Clear localStorage cache
-      const keysToKeep = ['telegram_api_id', 'telegram_api_hash', 'telegram_bot_token', 'telegram_chat_id'];
+      const keysToKeep = ["telegram_api_id", "telegram_api_hash", "telegram_bot_token", "telegram_chat_id"];
       const allKeys = Object.keys(localStorage);
       allKeys.forEach(key => {
         if (!keysToKeep.includes(key)) {
@@ -7745,27 +7823,27 @@ This action cannot be undone. Are you sure?
       });
       
       // Update display
-      document.getElementById('cache-size').textContent = '0 MB';
-      this.showToast('Cache cleared successfully', 'success');
+      document.getElementById("cache-size").textContent = "0 MB";
+      this.showToast("Cache cleared successfully", "success");
     } catch (error) {
-      if (RENDERER_DEBUG) console.error('Failed to clear cache:', error);
-      this.showToast('Failed to clear cache', 'error');
+      if (RENDERER_DEBUG) console.error("Failed to clear cache:", error);
+      this.showToast("Failed to clear cache", "error");
     }
   }
   
 
   async restartBackend() {
     try {
-      this.showToast('Restarting backend...', 'info');
-      const response = await this.apiRequest('POST', '/api/restart');
+      this.showToast("Restarting backend...", "info");
+      const response = await this.apiRequest("POST", "/api/restart");
       
       // Wait a bit for backend to restart
       setTimeout(() => {
         this.checkBackendStatus();
-        this.showToast('Backend restarted successfully', 'success');
+        this.showToast("Backend restarted successfully", "success");
       }, 3000);
     } catch (error) {
-      if (RENDERER_DEBUG) console.error('Failed to restart backend:', error);
+      if (RENDERER_DEBUG) console.error("Failed to restart backend:", error);
       // Try to reconnect after a delay
       setTimeout(() => {
         this.checkBackendStatus();
@@ -7774,7 +7852,7 @@ This action cannot be undone. Are you sure?
   }
   
   async resetStats() {
-    if (confirm('Are you sure you want to reset all statistics?')) {
+    if (confirm("Are you sure you want to reset all statistics?")) {
       try {
         const response = await this.apiRequest("POST", "/api/reset-stats");
         if (response.success) {
@@ -7793,7 +7871,7 @@ This action cannot be undone. Are you sure?
   }
 
   async clearLogs() {
-    if (confirm('Are you sure you want to clear all log files?')) {
+    if (confirm("Are you sure you want to clear all log files?")) {
       try {
         const response = await this.apiRequest("POST", "/api/clear-logs");
         if (response.success) {
@@ -7808,7 +7886,7 @@ This action cannot be undone. Are you sure?
   }
 
   async clearCredentials() {
-    if (confirm('Are you sure you want to clear all saved credentials? This will require you to re-enter your Telegram API credentials.')) {
+    if (confirm("Are you sure you want to clear all saved credentials? This will require you to re-enter your Telegram API credentials.")) {
       try {
         const response = await this.apiRequest("POST", "/api/clear-credentials");
         if (response.success) {
@@ -7904,26 +7982,26 @@ This action cannot be undone. Are you sure?
     `;
 
     // Remove existing modal if any
-    const existingModal = document.getElementById('kill-processes-modal');
+    const existingModal = document.getElementById("kill-processes-modal");
     if (existingModal) {
       existingModal.remove();
     }
 
     // Add modal to body
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    document.body.insertAdjacentHTML("beforeend", modalHtml);
     
     // Add escape key handler
     const handleEscape = (e) => {
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         this.hideKillProcessesModal();
-        document.removeEventListener('keydown', handleEscape);
+        document.removeEventListener("keydown", handleEscape);
       }
     };
-    document.addEventListener('keydown', handleEscape);
+    document.addEventListener("keydown", handleEscape);
   }
 
   hideKillProcessesModal() {
-    const modal = document.getElementById('kill-processes-modal');
+    const modal = document.getElementById("kill-processes-modal");
     if (modal) {
       modal.remove();
     }
@@ -7962,20 +8040,20 @@ This action cannot be undone. Are you sure?
     }
     
     // Defer emoji loading until needed
-    const modal = document.getElementById('emoji-modal');
+    const modal = document.getElementById("emoji-modal");
     if (!modal) return;
     
     // Use a single event listener for all emoji interactions
-    modal.addEventListener('click', (e) => {
-      const tab = e.target.closest('.emoji-tab');
+    modal.addEventListener("click", (e) => {
+      const tab = e.target.closest(".emoji-tab");
       if (tab) {
         this.handleEmojiTabClick(tab);
         return;
       }
       
-      const emojiBtn = e.target.closest('.emoji-btn');
+      const emojiBtn = e.target.closest(".emoji-btn");
       if (emojiBtn) {
-        const emoji = emojiBtn.getAttribute('data-emoji');
+        const emoji = emojiBtn.getAttribute("data-emoji");
         this.selectQuickEmoji(emoji);
       }
     });
@@ -7984,8 +8062,8 @@ This action cannot be undone. Are you sure?
   // Method to select a quick emoji from the emoji picker
   selectQuickEmoji(emoji) {
     // Update emoji input and preview
-    const emojiInput = document.getElementById('emoji-input');
-    const emojiPreview = document.getElementById('emoji-preview-icon');
+    const emojiInput = document.getElementById("emoji-input");
+    const emojiPreview = document.getElementById("emoji-preview-icon");
     
     if (emojiInput && emojiPreview) {
       emojiInput.value = emoji;
@@ -7994,19 +8072,19 @@ This action cannot be undone. Are you sure?
   }
   
   handleEmojiTabClick(tab) {
-    const category = tab.getAttribute('data-category');
+    const category = tab.getAttribute("data-category");
     
     // Batch DOM updates
     requestAnimationFrame(() => {
       // Update tabs
-      document.querySelectorAll('.emoji-tab').forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
+      document.querySelectorAll(".emoji-tab").forEach(t => t.classList.remove("active"));
+      tab.classList.add("active");
       
       // Update categories
-      document.querySelectorAll('.emoji-category').forEach(cat => cat.classList.remove('active'));
+      document.querySelectorAll(".emoji-category").forEach(cat => cat.classList.remove("active"));
       const targetCategory = document.getElementById(`category-${category}`);
       if (targetCategory) {
-        targetCategory.classList.add('active');
+        targetCategory.classList.add("active");
       }
     });
   }
@@ -8032,27 +8110,27 @@ This action cannot be undone. Are you sure?
       setTimeout(() => {
         resolve({
           loaded: true,
-          categories: ['smileys', 'hearts', 'animals', 'food', 'objects']
+          categories: ["smileys", "hearts", "animals", "food", "objects"]
         });
       }, 10);
     });
   }
   
   setupEmojiScrollNavigation() {
-    const tabsContainer = document.querySelector('.emoji-tabs');
+    const tabsContainer = document.querySelector(".emoji-tabs");
     
     if (!tabsContainer) {
-      console.log('Emoji tabs container not found');
+      console.log("Emoji tabs container not found");
       return;
     }
     
     // Enable mouse wheel scrolling
-    tabsContainer.addEventListener('wheel', (e) => {
+    tabsContainer.addEventListener("wheel", (e) => {
       if (e.deltaY !== 0) {
         e.preventDefault();
         tabsContainer.scrollBy({
           left: e.deltaY > 0 ? 100 : -100,
-          behavior: 'smooth'
+          behavior: "smooth"
         });
       }
     });
@@ -8062,24 +8140,24 @@ This action cannot be undone. Are you sure?
     let startX;
     let scrollLeft;
     
-    tabsContainer.addEventListener('mousedown', (e) => {
+    tabsContainer.addEventListener("mousedown", (e) => {
       isDown = true;
       startX = e.pageX - tabsContainer.offsetLeft;
       scrollLeft = tabsContainer.scrollLeft;
-      tabsContainer.style.cursor = 'grabbing';
+      tabsContainer.style.cursor = "grabbing";
     });
     
-    tabsContainer.addEventListener('mouseleave', () => {
+    tabsContainer.addEventListener("mouseleave", () => {
       isDown = false;
-      tabsContainer.style.cursor = 'grab';
+      tabsContainer.style.cursor = "grab";
     });
     
-    tabsContainer.addEventListener('mouseup', () => {
+    tabsContainer.addEventListener("mouseup", () => {
       isDown = false;
-      tabsContainer.style.cursor = 'grab';
+      tabsContainer.style.cursor = "grab";
     });
     
-    tabsContainer.addEventListener('mousemove', (e) => {
+    tabsContainer.addEventListener("mousemove", (e) => {
       if (!isDown) return;
       e.preventDefault();
       const x = e.pageX - tabsContainer.offsetLeft;
@@ -8088,15 +8166,15 @@ This action cannot be undone. Are you sure?
     });
     
     // Single delegated event for all emoji buttons
-    const emojiContainer = document.querySelector('.emoji-picker-enhanced');
+    const emojiContainer = document.querySelector(".emoji-picker-enhanced");
     if (emojiContainer) {
-      emojiContainer.addEventListener('click', (e) => {
-        const btn = e.target.closest('.emoji-btn');
+      emojiContainer.addEventListener("click", (e) => {
+        const btn = e.target.closest(".emoji-btn");
         if (!btn) return;
         
-        const emoji = btn.getAttribute('data-emoji');
-        const input = document.getElementById('emoji-input');
-        const preview = document.getElementById('emoji-preview-icon');
+        const emoji = btn.getAttribute("data-emoji");
+        const input = document.getElementById("emoji-input");
+        const preview = document.getElementById("emoji-preview-icon");
         
         if (input) input.value = emoji;
         if (preview) preview.textContent = emoji;
@@ -8104,13 +8182,13 @@ This action cannot be undone. Are you sure?
     }
     
     // Live emoji preview
-    const emojiInput = document.getElementById('emoji-input');
+    const emojiInput = document.getElementById("emoji-input");
     if (emojiInput) {
       let debounceTimer;
-      emojiInput.addEventListener('input', (e) => {
+      emojiInput.addEventListener("input", (e) => {
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
-          const preview = document.getElementById('emoji-preview-icon');
+          const preview = document.getElementById("emoji-preview-icon");
           if (preview && e.target.value) {
             preview.textContent = e.target.value;
           }
@@ -8120,7 +8198,7 @@ This action cannot be undone. Are you sure?
   }
 
   applyEmojiToAll() {
-    const currentEmoji = document.getElementById('emoji-input')?.value || '😀';
+    const currentEmoji = document.getElementById("emoji-input")?.value || "😀";
     
     this.mediaFiles.forEach(file => {
       file.emoji = currentEmoji;
@@ -8201,28 +8279,28 @@ This action cannot be undone. Are you sure?
     if (!this.mediaFiles || this.mediaFiles.length === 0) return;
     
     switch(sortType) {
-      case 'name-asc':
+      case "name-asc":
         this.mediaFiles.sort((a, b) => a.name.localeCompare(b.name));
         break;
-      case 'name-desc':
+      case "name-desc":
         this.mediaFiles.sort((a, b) => b.name.localeCompare(a.name));
         break;
-      case 'date-new':
+      case "date-new":
         this.mediaFiles.sort((a, b) => (b.dateAdded || 0) - (a.dateAdded || 0));
         break;
-      case 'date-old':
+      case "date-old":
         this.mediaFiles.sort((a, b) => (a.dateAdded || 0) - (b.dateAdded || 0));
         break;
-      case 'size-large':
+      case "size-large":
         this.mediaFiles.sort((a, b) => (b.size || 0) - (a.size || 0));
         break;
-      case 'size-small':
+      case "size-small":
         this.mediaFiles.sort((a, b) => (a.size || 0) - (b.size || 0));
         break;
     }
     
     this.updateMediaFileList();
-    this.showToast("success", "Sorted", `Files sorted by ${sortType.replace('-', ' ')}`);
+    this.showToast("success", "Sorted", `Files sorted by ${sortType.replace("-", " ")}`);
   }
   
   // Removed profile card functionality - will add new content later
@@ -8236,75 +8314,75 @@ This action cannot be undone. Are you sure?
   
   setupSupportButtons() {
     // Coffee button
-    const coffeeBtn = document.querySelector('.coffee-btn');
+    const coffeeBtn = document.querySelector(".coffee-btn");
     if (coffeeBtn) {
-      coffeeBtn.addEventListener('click', () => {
-        this.showSupportModal('coffee', 'Buy Me a Coffee', 
-          'Support my open source work with a coffee! ☕\n\n' +
-          'This will open your default browser to a coffee donation page.\n' +
-          'You can replace this with your actual coffee.me or similar link later.');
+      coffeeBtn.addEventListener("click", () => {
+        this.showSupportModal("coffee", "Buy Me a Coffee", 
+          "Support my open source work with a coffee! ☕\n\n" +
+          "This will open your default browser to a coffee donation page.\n" +
+          "You can replace this with your actual coffee.me or similar link later.");
       });
     }
     
     // PayPal button
-    const paypalBtn = document.querySelector('.paypal-btn');
+    const paypalBtn = document.querySelector(".paypal-btn");
     if (paypalBtn) {
-      paypalBtn.addEventListener('click', () => {
-        this.showSupportModal('paypal', 'PayPal Donation', 
-          'Support my work via PayPal! 💰\n\n' +
-          'This will open your default browser to PayPal.\n' +
-          'You can replace this with your actual PayPal.me link later.');
+      paypalBtn.addEventListener("click", () => {
+        this.showSupportModal("paypal", "PayPal Donation", 
+          "Support my work via PayPal! 💰\n\n" +
+          "This will open your default browser to PayPal.\n" +
+          "You can replace this with your actual PayPal.me link later.");
       });
     }
     
     // GitHub Sponsors button
-    const githubBtn = document.querySelector('.github-btn');
+    const githubBtn = document.querySelector(".github-btn");
     if (githubBtn) {
-      githubBtn.addEventListener('click', () => {
-        this.showSupportModal('github', 'GitHub Sponsors', 
-          'Become a GitHub Sponsor! 🌟\n\n' +
-          'This will open your GitHub profile for sponsorship.\n' +
-          'You can replace this with your actual GitHub Sponsors link later.');
+      githubBtn.addEventListener("click", () => {
+        this.showSupportModal("github", "GitHub Sponsors", 
+          "Become a GitHub Sponsor! 🌟\n\n" +
+          "This will open your GitHub profile for sponsorship.\n" +
+          "You can replace this with your actual GitHub Sponsors link later.");
       });
     }
     
     // Star Projects button
-    const starBtn = document.querySelector('.star-btn');
+    const starBtn = document.querySelector(".star-btn");
     if (starBtn) {
-      starBtn.addEventListener('click', () => {
-        this.showSupportModal('star', 'Star Projects', 
-          'Show your appreciation by starring my projects! ⭐\n\n' +
-          'This will open your GitHub repositories.\n' +
-          'You can replace this with your actual project links later.');
+      starBtn.addEventListener("click", () => {
+        this.showSupportModal("star", "Star Projects", 
+          "Show your appreciation by starring my projects! ⭐\n\n" +
+          "This will open your GitHub repositories.\n" +
+          "You can replace this with your actual project links later.");
       });
     }
   }
   
   setupProjectLinks() {
     // Add click tracking for project links
-    const projectLinks = document.querySelectorAll('.project-link');
+    const projectLinks = document.querySelectorAll(".project-link");
     projectLinks.forEach(link => {
-      link.addEventListener('click', (e) => {
+      link.addEventListener("click", (e) => {
         // Track project clicks
-        if (RENDERER_DEBUG) console.log('🚀 Project link clicked:', link.href);
-        this.showToast('info', 'Opening Project', 'Opening project in your browser...');
+        if (RENDERER_DEBUG) console.log("🚀 Project link clicked:", link.href);
+        this.showToast("info", "Opening Project", "Opening project in your browser...");
       });
     });
   }
   
   setupChannelPromotion() {
-    const channelBtn = document.querySelector('.channel-join-btn');
+    const channelBtn = document.querySelector(".channel-join-btn");
     if (channelBtn) {
-      channelBtn.addEventListener('click', (e) => {
-        if (RENDERER_DEBUG) console.log('📱 Channel join button clicked');
-        this.showToast('success', 'Joining Channel', 'Opening Telegram channel in your browser...');
+      channelBtn.addEventListener("click", (e) => {
+        if (RENDERER_DEBUG) console.log("📱 Channel join button clicked");
+        this.showToast("success", "Joining Channel", "Opening Telegram channel in your browser...");
       });
     }
   }
   showSupportModal(type, title, message) {
     // Create a simple modal for support options
-    const modal = document.createElement('div');
-    modal.className = 'support-modal';
+    const modal = document.createElement("div");
+    modal.className = "support-modal";
     modal.innerHTML = `
       <div class="support-modal-content">
         <div class="support-modal-header">
@@ -8312,7 +8390,7 @@ This action cannot be undone. Are you sure?
           <button class="support-modal-close">&times;</button>
         </div>
         <div class="support-modal-body">
-          <p>${message.replace(/\n/g, '<br>')}</p>
+          <p>${message.replace(/\n/g, "<br>")}</p>
         </div>
         <div class="support-modal-footer">
           <button class="btn btn-secondary support-modal-cancel">Cancel</button>
@@ -8322,7 +8400,7 @@ This action cannot be undone. Are you sure?
     `;
     
     // Add modal styles
-    const style = document.createElement('style');
+    const style = document.createElement("style");
     style.textContent = `
       .support-modal {
         position: fixed;
@@ -8411,36 +8489,36 @@ This action cannot be undone. Are you sure?
     document.body.appendChild(modal);
     
     // Handle close button
-    const closeBtn = modal.querySelector('.support-modal-close');
-    const cancelBtn = modal.querySelector('.support-modal-cancel');
-    const proceedBtn = modal.querySelector('.support-modal-proceed');
+    const closeBtn = modal.querySelector(".support-modal-close");
+    const cancelBtn = modal.querySelector(".support-modal-cancel");
+    const proceedBtn = modal.querySelector(".support-modal-proceed");
     
     const closeModal = () => {
       modal.remove();
       style.remove();
     };
     
-    closeBtn.addEventListener('click', closeModal);
-    cancelBtn.addEventListener('click', closeModal);
+    closeBtn.addEventListener("click", closeModal);
+    cancelBtn.addEventListener("click", closeModal);
     
     // Handle proceed button
-    proceedBtn.addEventListener('click', () => {
+    proceedBtn.addEventListener("click", () => {
       closeModal();
       
       // Open appropriate link based on type
-      let url = '';
+      let url = "";
       switch(type) {
-        case 'coffee':
-          url = 'https://buymeacoffee.com/JoonJelly'; // Updated with actual link
+        case "coffee":
+          url = "https://buymeacoffee.com/JoonJelly"; // Updated with actual link
           break;
-        case 'paypal':
-          url = 'https://paypal.me/'; // Replace with your actual link
+        case "paypal":
+          url = "https://paypal.me/"; // Replace with your actual link
           break;
-        case 'github':
-          url = 'https://github.com/RohitPoul'; // Updated with your actual GitHub profile
+        case "github":
+          url = "https://github.com/RohitPoul"; // Updated with your actual GitHub profile
           break;
-        case 'star':
-          url = 'https://github.com/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader'; // Updated with your actual repositories
+        case "star":
+          url = "https://github.com/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader"; // Updated with your actual repositories
           break;
       }
       
@@ -8450,21 +8528,21 @@ This action cannot be undone. Are you sure?
           window.electronAPI.shell.openExternal(url);
         } else {
           // Fallback to window.open if Electron API is not available
-          window.open(url, '_blank');
+          window.open(url, "_blank");
         }
-        this.showToast('success', 'Link Opened', 'Opening support page in your browser...');
+        this.showToast("success", "Link Opened", "Opening support page in your browser...");
       }
     });
 
     // Close on outside click
-    modal.addEventListener('click', (e) => {
+    modal.addEventListener("click", (e) => {
       if (e.target === modal) closeModal();
     });
   }
 
   initializeNavigation() {
     const navItems = document.querySelectorAll(".nav-item");
-    if (RENDERER_DEBUG) console.log('Navigation items:', navItems);
+    if (RENDERER_DEBUG) console.log("Navigation items:", navItems);
 
     navItems.forEach((item) => {
       item.addEventListener("click", () => {
@@ -8475,7 +8553,7 @@ This action cannot be undone. Are you sure?
         item.classList.add("active");
         
         const tabId = item.getAttribute("data-tab");
-        if (RENDERER_DEBUG) console.log('Clicked tab:', tabId);
+        if (RENDERER_DEBUG) console.log("Clicked tab:", tabId);
         
         this.handleTabSwitch(tabId);
       });
@@ -8485,10 +8563,10 @@ This action cannot be undone. Are you sure?
     const initialActiveTab = document.querySelector(".nav-item.active");
     if (initialActiveTab) {
       const initialTabId = initialActiveTab.getAttribute("data-tab");
-      if (RENDERER_DEBUG) console.log('Initial active tab:', initialTabId);
+      if (RENDERER_DEBUG) console.log("Initial active tab:", initialTabId);
       this.handleTabSwitch(initialTabId);
     } else {
-      if (RENDERER_DEBUG) console.warn('No initial active tab found');
+      if (RENDERER_DEBUG) console.warn("No initial active tab found");
     }
   }
 
@@ -8509,25 +8587,25 @@ This action cannot be undone. Are you sure?
     // Render function
     const render = () => {
       // Clear existing content
-      container.innerHTML = '';
+      container.innerHTML = "";
 
       // Slice the visible portion of data
       const visibleData = dataSource.slice(startIndex, endIndex);
 
       // Render visible items
       visibleData.forEach((item, index) => {
-        const itemElement = document.createElement('div');
-        itemElement.classList.add('virtual-list-item');
+        const itemElement = document.createElement("div");
+        itemElement.classList.add("virtual-list-item");
         renderFunction(itemElement, item, startIndex + index);
         container.appendChild(itemElement);
       });
 
       // Add padding to simulate full list height
-      const topPadding = document.createElement('div');
+      const topPadding = document.createElement("div");
       topPadding.style.height = `${startIndex * itemHeight}px`;
       container.insertBefore(topPadding, container.firstChild);
 
-      const bottomPadding = document.createElement('div');
+      const bottomPadding = document.createElement("div");
       bottomPadding.style.height = `${Math.max(0, (dataSource.length - endIndex) * itemHeight)}px`;
       container.appendChild(bottomPadding);
     };
@@ -8546,7 +8624,7 @@ This action cannot be undone. Are you sure?
     render();
 
     // Attach scroll event
-    container.addEventListener('scroll', handleScroll);
+    container.addEventListener("scroll", handleScroll);
 
     // Return methods for external control
     return {
@@ -8555,7 +8633,7 @@ This action cannot be undone. Are you sure?
         render();
       },
       destroy: () => {
-        container.removeEventListener('scroll', handleScroll);
+        container.removeEventListener("scroll", handleScroll);
       }
     };
   }
@@ -8564,8 +8642,8 @@ This action cannot be undone. Are you sure?
   initializeVirtualLists() {
     // Virtual scrolling for video file list
     this.videoFileList = this.createVirtualList(
-      '#video-file-list', 
-      '.file-item', 
+      "#video-file-list", 
+      ".file-item", 
       this.videoFiles, 
       (element, file, index) => {
         element.innerHTML = `
@@ -8585,8 +8663,8 @@ This action cannot be undone. Are you sure?
 
     // Similar implementation for sticker media list
     this.stickerMediaList = this.createVirtualList(
-      '#sticker-media-list', 
-      '.media-item', 
+      "#sticker-media-list", 
+      ".media-item", 
       this.stickerFiles, 
       (element, file, index) => {
         element.innerHTML = `
@@ -8607,7 +8685,7 @@ This action cannot be undone. Are you sure?
 
   async getFileMetadata(filePath) {
     try {
-      const response = await this.apiRequest('POST', '/api/get-file-info', {
+      const response = await this.apiRequest("POST", "/api/get-file-info", {
         path: filePath
       });
       
@@ -8626,7 +8704,7 @@ This action cannot be undone. Are you sure?
     
     // Fallback: try to get basic file size
     try {
-      const response = await this.apiRequest('POST', '/api/analyze-video', {
+      const response = await this.apiRequest("POST", "/api/analyze-video", {
         file_path: filePath
       });
       
@@ -8654,17 +8732,17 @@ This action cannot be undone. Are you sure?
   formatFileSize(bytes) {
     if (bytes === "Unknown" || !bytes) return "Unknown";
     
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    if (bytes === 0) return '0 B';
+    const sizes = ["B", "KB", "MB", "GB"];
+    if (bytes === 0) return "0 B";
     
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
-    return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+    return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + " " + sizes[i];
   }
 
   formatDuration(seconds) {
     if (seconds === "Unknown" || !seconds) return "Unknown";
     
-    if (typeof seconds === 'string' && seconds.includes('s')) {
+    if (typeof seconds === "string" && seconds.includes("s")) {
       return seconds; // Already formatted
     }
     
@@ -8675,7 +8753,7 @@ This action cannot be undone. Are you sure?
     const remainingSeconds = Math.floor(secs % 60);
     
     if (minutes > 0) {
-      return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+      return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
     } else {
       return `${remainingSeconds}s`;
     }
@@ -8690,7 +8768,7 @@ This action cannot be undone. Are you sure?
       if (RENDERER_DEBUG) console.log(`[SECURE] Stored ${key} securely`);
     } catch (error) {
       if (RENDERER_DEBUG) console.error(`[SECURE] Error storing ${key}:`, error);
-      this.showToast('error', 'Credential Storage Error', 'Failed to securely store credentials');
+      this.showToast("error", "Credential Storage Error", "Failed to securely store credentials");
     }
   }
 
@@ -8703,26 +8781,26 @@ This action cannot be undone. Are you sure?
       return decryptedValue;
     } catch (error) {
       if (RENDERER_DEBUG) console.error(`[SECURE] Error retrieving ${key}:`, error);
-      this.showToast('error', 'Credential Retrieval Error', 'Failed to retrieve stored credentials');
+      this.showToast("error", "Credential Retrieval Error", "Failed to retrieve stored credentials");
       return null;
     }
   }
 
   // Simple XOR encryption for localStorage (basic obfuscation)
   encryptData(data) {
-    if (!data) return '';
-    const key = 'TELEGRAM_SECURE_KEY';
-    return btoa(data.split('').map((char, index) => 
+    if (!data) return "";
+    const key = "TELEGRAM_SECURE_KEY";
+    return btoa(data.split("").map((char, index) => 
       String.fromCharCode(char.charCodeAt(0) ^ key.charCodeAt(index % key.length))
-    ).join(''));
+    ).join(""));
   }
 
   decryptData(encryptedData) {
-    if (!encryptedData) return '';
-    const key = 'TELEGRAM_SECURE_KEY';
-    return atob(encryptedData).split('').map((char, index) => 
+    if (!encryptedData) return "";
+    const key = "TELEGRAM_SECURE_KEY";
+    return atob(encryptedData).split("").map((char, index) => 
       String.fromCharCode(char.charCodeAt(0) ^ key.charCodeAt(index % key.length))
-    ).join('');
+    ).join("");
   }
 
   // Modify existing credential storage methods
@@ -8739,17 +8817,17 @@ This action cannot be undone. Are you sure?
       };
 
       try {
-        localStorage.setItem('telegramCredentials', JSON.stringify(credentials));
-        this.showToast('success', 'Saved', 'Telegram credentials saved securely');
+        localStorage.setItem("telegramCredentials", JSON.stringify(credentials));
+        this.showToast("success", "Saved", "Telegram credentials saved securely");
       } catch (error) {
-        this.showToast('warning', 'Save Failed', 'Could not save credentials');
+        this.showToast("warning", "Save Failed", "Could not save credentials");
       }
     }
   }
 
   loadCredentials() {
     try {
-      const savedCredentials = localStorage.getItem('telegramCredentials');
+      const savedCredentials = localStorage.getItem("telegramCredentials");
       if (savedCredentials) {
         const { apiId, apiHash, phoneNumber } = JSON.parse(savedCredentials);
         
@@ -8758,13 +8836,13 @@ This action cannot be undone. Are you sure?
     const phoneInput = document.getElementById("telegram-phone");
     
     if (apiIdInput && apiHashInput && phoneInput) {
-          apiIdInput.value = apiId || '';
-          apiHashInput.value = apiHash || '';
-          phoneInput.value = phoneNumber || '';
+          apiIdInput.value = apiId || "";
+          apiHashInput.value = apiHash || "";
+          phoneInput.value = phoneNumber || "";
         }
       }
     } catch (error) {
-      if (RENDERER_DEBUG) console.error('Error loading credentials:', error);
+      if (RENDERER_DEBUG) console.error("Error loading credentials:", error);
     }
   }
 
@@ -8779,36 +8857,36 @@ This action cannot be undone. Are you sure?
     const phoneInput = document.getElementById("telegram-phone");
 
     if (apiIdInput) {
-      apiIdInput.addEventListener('change', () => this.saveCredentials());
+      apiIdInput.addEventListener("change", () => this.saveCredentials());
     }
     if (apiHashInput) {
-      apiHashInput.addEventListener('change', () => this.saveCredentials());
+      apiHashInput.addEventListener("change", () => this.saveCredentials());
     }
     if (phoneInput) {
-      phoneInput.addEventListener('change', () => this.saveCredentials());
+      phoneInput.addEventListener("change", () => this.saveCredentials());
     }
   }
 
   // Add method to clear credentials
   clearStoredCredentials() {
     try {
-      localStorage.removeItem('telegram_api_id');
-      localStorage.removeItem('telegram_api_hash');
-      localStorage.removeItem('telegram_phone');
+      localStorage.removeItem("telegram_api_id");
+      localStorage.removeItem("telegram_api_hash");
+      localStorage.removeItem("telegram_phone");
       
       // Clear input fields
       const apiIdInput = document.getElementById("telegram-api-id");
       const apiHashInput = document.getElementById("telegram-api-hash");
       const phoneInput = document.getElementById("telegram-phone");
       
-      if (apiIdInput) apiIdInput.value = '';
-      if (apiHashInput) apiHashInput.value = '';
-      if (phoneInput) phoneInput.value = '';
+      if (apiIdInput) apiIdInput.value = "";
+      if (apiHashInput) apiHashInput.value = "";
+      if (phoneInput) phoneInput.value = "";
       
-      this.showToast('success', 'Credentials Cleared', 'Telegram credentials have been removed');
+      this.showToast("success", "Credentials Cleared", "Telegram credentials have been removed");
     } catch (error) {
-      if (RENDERER_DEBUG) console.error('[SECURE] Error clearing credentials:', error);
-      this.showToast('error', 'Clearing Error', 'Failed to clear stored credentials');
+      if (RENDERER_DEBUG) console.error("[SECURE] Error clearing credentials:", error);
+      this.showToast("error", "Clearing Error", "Failed to clear stored credentials");
     }
   }
 
@@ -8816,7 +8894,7 @@ This action cannot be undone. Are you sure?
   savePhoneNumber(phoneNumber) {
     try {
       // Securely store phone number
-      this.secureStoreCredentials('telegram_last_phone', phoneNumber);
+      this.secureStoreCredentials("telegram_last_phone", phoneNumber);
       
       // Optional: Store recent phone numbers (up to 5)
       const recentPhones = this.getRecentPhoneNumbers();
@@ -8824,21 +8902,21 @@ This action cannot be undone. Are you sure?
         recentPhones.unshift(phoneNumber);
         // Keep only the last 5 unique phone numbers
         const uniqueRecentPhones = [...new Set(recentPhones)].slice(0, 5);
-        localStorage.setItem('telegram_recent_phones', JSON.stringify(uniqueRecentPhones));
+        localStorage.setItem("telegram_recent_phones", JSON.stringify(uniqueRecentPhones));
       }
       
-      if (RENDERER_DEBUG) console.log('[PHONE] Phone number saved successfully');
+      if (RENDERER_DEBUG) console.log("[PHONE] Phone number saved successfully");
     } catch (error) {
-      if (RENDERER_DEBUG) console.error('[PHONE] Error saving phone number:', error);
+      if (RENDERER_DEBUG) console.error("[PHONE] Error saving phone number:", error);
     }
   }
 
   getRecentPhoneNumbers() {
     try {
-      const storedPhones = localStorage.getItem('telegram_recent_phones');
+      const storedPhones = localStorage.getItem("telegram_recent_phones");
       return storedPhones ? JSON.parse(storedPhones) : [];
     } catch (error) {
-      if (RENDERER_DEBUG) console.error('[PHONE] Error retrieving recent phone numbers:', error);
+      if (RENDERER_DEBUG) console.error("[PHONE] Error retrieving recent phone numbers:", error);
       return [];
     }
   }
@@ -8850,67 +8928,67 @@ This action cannot be undone. Are you sure?
     if (!phoneInput || !recentPhonesContainer) return;
 
     // Clear existing recent phones
-    recentPhonesContainer.innerHTML = '';
+    recentPhonesContainer.innerHTML = "";
 
     const recentPhones = this.getRecentPhoneNumbers();
     
     // Populate recent phones dropdown
     if (recentPhones.length > 0) {
       recentPhones.forEach(phone => {
-        const phoneOption = document.createElement('button');
+        const phoneOption = document.createElement("button");
         phoneOption.textContent = phone;
-        phoneOption.className = 'recent-phone-option';
-        phoneOption.addEventListener('click', () => {
+        phoneOption.className = "recent-phone-option";
+        phoneOption.addEventListener("click", () => {
           phoneInput.value = phone;
           // Optional: hide dropdown after selection
-          recentPhonesContainer.style.display = 'none';
+          recentPhonesContainer.style.display = "none";
         });
         recentPhonesContainer.appendChild(phoneOption);
       });
       
       // Show dropdown if there are recent phones
-      recentPhonesContainer.style.display = recentPhones.length > 0 ? 'flex' : 'none';
+      recentPhonesContainer.style.display = recentPhones.length > 0 ? "flex" : "none";
     }
   }
 
   // Input handling methods
   setupInputHandlers() {
     // Clipboard paste functionality
-    const pasteButtons = document.querySelectorAll('.btn-paste');
+    const pasteButtons = document.querySelectorAll(".btn-paste");
     pasteButtons.forEach(button => {
-      button.addEventListener('click', async () => {
-        const targetId = button.getAttribute('data-target');
+      button.addEventListener("click", async () => {
+        const targetId = button.getAttribute("data-target");
         const targetInput = document.getElementById(targetId);
         
         try {
           const clipboardText = await navigator.clipboard.readText();
           if (clipboardText) {
             targetInput.value = clipboardText.trim();
-            this.showToast('success', 'Clipboard', 'Text pasted successfully');
+            this.showToast("success", "Clipboard", "Text pasted successfully");
           }
         } catch (error) {
-          if (RENDERER_DEBUG) console.error('Clipboard paste error:', error);
-          this.showToast('error', 'Clipboard Error', 'Failed to paste from clipboard');
+          if (RENDERER_DEBUG) console.error("Clipboard paste error:", error);
+          this.showToast("error", "Clipboard Error", "Failed to paste from clipboard");
         }
       });
     });
 
     // Input visibility toggle
-    const visibilityButtons = document.querySelectorAll('.btn-toggle-visibility');
+    const visibilityButtons = document.querySelectorAll(".btn-toggle-visibility");
     visibilityButtons.forEach(button => {
-      button.addEventListener('click', () => {
-        const targetId = button.getAttribute('data-target');
+      button.addEventListener("click", () => {
+        const targetId = button.getAttribute("data-target");
         const targetInput = document.getElementById(targetId);
-        const icon = button.querySelector('i');
+        const icon = button.querySelector("i");
         
-        if (targetInput.type === 'tel' || targetInput.type === 'password') {
-          targetInput.type = 'text';
-          icon.classList.remove('fa-eye-slash');
-          icon.classList.add('fa-eye');
+        if (targetInput.type === "tel" || targetInput.type === "password") {
+          targetInput.type = "text";
+          icon.classList.remove("fa-eye-slash");
+          icon.classList.add("fa-eye");
         } else {
-          targetInput.type = 'tel';
-          icon.classList.remove('fa-eye');
-          icon.classList.add('fa-eye-slash');
+          targetInput.type = "tel";
+          icon.classList.remove("fa-eye");
+          icon.classList.add("fa-eye-slash");
         }
       });
     });
@@ -8919,7 +8997,7 @@ This action cannot be undone. Are you sure?
   // Check for existing Telegram session on startup
   async checkExistingConnection() {
     try {
-      if (RENDERER_DEBUG) console.log('[DEBUG] Checking for existing Telegram session...');
+      if (RENDERER_DEBUG) console.log("[DEBUG] Checking for existing Telegram session...");
       
       const response = await this.apiRequest("GET", "/api/telegram/session-status");
       
@@ -8927,18 +9005,18 @@ This action cannot be undone. Are you sure?
         const { session_exists, session_valid } = response.data;
         
         if (session_exists && session_valid) {
-          if (RENDERER_DEBUG) console.log('[DEBUG] Found valid existing session - setting connected status');
+          if (RENDERER_DEBUG) console.log("[DEBUG] Found valid existing session - setting connected status");
           this.updateTelegramStatus("connected");
           return true;
         }
       }
       
-      if (RENDERER_DEBUG) console.log('[DEBUG] No valid session found - setting disconnected status');
+      if (RENDERER_DEBUG) console.log("[DEBUG] No valid session found - setting disconnected status");
       this.updateTelegramStatus("disconnected");
       return false;
       
     } catch (error) {
-      if (RENDERER_DEBUG) console.error('[DEBUG] Error checking session status:', error);
+      if (RENDERER_DEBUG) console.error("[DEBUG] Error checking session status:", error);
       // Default to disconnected if we can't check
       this.updateTelegramStatus("disconnected");
       return false;
@@ -8959,14 +9037,14 @@ This action cannot be undone. Are you sure?
         return false;
       }
     } catch (error) {
-      console.error('Session cleanup error:', error);
+      console.error("Session cleanup error:", error);
       return false;
     }
   }
 
   // Modify initialization to include input handlers
   async initializeTelegramConnection() {
-    this.logDebug('initializeTelegramConnection() - CLEAN WORKFLOW');
+    this.logDebug("initializeTelegramConnection() - CLEAN WORKFLOW");
     
     // CLEAN WORKFLOW: Always start disconnected and force cleanup
     
@@ -8976,7 +9054,7 @@ This action cannot be undone. Are you sure?
       let forceResetSuccess = false;
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
-          await this.apiRequest('POST', '/api/telegram/force-reset');
+          await this.apiRequest("POST", "/api/telegram/force-reset");
           forceResetSuccess = true;
           break;
         } catch (error) {
@@ -8988,21 +9066,21 @@ This action cannot be undone. Are you sure?
       }
       
       // STEP 2: Always set disconnected state 
-      this.updateTelegramStatus('disconnected');
+      this.updateTelegramStatus("disconnected");
       this.telegramConnected = false;
       
       // STEP 3: Check actual connection status from backend (with retry)
       try {
-        const statusResponse = await this.apiRequest('GET', '/api/telegram/connection-status');
+        const statusResponse = await this.apiRequest("GET", "/api/telegram/connection-status");
         
         if (statusResponse.success && statusResponse.data) {
           const status = statusResponse.data;
           
           // For clean workflow, we expect clean_state: true and connected: false
           if (status.clean_state && !status.connected) {
-            this.addStatusItem('🔄 Clean startup completed - ready for fresh connection', 'info');
+            this.addStatusItem("🔄 Clean startup completed - ready for fresh connection", "info");
           } else if (status.connected) {
-            this.addStatusItem('⚠️ Unexpected connection state - will force cleanup on connect', 'warning');
+            this.addStatusItem("⚠️ Unexpected connection state - will force cleanup on connect", "warning");
           }
         }
       } catch (error) {
@@ -9010,11 +9088,11 @@ This action cannot be undone. Are you sure?
       }
       
     } catch (error) {
-      console.error('❌ [CLEAN_INIT] Error during clean initialization:', error);
+      console.error("❌ [CLEAN_INIT] Error during clean initialization:", error);
       // Even on error, ensure we're in disconnected state
-      this.updateTelegramStatus('disconnected');
+      this.updateTelegramStatus("disconnected");
       this.telegramConnected = false;
-      this.addStatusItem('⚠️ Clean startup completed with warnings', 'warning');
+      this.addStatusItem("⚠️ Clean startup completed with warnings", "warning");
     }
     
     // Continue with standard initialization...
@@ -9024,7 +9102,7 @@ This action cannot be undone. Are you sure?
     const phoneInput = document.getElementById("telegram-phone");
     const connectBtn = document.getElementById("connect-telegram");
     
-    if (RENDERER_DEBUG) console.log('[DEBUG] Telegram form elements check:', {
+    if (RENDERER_DEBUG) console.log("[DEBUG] Telegram form elements check:", {
       apiIdInput: !!apiIdInput,
       apiHashInput: !!apiHashInput,
       phoneInput: !!phoneInput,
@@ -9032,7 +9110,7 @@ This action cannot be undone. Are you sure?
     });
     
     if (!connectBtn) {
-      if (RENDERER_DEBUG) console.error('[DEBUG] Critical: Connect button not found!');
+      if (RENDERER_DEBUG) console.error("[DEBUG] Critical: Connect button not found!");
       return;
     }
     
@@ -9040,45 +9118,45 @@ This action cannot be undone. Are you sure?
     this.setupInputActionListeners?.();
     
     // Load saved credentials if available
-    if (typeof this.loadCredentials === 'function') {
+    if (typeof this.loadCredentials === "function") {
       try { this.loadCredentials(); } catch (_) {}
     }
     
     // Sync visibility icons
     this.syncVisibilityIcons?.();
     
-    if (RENDERER_DEBUG) console.log('[DEBUG] Telegram connection initialization complete');
+    if (RENDERER_DEBUG) console.log("[DEBUG] Telegram connection initialization complete");
   }
 
   syncVisibilityIcons() {
-    const visibilityButtons = document.querySelectorAll('.btn-input-action.btn-toggle-visibility');
+    const visibilityButtons = document.querySelectorAll(".btn-input-action.btn-toggle-visibility");
     visibilityButtons.forEach(button => {
-      const targetId = button.getAttribute('data-target');
+      const targetId = button.getAttribute("data-target");
       const targetInput = document.getElementById(targetId);
-      const icon = button.querySelector('i');
+      const icon = button.querySelector("i");
       if (!targetInput || !icon) return;
-      if (targetInput.type === 'password') {
-        icon.classList.remove('fa-eye');
-        icon.classList.add('fa-eye-slash');
+      if (targetInput.type === "password") {
+        icon.classList.remove("fa-eye");
+        icon.classList.add("fa-eye-slash");
       } else {
-        icon.classList.remove('fa-eye-slash');
-        icon.classList.add('fa-eye');
+        icon.classList.remove("fa-eye-slash");
+        icon.classList.add("fa-eye");
       }
     });
   }
   // Clipboard and Visibility Handling for Sensitive Inputs
   setupInputActionListeners() {
     // Visibility Toggle Functionality with Enhanced Logic
-    const visibilityButtons = document.querySelectorAll('.btn-input-action.btn-toggle-visibility');
+    const visibilityButtons = document.querySelectorAll(".btn-input-action.btn-toggle-visibility");
     visibilityButtons.forEach(button => {
-      button.addEventListener('click', (e) => {
+      button.addEventListener("click", (e) => {
         // Prevent default button actions
         e.preventDefault();
         e.stopPropagation();
 
-        const targetId = button.getAttribute('data-target');
+        const targetId = button.getAttribute("data-target");
         const targetInput = document.getElementById(targetId);
-        const visibilityIcon = button.querySelector('i');
+        const visibilityIcon = button.querySelector("i");
         
         if (!targetInput || !visibilityIcon) return;
 
@@ -9086,18 +9164,18 @@ This action cannot be undone. Are you sure?
         targetInput.focus();
 
         // Comprehensive toggle logic
-        const isCurrentlyPassword = targetInput.type === 'password';
+        const isCurrentlyPassword = targetInput.type === "password";
         
         // Toggle input type
-        targetInput.type = isCurrentlyPassword ? 'text' : 'password';
+        targetInput.type = isCurrentlyPassword ? "text" : "password";
         
         // Toggle icon classes
         if (isCurrentlyPassword) {
-          visibilityIcon.classList.remove('fa-eye-slash');
-          visibilityIcon.classList.add('fa-eye');
+          visibilityIcon.classList.remove("fa-eye-slash");
+          visibilityIcon.classList.add("fa-eye");
         } else {
-          visibilityIcon.classList.remove('fa-eye');
-          visibilityIcon.classList.add('fa-eye-slash');
+          visibilityIcon.classList.remove("fa-eye");
+          visibilityIcon.classList.add("fa-eye-slash");
         }
 
         // Maintain focus and cursor position
@@ -9106,17 +9184,17 @@ This action cannot be undone. Are you sure?
       });
 
       // Prevent default form submission or other unwanted behaviors
-      button.addEventListener('mousedown', (e) => {
+      button.addEventListener("mousedown", (e) => {
         e.preventDefault();
         e.stopPropagation();
       });
     });
 
     // Clipboard Paste Functionality (unchanged from previous implementation)
-    const pasteButtons = document.querySelectorAll('.btn-input-action.btn-paste');
+    const pasteButtons = document.querySelectorAll(".btn-input-action.btn-paste");
     pasteButtons.forEach(button => {
-      button.addEventListener('click', async (e) => {
-        const targetId = button.getAttribute('data-target');
+      button.addEventListener("click", async (e) => {
+        const targetId = button.getAttribute("data-target");
         const targetInput = document.getElementById(targetId);
         
         if (!targetInput) return;
@@ -9126,18 +9204,18 @@ This action cannot be undone. Are you sure?
           targetInput.value = clipboardText.trim();
           
           // Trigger change event for saving
-          targetInput.dispatchEvent(new Event('change'));
+          targetInput.dispatchEvent(new Event("change"));
           
-          this.showToast('success', 'Pasted', 'Text copied from clipboard');
+          this.showToast("success", "Pasted", "Text copied from clipboard");
           
           // Highlight input briefly
-          targetInput.classList.add('paste-highlight');
+          targetInput.classList.add("paste-highlight");
           setTimeout(() => {
-            targetInput.classList.remove('paste-highlight');
+            targetInput.classList.remove("paste-highlight");
           }, 1000);
         } catch (err) {
-          this.showToast('error', 'Paste Failed', 'Could not read clipboard');
-          if (RENDERER_DEBUG) console.error('Clipboard paste error:', err);
+          this.showToast("error", "Paste Failed", "Could not read clipboard");
+          if (RENDERER_DEBUG) console.error("Clipboard paste error:", err);
         }
       });
     });
@@ -9148,8 +9226,8 @@ This action cannot be undone. Are you sure?
 let app;
 
 // Wait for DOM to be fully loaded before initializing
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => {
     app = new TelegramUtilities();
     window.app = app;
     // Force immediate database stats update on app startup
@@ -9171,6 +9249,7 @@ window.removeMediaFile = (index) => window.app?.removeMediaFile(index);
 window.editEmoji = (index) => window.app?.editEmoji(index);
 window.showFileInfo = (index) => window.app?.showFileInfo(index);
 window.showMediaInfo = (index) => window.app?.showMediaInfo(index);
+window.openMediaPreview = (index) => window.app?.openMediaPreview(index);
 
 // Enhanced emoji modal functions
 window.applyEmojiToAll = () => window.app?.applyEmojiToAll();
@@ -9188,7 +9267,7 @@ window.testSuccessModal = () => {
 // Quick manual test - inject and show modal immediately
 window.quickModalTest = () => {
   if (window.app?.showSuccessModal) {
-    window.app.showSuccessModal('https://t.me/addstickers/test_manual_123');
+    window.app.showSuccessModal("https://t.me/addstickers/test_manual_123");
   }
 };
 
@@ -9226,12 +9305,12 @@ window.addEventListener("beforeunload", (event) => {
   try {
     // console.info('[TRACE] boot hook executing');
     const banner = () => { /* console.info('[TRACE] Frontend tracing active'); */ };
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', banner, { once: true });
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", banner, { once: true });
     } else {
       banner();
     }
-  } catch (e) { console.warn('TRACE boot failed', e); }
+  } catch (e) { console.warn("TRACE boot failed", e); }
 })();
 
 // ===== Aggressive apiRequest patch (poll until app exists) =====

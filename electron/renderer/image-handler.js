@@ -7,12 +7,12 @@ class ImageHandler {
   constructor(app) {
     this.app = app;
     this.imageFiles = []; // Each item: {path, name, thumbnail, metadata, converted, convertedMetadata, status, selected}
-    this.selectedFormat = 'png';
+    this.selectedFormat = "png";
     this.quality = 95;
-    this.outputDir = '';
+    this.outputDir = "";
     this.currentProcessId = null;
     this.selectedImageIndex = null;
-    this.previewMode = 'original'; // 'original' or 'converted'
+    this.previewMode = "original"; // 'original' or 'converted'
     
     this.init();
   }
@@ -20,17 +20,17 @@ class ImageHandler {
   // Ensure UI and state are reset when images are cleared/removed
   resetConversionUI() {
     this.currentProcessId = null;
-    this.previewMode = 'original';
+    this.previewMode = "original";
 
-    const statusEl = document.getElementById('image-conversion-status');
+    const statusEl = document.getElementById("image-conversion-status");
     if (statusEl) {
-      const statusText = statusEl.querySelector('.status-text');
-      const progressText = statusEl.querySelector('.progress-text');
-      if (statusText) statusText.textContent = 'Ready';
-      if (progressText) progressText.textContent = '';
+      const statusText = statusEl.querySelector(".status-text");
+      const progressText = statusEl.querySelector(".progress-text");
+      if (statusText) statusText.textContent = "Ready";
+      if (progressText) progressText.textContent = "";
     }
 
-    const convertBtn = document.getElementById('start-image-conversion');
+    const convertBtn = document.getElementById("start-image-conversion");
     if (convertBtn) {
       const canConvert = this.imageFiles.some(img => img.selected) && this.outputDir;
       convertBtn.disabled = !canConvert;
@@ -45,7 +45,7 @@ class ImageHandler {
     this.checkImageMagick();
     
     // Initialize button states
-    const convertBtn = document.getElementById('start-image-conversion');
+    const convertBtn = document.getElementById("start-image-conversion");
     if (convertBtn) {
       convertBtn.disabled = true; // Disabled until images selected and output dir set
     }
@@ -53,86 +53,86 @@ class ImageHandler {
   
   setupEventListeners() {
     // Add images button
-    const addImagesBtn = document.getElementById('add-images');
+    const addImagesBtn = document.getElementById("add-images");
     if (addImagesBtn) {
-      addImagesBtn.addEventListener('click', () => this.selectImages());
+      addImagesBtn.addEventListener("click", () => this.selectImages());
     }
     
     // Clear images button
-    const clearImagesBtn = document.getElementById('clear-images');
+    const clearImagesBtn = document.getElementById("clear-images");
     if (clearImagesBtn) {
-      clearImagesBtn.addEventListener('click', () => this.clearImages());
+      clearImagesBtn.addEventListener("click", () => this.clearImages());
     }
     
     // Format selector (works with all styles)
-    const formatBtns = document.querySelectorAll('.format-btn, .format-btn-compact, .format-toggle-btn');
+    const formatBtns = document.querySelectorAll(".format-btn, .format-btn-compact, .format-toggle-btn");
     formatBtns.forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        formatBtns.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
+      btn.addEventListener("click", (_e) => {
+        formatBtns.forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
         this.selectedFormat = btn.dataset.format;
       });
     });
     
     // Quality slider
-    const qualitySlider = document.getElementById('image-quality');
-    const qualityValue = document.getElementById('image-quality-value');
+    const qualitySlider = document.getElementById("image-quality");
+    const qualityValue = document.getElementById("image-quality-value");
     if (qualitySlider && qualityValue) {
-      qualitySlider.addEventListener('input', (e) => {
+      qualitySlider.addEventListener("input", (e) => {
         this.quality = parseInt(e.target.value);
         qualityValue.textContent = this.quality;
       });
     }
     
     // Output directory browser
-    const browseOutputBtn = document.getElementById('browse-image-output');
+    const browseOutputBtn = document.getElementById("browse-image-output");
     if (browseOutputBtn) {
-      browseOutputBtn.addEventListener('click', () => this.selectOutputDirectory());
+      browseOutputBtn.addEventListener("click", () => this.selectOutputDirectory());
     }
     
     // Start conversion button
-    const startConversionBtn = document.getElementById('start-image-conversion');
+    const startConversionBtn = document.getElementById("start-image-conversion");
     if (startConversionBtn) {
-      startConversionBtn.addEventListener('click', () => {
+      startConversionBtn.addEventListener("click", () => {
         this.startConversion();
       });
     }
     
     // Select all button
-    const selectAllBtn = document.getElementById('select-all-images');
+    const selectAllBtn = document.getElementById("select-all-images");
     if (selectAllBtn) {
-      selectAllBtn.addEventListener('click', () => this.selectAllImages());
+      selectAllBtn.addEventListener("click", () => this.selectAllImages());
     }
     
     // Deselect all button  
-    const deselectAllBtn = document.getElementById('deselect-all-images');
+    const deselectAllBtn = document.getElementById("deselect-all-images");
     if (deselectAllBtn) {
-      deselectAllBtn.addEventListener('click', () => this.deselectAllImages());
+      deselectAllBtn.addEventListener("click", () => this.deselectAllImages());
     }
     
   }
   
   async checkImageMagick() {
     try {
-      const response = await this.app.apiRequest('GET', '/api/image/check-imagemagick');
+      const response = await this.app.apiRequest("GET", "/api/image/check-imagemagick");
       if (response && response.success) {
         if (!response.available) {
-          this.app.showToast('warning', 'ImageMagick Not Found', 
-            'ImageMagick is required for image conversion. Please install it to use this feature.');
+          this.app.showToast("warning", "ImageMagick Not Found", 
+            "ImageMagick is required for image conversion. Please install it to use this feature.");
         }
       }
     } catch (error) {
-      console.error('Error checking ImageMagick:', error);
+      console.error("Error checking ImageMagick:", error);
     }
   }
   
   async selectImages() {
     try {
       const filePaths = await window.electronAPI.selectFiles({
-        title: 'Select Images',
-        properties: ['openFile', 'multiSelections'],
+        title: "Select Images",
+        properties: ["openFile", "multiSelections"],
         filters: [
-          { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif', 'tiff', 'tif'] }
+          { name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "bmp", "gif", "tiff", "tif"] }
         ]
       });
       
@@ -144,7 +144,7 @@ class ImageHandler {
           if (!this.imageFiles.some(img => img.path === filePath)) {
             const newImg = {
               path: filePath,
-              name: filePath.split('/').pop().split('\\').pop(),
+              name: filePath.split("/").pop().split("\\").pop(),
               thumbnail: null,
               metadata: null,
               selected: true // Auto-select new images
@@ -157,7 +157,7 @@ class ImageHandler {
         await this.updateImageList();
         
         // Load metadata immediately for all new images
-        const metadataPromises = newImages.map((img, idx) => {
+        const metadataPromises = newImages.map((img, _idx) => {
           const globalIndex = this.imageFiles.indexOf(img);
           return this.loadImageMetadata(globalIndex);
         });
@@ -168,11 +168,11 @@ class ImageHandler {
           this.updateSelectionCount();
         });
         
-        this.app.showToast('success', 'Images Added', `Added ${filePaths.length} image(s)`);
+        this.app.showToast("success", "Images Added", `Added ${filePaths.length} image(s)`);
       }
     } catch (error) {
-      console.error('Error selecting images:', error);
-      this.app.showToast('error', 'Error', 'Failed to select images');
+      console.error("Error selecting images:", error);
+      this.app.showToast("error", "Error", "Failed to select images");
     }
   }
   
@@ -181,10 +181,10 @@ class ImageHandler {
     
     // Clean up data URLs and object references
     this.imageFiles.forEach(img => {
-      if (img.thumbnail && img.thumbnail.startsWith('blob:')) {
+      if (img.thumbnail && img.thumbnail.startsWith("blob:")) {
         URL.revokeObjectURL(img.thumbnail);
       }
-      if (img.converted && img.converted.startsWith('blob:')) {
+      if (img.converted && img.converted.startsWith("blob:")) {
         URL.revokeObjectURL(img.converted);
       }
       // Clear references
@@ -197,10 +197,10 @@ class ImageHandler {
     const count = this.imageFiles.length;
     this.imageFiles = [];
     this.selectedImageIndex = null;
-    this.previewMode = 'original';
+    this.previewMode = "original";
     this.updateImageList();
     this.updateImageDetails(null);
-    this.app.showToast('success', 'Images Cleared', `Removed ${count} image(s)`);
+    this.app.showToast("success", "Images Cleared", `Removed ${count} image(s)`);
     this.resetConversionUI();
     
     // Force garbage collection hint
@@ -208,8 +208,8 @@ class ImageHandler {
   }
   
   async updateImageList() {
-    const fileList = document.getElementById('image-file-list');
-    const fileCount = document.getElementById('image-file-count');
+    const fileList = document.getElementById("image-file-list");
+    const fileCount = document.getElementById("image-file-count");
     
     if (!fileList) return;
     
@@ -220,7 +220,7 @@ class ImageHandler {
           <p>No images</p>
         </div>
       `;
-      if (fileCount) fileCount.textContent = '0';
+      if (fileCount) fileCount.textContent = "0";
       return;
     }
     
@@ -231,13 +231,13 @@ class ImageHandler {
     
     // Use document fragment for better performance
     const fragment = document.createDocumentFragment();
-    fileList.classList.remove('image-preview-grid');
-    fileList.classList.add('image-list-compact');
+    fileList.classList.remove("image-preview-grid");
+    fileList.classList.add("image-list-compact");
     
     for (let i = 0; i < this.imageFiles.length; i++) {
       const img = this.imageFiles[i];
-      const imgItem = document.createElement('div');
-      imgItem.className = 'image-list-item';
+      const imgItem = document.createElement("div");
+      imgItem.className = "image-list-item";
       imgItem.dataset.index = i;
       
       // Add status class
@@ -251,14 +251,14 @@ class ImageHandler {
       }
       
       // Get file sizes
-      const originalSize = img.metadata ? img.metadata.file_size_kb : '?';
+      const originalSize = img.metadata ? img.metadata.file_size_kb : "?";
       const convertedSize = img.convertedMetadata ? img.convertedMetadata.file_size_kb : null;
-      const sizeStatus = img.metadata && img.metadata.file_size_kb > 512 ? 'size-over-limit' : 'size-ok';
-      const convertedSizeStatus = convertedSize && convertedSize <= 512 ? 'size-ok' : (convertedSize ? 'size-over-limit' : '');
+      const sizeStatus = img.metadata && img.metadata.file_size_kb > 512 ? "size-over-limit" : "size-ok";
+      const convertedSizeStatus = convertedSize && convertedSize <= 512 ? "size-ok" : (convertedSize ? "size-over-limit" : "");
       
       imgItem.innerHTML = `
         <div class="image-list-checkbox">
-          <input type="checkbox" id="img-check-${i}" ${img.selected ? 'checked' : ''}>
+          <input type="checkbox" id="img-check-${i}" ${img.selected ? "checked" : ""}>
           <label for="img-check-${i}"></label>
         </div>
         <div class="image-list-thumbnails">
@@ -266,8 +266,8 @@ class ImageHandler {
             <img src="${img.thumbnail}" alt="${img.name}" loading="lazy">
             <div class="image-list-thumb-label">Original</div>
           </div>
-          <div class="image-list-thumb ${!img.converted ? 'placeholder' : ''}">
-            ${img.converted ? `<img src="${img.converted}" alt="Converted" loading="lazy">` : ''}
+          <div class="image-list-thumb ${!img.converted ? "placeholder" : ""}">
+            ${img.converted ? `<img src="${img.converted}" alt="Converted" loading="lazy">` : ""}
             <div class="image-list-thumb-label">Converted</div>
           </div>
         </div>
@@ -283,7 +283,7 @@ class ImageHandler {
                 <i class="fas fa-arrow-right image-list-stat-icon"></i>
                 <span>${convertedSize}KB</span>
               </div>
-            ` : img.status === 'error' && img.errorMessage ? `
+            ` : img.status === "error" && img.errorMessage ? `
               <div class="image-list-stat" style="color: var(--error-color);" title="${img.errorMessage}">
                 <i class="fas fa-exclamation-circle image-list-stat-icon"></i>
                 <span>Failed</span>
@@ -304,7 +304,7 @@ class ImageHandler {
       // Add checkbox handler
       const checkbox = imgItem.querySelector(`#img-check-${i}`);
       if (checkbox) {
-        checkbox.addEventListener('change', (e) => {
+        checkbox.addEventListener("change", (e) => {
           e.stopPropagation();
           img.selected = checkbox.checked;
           this.updateSelectionCount();
@@ -312,31 +312,31 @@ class ImageHandler {
       }
       
       // Add click handler to show preview (not the checkbox area)
-      imgItem.addEventListener('click', (e) => {
-        if (!e.target.closest('.image-list-remove') && !e.target.closest('.image-list-checkbox')) {
+      imgItem.addEventListener("click", (e) => {
+        if (!e.target.closest(".image-list-remove") && !e.target.closest(".image-list-checkbox")) {
           this.selectImage(i);
         }
       });
 
       // Open fullscreen viewer on thumbnail click
-      const origThumb = imgItem.querySelector('.image-list-thumb:first-child img');
-      const convThumb = imgItem.querySelector('.image-list-thumb:nth-child(2) img');
+      const origThumb = imgItem.querySelector(".image-list-thumb:first-child img");
+      const convThumb = imgItem.querySelector(".image-list-thumb:nth-child(2) img");
       if (origThumb) {
-        origThumb.addEventListener('click', (e) => {
+        origThumb.addEventListener("click", (e) => {
           e.stopPropagation();
           this.openFullscreenViewer(`file://${img.path}`, `${img.name} • Original`);
         });
       }
       if (convThumb) {
-        convThumb.addEventListener('click', (e) => {
+        convThumb.addEventListener("click", (e) => {
           e.stopPropagation();
           this.openFullscreenViewer(img.converted, `${img.name} • Converted`);
         });
       }
       
       // Add remove button handler
-      const removeBtn = imgItem.querySelector('.image-list-remove');
-      removeBtn.addEventListener('click', (e) => {
+      const removeBtn = imgItem.querySelector(".image-list-remove");
+      removeBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         this.removeImage(i);
       });
@@ -345,7 +345,7 @@ class ImageHandler {
     }
     
     // Clear and append all at once for better performance
-    fileList.innerHTML = '';
+    fileList.innerHTML = "";
     fileList.appendChild(fragment);
     
     // Restore scroll position
@@ -357,7 +357,7 @@ class ImageHandler {
     if (!img) return;
     
     try {
-      const response = await this.app.apiRequest('POST', '/api/image/metadata', {
+      const response = await this.app.apiRequest("POST", "/api/image/metadata", {
         image_path: img.path
       });
       
@@ -366,10 +366,10 @@ class ImageHandler {
         // Metadata will be displayed on next list update
       }
     } catch (error) {
-      console.error('Error loading metadata:', error);
+      console.error("Error loading metadata:", error);
       const metaEl = document.getElementById(`image-meta-${index}`);
       if (metaEl) {
-        metaEl.textContent = 'Error loading info';
+        metaEl.textContent = "Error loading info";
       }
     }
   }
@@ -378,10 +378,10 @@ class ImageHandler {
     // Clean up resources before removing
     const img = this.imageFiles[index];
     if (img) {
-      if (img.thumbnail && img.thumbnail.startsWith('blob:')) {
+      if (img.thumbnail && img.thumbnail.startsWith("blob:")) {
         URL.revokeObjectURL(img.thumbnail);
       }
-      if (img.converted && img.converted.startsWith('blob:')) {
+      if (img.converted && img.converted.startsWith("blob:")) {
         URL.revokeObjectURL(img.converted);
       }
     }
@@ -389,7 +389,7 @@ class ImageHandler {
     this.imageFiles.splice(index, 1);
     if (this.selectedImageIndex === index) {
       this.selectedImageIndex = null;
-      this.previewMode = 'original';
+      this.previewMode = "original";
       this.updateImageDetails(null);
     } else if (this.selectedImageIndex > index) {
       this.selectedImageIndex--;
@@ -406,25 +406,27 @@ class ImageHandler {
     const img = this.imageFiles[index];
     
     // Highlight selected image
-    document.querySelectorAll('.image-list-item').forEach((item, i) => {
-      item.classList.toggle('selected', i === index);
+    document.querySelectorAll(".image-list-item").forEach((item, i) => {
+      item.classList.toggle("selected", i === index);
     });
     
     // Reset preview mode to original when selecting new image
-    this.previewMode = 'original';
+    this.previewMode = "original";
     this.updateImageDetails(img);
   }
   
-  openFullscreenViewer(src, title = '') {
+  openFullscreenViewer(src, title = "") {
     try {
-      if (window.ImageViewer && typeof window.ImageViewer.open === 'function') {
+      if (window.ImageViewer && typeof window.ImageViewer.open === "function") {
         window.ImageViewer.open({ src, title });
       }
-    } catch (e) { }
+      } catch (_e) { 
+        // Intentionally ignore fullscreen viewer errors
+      }
   }
 
   updateImageDetails(img) {
-    const detailsContainer = document.getElementById('image-details-container');
+    const detailsContainer = document.getElementById("image-details-container");
     if (!detailsContainer) return;
     
     if (!img || !img.metadata) {
@@ -442,7 +444,7 @@ class ImageHandler {
     
     // Determine which image to show based on preview mode
     let previewSrc, previewMeta;
-    if (this.previewMode === 'converted' && hasConverted) {
+    if (this.previewMode === "converted" && hasConverted) {
       previewSrc = img.converted;
       previewMeta = img.convertedMetadata;
     } else {
@@ -453,16 +455,16 @@ class ImageHandler {
     detailsContainer.innerHTML = `
       <div class="image-details-content">
         <div class="preview-controls">
-          <button class="preview-mode-btn ${this.previewMode === 'original' ? 'active' : ''}" data-mode="original">
+          <button class="preview-mode-btn ${this.previewMode === "original" ? "active" : ""}" data-mode="original">
             <i class="fas fa-image"></i> Original
           </button>
-          <button class="preview-mode-btn ${this.previewMode === 'converted' ? 'active' : ''}" data-mode="converted" ${!hasConverted ? 'disabled' : ''}>
+          <button class="preview-mode-btn ${this.previewMode === "converted" ? "active" : ""}" data-mode="converted" ${!hasConverted ? "disabled" : ""}>
             <i class="fas fa-check-circle"></i> Converted
           </button>
         </div>
         <div class="image-details-preview">
           <img src="${previewSrc}" alt="${img.name}">
-          ${!hasConverted && this.previewMode === 'converted' ? '<div class="preview-message">Not converted yet</div>' : ''}
+          ${!hasConverted && this.previewMode === "converted" ? '<div class="preview-message">Not converted yet</div>' : ""}
         </div>
         <div class="preview-info">
           <div class="preview-info-item">
@@ -471,23 +473,23 @@ class ImageHandler {
           </div>
           <div class="preview-info-item">
             <span class="label">File:</span>
-            <span class="value ${previewMeta.file_size_kb > 512 ? 'text-error' : 'text-success'}">${previewMeta.file_size_kb}KB</span>
+            <span class="value ${previewMeta.file_size_kb > 512 ? "text-error" : "text-success"}">${previewMeta.file_size_kb}KB</span>
           </div>
           <div class="preview-info-item">
             <span class="label">Input:</span>
-            <span class="value">${meta.format ? meta.format.toUpperCase() : 'Unknown'}</span>
+            <span class="value">${meta.format ? meta.format.toUpperCase() : "Unknown"}</span>
           </div>
           <div class="preview-info-item">
             <span class="label">Output:</span>
-            <span class="value">${this.selectedFormat ? this.selectedFormat.toUpperCase() : 'PNG'}</span>
+            <span class="value">${this.selectedFormat ? this.selectedFormat.toUpperCase() : "PNG"}</span>
           </div>
         </div>
       </div>
     `;
     
     // Add event listeners for preview mode buttons
-    detailsContainer.querySelectorAll('.preview-mode-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+    detailsContainer.querySelectorAll(".preview-mode-btn").forEach(btn => {
+      btn.addEventListener("click", (_e) => {
         const mode = btn.dataset.mode;
         if (mode && !btn.disabled) {
           this.previewMode = mode;
@@ -497,10 +499,10 @@ class ImageHandler {
     });
 
     // Fullscreen on main preview click
-    const mainPreview = detailsContainer.querySelector('.image-details-preview img');
+    const mainPreview = detailsContainer.querySelector(".image-details-preview img");
     if (mainPreview) {
-      mainPreview.addEventListener('click', () => {
-        const title = this.previewMode === 'converted' ? `${img.name} • Converted` : `${img.name} • Original`;
+      mainPreview.addEventListener("click", () => {
+        const title = this.previewMode === "converted" ? `${img.name} • Converted` : `${img.name} • Original`;
         this.openFullscreenViewer(mainPreview.src, title);
       });
     }
@@ -509,24 +511,24 @@ class ImageHandler {
   async selectOutputDirectory() {
     try {
       const directory = await window.electronAPI.selectDirectory({
-        title: 'Select Output Directory'
+        title: "Select Output Directory"
       });
       
       // The IPC handler returns a string directly (or undefined if canceled)
       if (directory) {
         this.outputDir = directory;
-        const outputDirInput = document.getElementById('image-output-dir');
+        const outputDirInput = document.getElementById("image-output-dir");
         if (outputDirInput) {
           outputDirInput.value = this.outputDir;
         }
         
         // Update convert button state
         this.updateSelectionCount();
-        this.app.showToast('success', 'Output Directory Set', 'Ready to convert images');
+        this.app.showToast("success", "Output Directory Set", "Ready to convert images");
       }
     } catch (error) {
-      console.error('Error selecting directory:', error);
-      this.app.showToast('error', 'Error', 'Failed to select directory');
+      console.error("Error selecting directory:", error);
+      this.app.showToast("error", "Error", "Failed to select directory");
     }
   }
   
@@ -544,23 +546,23 @@ class ImageHandler {
   
   updateSelectionCount() {
     const selectedCount = this.imageFiles.filter(img => img.selected).length;
-    const countEl = document.getElementById('selected-image-count');
+    const countEl = document.getElementById("selected-image-count");
     if (countEl) {
       countEl.textContent = selectedCount;
     }
     
     // Enable/disable convert button based on selection and output dir
-    const convertBtn = document.getElementById('start-image-conversion');
+    const convertBtn = document.getElementById("start-image-conversion");
     if (convertBtn) {
       const canConvert = selectedCount > 0 && this.outputDir;
       convertBtn.disabled = !canConvert;
       
       // Update button text/tooltip to guide user
       if (!this.outputDir) {
-        convertBtn.title = '⚠️ Please select output directory first';
+        convertBtn.title = "⚠️ Please select output directory first";
         convertBtn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Select Output Directory First';
       } else if (selectedCount === 0) {
-        convertBtn.title = '⚠️ Please select at least one image';
+        convertBtn.title = "⚠️ Please select at least one image";
         convertBtn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Select Images First';
       } else {
         convertBtn.title = `Convert ${selectedCount} selected image(s)`;
@@ -573,27 +575,27 @@ class ImageHandler {
     const selectedImages = this.imageFiles.filter(img => img.selected);
     
     if (selectedImages.length === 0) {
-      this.app.showToast('warning', 'No Images Selected', 'Please select at least one image to convert');
+      this.app.showToast("warning", "No Images Selected", "Please select at least one image to convert");
       return;
     }
     
     if (!this.outputDir) {
-      this.app.showToast('warning', 'No Output Directory', 'Please select an output directory first');
+      this.app.showToast("warning", "No Output Directory", "Please select an output directory first");
       return;
     }
     
     try {
-      const statusEl = document.getElementById('image-conversion-status');
-      const startBtn = document.getElementById('start-image-conversion');
+      const statusEl = document.getElementById("image-conversion-status");
+      const startBtn = document.getElementById("start-image-conversion");
       
       if (startBtn) {
         startBtn.disabled = true;
         startBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Converting...';
       }
       if (statusEl) {
-        const statusText = statusEl.querySelector('.status-text');
-        const progressText = statusEl.querySelector('.progress-text');
-        if (statusText) statusText.textContent = 'Processing...';
+        const statusText = statusEl.querySelector(".status-text");
+        const progressText = statusEl.querySelector(".progress-text");
+        if (statusText) statusText.textContent = "Processing...";
         if (progressText) progressText.textContent = `0 / ${selectedImages.length} images (0%)`;
       }
       
@@ -602,7 +604,7 @@ class ImageHandler {
       
       // Mark selected images as processing
       selectedImages.forEach(img => {
-        img.status = 'processing';
+        img.status = "processing";
       });
       this.updateImageList();
       
@@ -614,21 +616,21 @@ class ImageHandler {
         process_id: processId
       };
       
-      const response = await this.app.apiRequest('POST', '/api/image/process-batch', payload);
+      const response = await this.app.apiRequest("POST", "/api/image/process-batch", payload);
       
       if (response && response.success) {
         this.currentProcessId = processId;
-        this.app.showToast('info', 'Processing Started', `Converting ${selectedImages.length} image(s)...`);
+        this.app.showToast("info", "Processing Started", `Converting ${selectedImages.length} image(s)...`);
         this.monitorProgress(processId);
       } else {
-        throw new Error(response?.error || 'Failed to start conversion');
+        throw new Error(response?.error || "Failed to start conversion");
       }
     } catch (error) {
-      console.error('Conversion error:', error);
-      this.app.showToast('error', 'Conversion Failed', error.message || 'Failed to start conversion');
+      console.error("Conversion error:", error);
+      this.app.showToast("error", "Conversion Failed", error.message || "Failed to start conversion");
       
       // Reset button state
-      const startBtn = document.getElementById('start-image-conversion');
+      const startBtn = document.getElementById("start-image-conversion");
       if (startBtn) {
         startBtn.disabled = false;
         startBtn.innerHTML = '<i class="fas fa-magic"></i> Convert';
@@ -636,7 +638,7 @@ class ImageHandler {
       
       // Reset image statuses
       this.imageFiles.forEach(img => {
-        if (img.status === 'processing') {
+        if (img.status === "processing") {
           img.status = null;
         }
       });
@@ -645,8 +647,8 @@ class ImageHandler {
   }
   
   async monitorProgress(processId) {
-    const statusEl = document.getElementById('image-conversion-status');
-    const startBtn = document.getElementById('start-image-conversion');
+    const statusEl = document.getElementById("image-conversion-status");
+    const startBtn = document.getElementById("start-image-conversion");
     
     let pollCount = 0;
     const maxPolls = 200; // 60 seconds max
@@ -655,19 +657,19 @@ class ImageHandler {
       pollCount++;
       
       try {
-        const response = await this.app.apiRequest('GET', `/api/image/process-status/${processId}`);
-        console.log('[MONITOR] Progress check response:', response);
+        const response = await this.app.apiRequest("GET", `/api/image/process-status/${processId}`);
+        console.log("[MONITOR] Progress check response:", response);
         
         if (response && response.success && response.process) {
           const proc = response.process;
           
           // Update status display
           if (statusEl) {
-            const statusText = statusEl.querySelector('.status-text');
-            const progressText = statusEl.querySelector('.progress-text');
+            const statusText = statusEl.querySelector(".status-text");
+            const progressText = statusEl.querySelector(".progress-text");
             if (statusText) {
-              statusText.textContent = proc.status === 'completed' ? 'Completed' : 
-                                     proc.status === 'failed' ? 'Failed' : 'Processing';
+              statusText.textContent = proc.status === "completed" ? "Completed" : 
+                                     proc.status === "failed" ? "Failed" : "Processing";
             }
             if (progressText) {
               const totalFiles = proc.total_files || 0;
@@ -686,10 +688,10 @@ class ImageHandler {
                 img.converted = `file://${result.output_path}`;
                 img.convertedPath = result.output_path;
                 img.convertedMetadata = result.final_metadata;
-                img.status = result.final_metadata && result.final_metadata.file_size_kb <= 512 ? 'success' : 'warning';
+                img.status = result.final_metadata && result.final_metadata.file_size_kb <= 512 ? "success" : "warning";
                 updated = true;
-              } else if (img && !result.success && img.status === 'processing') {
-                img.status = 'error';
+              } else if (img && !result.success && img.status === "processing") {
+                img.status = "error";
                 updated = true;
               }
             });
@@ -700,31 +702,31 @@ class ImageHandler {
           }
           
           // Check if completed or failed
-          if (proc.status === 'completed') {
-            console.log('[MONITOR] Conversion completed', proc);
+          if (proc.status === "completed") {
+            console.log("[MONITOR] Conversion completed", proc);
             this.handleConversionComplete(proc);
             return;
-          } else if (proc.status === 'failed') {
-            console.error('[MONITOR] Conversion failed', proc);
-            const errorMsg = proc.error || proc.message || 'Conversion process failed';
-            this.app.showToast('error', 'Conversion Failed', errorMsg);
+          } else if (proc.status === "failed") {
+            console.error("[MONITOR] Conversion failed", proc);
+            const errorMsg = proc.error || proc.message || "Conversion process failed";
+            this.app.showToast("error", "Conversion Failed", errorMsg);
             if (statusEl) {
-              const statusText = statusEl.querySelector('.status-text');
-              if (statusText) statusText.textContent = 'Failed';
+              const statusText = statusEl.querySelector(".status-text");
+              if (statusText) statusText.textContent = "Failed";
             }
             // Still update what we have and extract specific error
             if (proc.results && proc.results.length > 0) {
-              console.log('[MONITOR] Updating results despite failure', proc.results);
+              console.log("[MONITOR] Updating results despite failure", proc.results);
               
               // Get the first error message for display
               const firstError = proc.results.find(r => !r.success && r.error);
               if (firstError && firstError.error) {
                 // Check for ImageMagick missing
-                if (firstError.error.includes('magick') || firstError.error.includes('ImageMagick')) {
-                  this.app.showToast('error', 'ImageMagick Not Found', 
-                    'Please install ImageMagick: sudo apt install imagemagick');
+                if (firstError.error.includes("magick") || firstError.error.includes("ImageMagick")) {
+                  this.app.showToast("error", "ImageMagick Not Found", 
+                    "Please install ImageMagick: sudo apt install imagemagick");
                 } else {
-                  this.app.showToast('error', 'Conversion Error', firstError.error);
+                  this.app.showToast("error", "Conversion Error", firstError.error);
                 }
               }
               
@@ -735,10 +737,10 @@ class ImageHandler {
                     img.converted = `file://${result.output_path}`;
                     img.convertedPath = result.output_path;
                     img.convertedMetadata = result.final_metadata;
-                    img.status = result.final_metadata && result.final_metadata.file_size_kb <= 512 ? 'success' : 'warning';
+                    img.status = result.final_metadata && result.final_metadata.file_size_kb <= 512 ? "success" : "warning";
                   } else {
-                    img.status = 'error';
-                    img.errorMessage = result.error || 'Conversion failed';
+                    img.status = "error";
+                    img.errorMessage = result.error || "Conversion failed";
                   }
                 }
               });
@@ -756,11 +758,11 @@ class ImageHandler {
           setTimeout(checkProgress, 300); // Faster polling for better responsiveness
         } else {
           // Handle case where process is not found or response is invalid
-          console.warn('[MONITOR] Invalid response or process not found', response);
+          console.warn("[MONITOR] Invalid response or process not found", response);
           
           // If we've polled too many times, give up
           if (pollCount >= maxPolls) {
-            this.app.showToast('error', 'Conversion Timeout', 'Process monitoring timed out');
+            this.app.showToast("error", "Conversion Timeout", "Process monitoring timed out");
             if (startBtn) {
               startBtn.disabled = false;
               startBtn.innerHTML = '<i class="fas fa-magic"></i> Convert';
@@ -772,11 +774,11 @@ class ImageHandler {
           setTimeout(checkProgress, 500);
         }
       } catch (error) {
-        console.error('[MONITOR] Error checking progress:', error);
+        console.error("[MONITOR] Error checking progress:", error);
         
         // If we've polled too many times, give up
         if (pollCount >= maxPolls) {
-          this.app.showToast('error', 'Conversion Error', error.message || 'Failed to monitor conversion');
+          this.app.showToast("error", "Conversion Error", error.message || "Failed to monitor conversion");
           if (startBtn) {
             startBtn.disabled = false;
             startBtn.innerHTML = '<i class="fas fa-magic"></i> Convert';
@@ -793,16 +795,15 @@ class ImageHandler {
   }
   
   handleConversionComplete(proc) {
-    const statusEl = document.getElementById('image-conversion-status');
-    const startBtn = document.getElementById('start-image-conversion');
+    const statusEl = document.getElementById("image-conversion-status");
+    const startBtn = document.getElementById("start-image-conversion");
     
     if (statusEl) {
-      const statusText = statusEl.querySelector('.status-text');
-      const progressText = statusEl.querySelector('.progress-text');
-      if (statusText) statusText.textContent = 'Completed';
+      const statusText = statusEl.querySelector(".status-text");
+      const progressText = statusEl.querySelector(".progress-text");
+      if (statusText) statusText.textContent = "Completed";
       if (progressText) {
         const successCount = proc.success_count || 0;
-        const totalCount = proc.total_files || 0;
         progressText.textContent = `${successCount} successful, ${proc.failed_count || 0} failed`;
       }
     }
@@ -813,7 +814,7 @@ class ImageHandler {
       startBtn.innerHTML = '<i class="fas fa-magic"></i> Convert';
     }
     
-    this.app.showToast('success', 'Conversion Complete', 
+    this.app.showToast("success", "Conversion Complete", 
       `Successfully converted ${proc.success_count || 0} of ${proc.total_files || 0} images`);
     
     // Update image files with conversion results
@@ -825,9 +826,9 @@ class ImageHandler {
             img.converted = `file://${result.output_path}`;
             img.convertedPath = result.output_path;
             img.convertedMetadata = result.final_metadata;
-            img.status = result.final_metadata && result.final_metadata.file_size_kb <= 512 ? 'success' : 'warning';
+            img.status = result.final_metadata && result.final_metadata.file_size_kb <= 512 ? "success" : "warning";
           } else {
-            img.status = 'error';
+            img.status = "error";
           }
         }
       });
@@ -843,7 +844,7 @@ class ImageHandler {
     
     // Reset image selection statuses
     this.imageFiles.forEach(img => {
-      if (img.status === 'processing') {
+      if (img.status === "processing") {
         img.status = null;
       }
     });
@@ -855,6 +856,6 @@ class ImageHandler {
 }
 
 // Export for use in main app
-if (typeof window !== 'undefined') {
+if (typeof window !== "undefined") {
   window.ImageHandler = ImageHandler;
 }

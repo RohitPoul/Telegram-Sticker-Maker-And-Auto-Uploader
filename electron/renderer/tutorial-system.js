@@ -38,7 +38,7 @@ class TutorialSystem {
 
   loadProgress() {
     try {
-      const saved = localStorage.getItem('tutorial_progress');
+      const saved = localStorage.getItem("tutorial_progress");
       return saved ? JSON.parse(saved) : {};
     } catch (e) {
       return {};
@@ -46,7 +46,7 @@ class TutorialSystem {
   }
 
   saveProgress() {
-    localStorage.setItem('tutorial_progress', JSON.stringify(this.userProgress));
+    localStorage.setItem("tutorial_progress", JSON.stringify(this.userProgress));
   }
 
   markCompleted(tutorialId) {
@@ -63,10 +63,10 @@ class TutorialSystem {
   }
 
   injectStyles() {
-    if (document.getElementById('tutorial-system-styles')) return;
+    if (document.getElementById("tutorial-system-styles")) return;
 
-    const style = document.createElement('style');
-    style.id = 'tutorial-system-styles';
+    const style = document.createElement("style");
+    style.id = "tutorial-system-styles";
     style.textContent = `
       /* Tutorial Overlay - More transparent */
       .tutorial-overlay {
@@ -444,30 +444,31 @@ class TutorialSystem {
     // Check if tutorials have been registered
     if (this.tutorials.size === 0) {
       // Try to trigger tutorial registration
-      if (typeof registerAllTutorials === 'function') {
+      /* global registerAllTutorials */
+      if (typeof registerAllTutorials === "function") {
         try {
           registerAllTutorials();
         } catch (e) {
-          console.error('Failed to register tutorials:', e);
+          console.error("Failed to register tutorials:", e);
         }
       }
     }
   }
 
   addKeyboardListeners() {
-    document.addEventListener('keydown', (e) => {
+    document.addEventListener("keydown", (e) => {
       if (!this.isActive) return;
       
       switch (e.key) {
-        case 'ArrowRight':
+        case "ArrowRight":
           e.preventDefault();
           this.nextStep();
           break;
-        case 'ArrowLeft':
+        case "ArrowLeft":
           e.preventDefault();
           this.previousStep();
           break;
-        case 'Escape':
+        case "Escape":
           e.preventDefault();
           this.endTutorial();
           break;
@@ -507,21 +508,21 @@ class TutorialSystem {
   createOverlay() {
     if (this.overlay) return;
 
-    this.overlay = document.createElement('div');
-    this.overlay.className = 'tutorial-overlay';
+    this.overlay = document.createElement("div");
+    this.overlay.className = "tutorial-overlay";
     document.body.appendChild(this.overlay);
 
     // Faster activation
     requestAnimationFrame(() => {
-      this.overlay.classList.add('active');
+      this.overlay.classList.add("active");
     });
   }
 
   createTooltip() {
     if (this.tooltip) return;
 
-    this.tooltip = document.createElement('div');
-    this.tooltip.className = 'tutorial-tooltip';
+    this.tooltip = document.createElement("div");
+    this.tooltip.className = "tutorial-tooltip";
     document.body.appendChild(this.tooltip);
   }
 
@@ -535,7 +536,7 @@ class TutorialSystem {
     const step = this.currentTutorial.steps[stepIndex];
 
     // Execute before callback if exists
-    if (step.before && typeof step.before === 'function') {
+    if (step.before && typeof step.before === "function") {
       await step.before();
     }
 
@@ -550,7 +551,7 @@ class TutorialSystem {
 
     // Show tooltip with faster timing
     requestAnimationFrame(() => {
-      this.tooltip.classList.add('active');
+      this.tooltip.classList.add("active");
     });
   }
 
@@ -566,12 +567,12 @@ class TutorialSystem {
     }
 
     // Get target element
-    const element = typeof target === 'string' ? document.querySelector(target) : target;
+    const element = typeof target === "string" ? document.querySelector(target) : target;
     if (!element) return;
 
     // Create spotlight
-    this.spotlight = document.createElement('div');
-    this.spotlight.className = 'tutorial-spotlight';
+    this.spotlight = document.createElement("div");
+    this.spotlight.className = "tutorial-spotlight";
     document.body.appendChild(this.spotlight);
 
     // Position spotlight
@@ -584,8 +585,8 @@ class TutorialSystem {
     this.spotlight.style.height = `${rect.height + padding * 2}px`;
 
     // Make target element clickable if needed
-    element.style.position = 'relative';
-    element.style.zIndex = '10000';
+    element.style.position = "relative";
+    element.style.zIndex = "10000";
   }
 
   updateTooltip(step) {
@@ -594,7 +595,7 @@ class TutorialSystem {
 
     this.tooltip.innerHTML = `
       <div class="tutorial-tooltip-header">
-        <div class="tutorial-tooltip-icon">${step.icon || '💡'}</div>
+        <div class="tutorial-tooltip-icon">${step.icon || "💡"}</div>
         <h3 class="tutorial-tooltip-title">${step.title}</h3>
       </div>
       <div class="tutorial-tooltip-body">
@@ -604,7 +605,7 @@ class TutorialSystem {
             <span class="tutorial-tip-icon">✨</span>
             <span>${step.tip}</span>
           </div>
-        ` : ''}
+        ` : ""}
       </div>
       <div class="tutorial-tooltip-footer">
         <div class="tutorial-progress">${currentStep} / ${totalSteps}</div>
@@ -614,11 +615,11 @@ class TutorialSystem {
           </button>
           <button class="tutorial-btn tutorial-btn-prev" 
                   data-action="prev"
-                  ${this.currentStep === 0 ? 'disabled' : ''}>
+                  ${this.currentStep === 0 ? "disabled" : ""}>
             Prev
           </button>
           <button class="tutorial-btn tutorial-btn-next" data-action="next">
-            ${currentStep === totalSteps ? 'Finish' : 'Next'}
+            ${currentStep === totalSteps ? "Finish" : "Next"}
           </button>
         </div>
       </div>
@@ -630,28 +631,28 @@ class TutorialSystem {
     const nextBtn = this.tooltip.querySelector('[data-action="next"]');
     
     if (skipBtn) {
-      skipBtn.addEventListener('click', () => this.endTutorial());
+      skipBtn.addEventListener("click", () => this.endTutorial());
     }
     
     if (prevBtn) {
-      prevBtn.addEventListener('click', () => this.previousStep());
+      prevBtn.addEventListener("click", () => this.previousStep());
     }
     
     if (nextBtn) {
-      nextBtn.addEventListener('click', () => this.nextStep());
+      nextBtn.addEventListener("click", () => this.nextStep());
     }
   }
 
   positionTooltip(step) {
     if (!step.target) {
       // Center tooltip if no target
-      this.tooltip.style.top = '50%';
-      this.tooltip.style.left = '50%';
-      this.tooltip.style.transform = 'translate(-50%, -50%)';
+      this.tooltip.style.top = "50%";
+      this.tooltip.style.left = "50%";
+      this.tooltip.style.transform = "translate(-50%, -50%)";
       return;
     }
 
-    const element = typeof step.target === 'string' ? 
+    const element = typeof step.target === "string" ? 
                     document.querySelector(step.target) : step.target;
     if (!element) return;
 
@@ -662,20 +663,20 @@ class TutorialSystem {
     let top, left;
 
     // Position based on preference
-    switch (step.position || 'bottom') {
-      case 'top':
+    switch (step.position || "bottom") {
+      case "top":
         top = rect.top - tooltipRect.height - spacing;
         left = rect.left + (rect.width / 2) - (tooltipRect.width / 2);
         break;
-      case 'bottom':
+      case "bottom":
         top = rect.bottom + spacing;
         left = rect.left + (rect.width / 2) - (tooltipRect.width / 2);
         break;
-      case 'left':
+      case "left":
         top = rect.top + (rect.height / 2) - (tooltipRect.height / 2);
         left = rect.left - tooltipRect.width - spacing;
         break;
-      case 'right':
+      case "right":
         top = rect.top + (rect.height / 2) - (tooltipRect.height / 2);
         left = rect.right + spacing;
         break;
@@ -693,18 +694,18 @@ class TutorialSystem {
 
     this.tooltip.style.top = `${top}px`;
     this.tooltip.style.left = `${left}px`;
-    this.tooltip.style.transform = 'none';
+    this.tooltip.style.transform = "none";
   }
 
   async nextStep() {
     const step = this.currentTutorial.steps[this.currentStep];
 
     // Execute after callback if exists
-    if (step.after && typeof step.after === 'function') {
+    if (step.after && typeof step.after === "function") {
       await step.after();
     }
 
-    this.tooltip.classList.remove('active');
+    this.tooltip.classList.remove("active");
 
     // Faster transition
     requestAnimationFrame(() => {
@@ -719,7 +720,7 @@ class TutorialSystem {
   previousStep() {
     if (this.currentStep <= 0) return;
 
-    this.tooltip.classList.remove('active');
+    this.tooltip.classList.remove("active");
 
     // Faster transition
     requestAnimationFrame(() => {
@@ -735,7 +736,7 @@ class TutorialSystem {
 
     // Remove UI elements with enhanced cleanup
     if (this.overlay) {
-      this.overlay.classList.remove('active');
+      this.overlay.classList.remove("active");
       // Ensure overlay is removed from DOM
       setTimeout(() => {
         if (this.overlay && this.overlay.parentNode) {
@@ -746,7 +747,7 @@ class TutorialSystem {
     }
 
     if (this.tooltip) {
-      this.tooltip.classList.remove('active');
+      this.tooltip.classList.remove("active");
       // Ensure tooltip is removed from DOM
       setTimeout(() => {
         if (this.tooltip && this.tooltip.parentNode) {
@@ -771,7 +772,7 @@ class TutorialSystem {
 
     // Reset any modified z-indexes
     document.querySelectorAll('[style*="z-index: 10000"]').forEach(el => {
-      el.style.zIndex = '';
+      el.style.zIndex = "";
     });
     
     // Additional cleanup for any remaining tutorial elements
@@ -790,11 +791,11 @@ class TutorialSystem {
       }
     }
     
-    const menu = document.createElement('div');
-    menu.className = 'tutorial-menu';
+    const menu = document.createElement("div");
+    menu.className = "tutorial-menu";
     
     // Build menu content safely
-    let tutorialItemsHTML = '';
+    let tutorialItemsHTML = "";
     Array.from(this.tutorials.values()).forEach(tutorial => {
       tutorialItemsHTML += `
         <div class="tutorial-menu-item" tabindex="0" data-tutorial-id="${tutorial.id}">
@@ -803,7 +804,7 @@ class TutorialSystem {
             <h4 class="tutorial-menu-item-title">${tutorial.title}</h4>
             <p class="tutorial-menu-item-desc">${tutorial.description}</p>
           </div>
-          ${this.hasCompleted(tutorial.id) ? '<span class="tutorial-menu-item-badge">✓ Completed</span>' : ''}
+          ${this.hasCompleted(tutorial.id) ? '<span class="tutorial-menu-item-badge">✓ Completed</span>' : ""}
         </div>
       `;
     });
@@ -828,40 +829,40 @@ class TutorialSystem {
     `;
 
     // Create overlay
-    const overlay = document.createElement('div');
-    overlay.className = 'tutorial-overlay';
+    const overlay = document.createElement("div");
+    overlay.className = "tutorial-overlay";
     overlay.onclick = () => this.closeTutorialMenu();
     document.body.appendChild(overlay);
 
     document.body.appendChild(menu);
 
     // Add search functionality
-    const searchInput = menu.querySelector('#tutorial-search');
-    const menuContent = menu.querySelector('#tutorial-menu-content');
+    const searchInput = menu.querySelector("#tutorial-search");
+    const menuContent = menu.querySelector("#tutorial-menu-content");
     
-    searchInput.addEventListener('input', (e) => {
+    searchInput.addEventListener("input", (e) => {
       const searchTerm = e.target.value.toLowerCase();
-      const tutorialItems = menuContent.querySelectorAll('.tutorial-menu-item');
+      const tutorialItems = menuContent.querySelectorAll(".tutorial-menu-item");
       
       tutorialItems.forEach(item => {
-        const title = item.querySelector('.tutorial-menu-item-title').textContent.toLowerCase();
-        const description = item.querySelector('.tutorial-menu-item-desc').textContent.toLowerCase();
+        const title = item.querySelector(".tutorial-menu-item-title").textContent.toLowerCase();
+        const description = item.querySelector(".tutorial-menu-item-desc").textContent.toLowerCase();
         
         if (title.includes(searchTerm) || description.includes(searchTerm)) {
-          item.style.display = 'flex';
+          item.style.display = "flex";
         } else {
-          item.style.display = 'none';
+          item.style.display = "none";
         }
       });
     });
 
     // Add event listeners for tutorial items
-    const tutorialItems = menu.querySelectorAll('.tutorial-menu-item');
+    const tutorialItems = menu.querySelectorAll(".tutorial-menu-item");
     tutorialItems.forEach(item => {
-      item.addEventListener('click', (e) => {
+      item.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
-        const tutorialId = item.getAttribute('data-tutorial-id');
+        const tutorialId = item.getAttribute("data-tutorial-id");
         if (tutorialId) {
           // Close the menu first, then start the tutorial
           this.closeTutorialMenu();
@@ -873,10 +874,10 @@ class TutorialSystem {
       });
       
       // Also support Enter key for accessibility
-      item.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
+      item.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          const tutorialId = item.getAttribute('data-tutorial-id');
+          const tutorialId = item.getAttribute("data-tutorial-id");
           if (tutorialId) {
             // Close the menu first, then start the tutorial
             this.closeTutorialMenu();
@@ -890,9 +891,9 @@ class TutorialSystem {
     });
     
     // Add event listener for close button
-    const closeBtn = menu.querySelector('#tutorial-close-btn');
+    const closeBtn = menu.querySelector("#tutorial-close-btn");
     if (closeBtn) {
-      closeBtn.addEventListener('click', () => {
+      closeBtn.addEventListener("click", () => {
         this.closeTutorialMenu();
       });
     }
@@ -904,8 +905,8 @@ class TutorialSystem {
 
     // Faster activation
     requestAnimationFrame(() => {
-      overlay.classList.add('active');
-      menu.classList.add('active');
+      overlay.classList.add("active");
+      menu.classList.add("active");
     });
 
     this.currentMenu = { menu, overlay, searchInput };
@@ -916,8 +917,8 @@ class TutorialSystem {
 
     const { menu, overlay } = this.currentMenu;
 
-    menu.classList.remove('active');
-    overlay.classList.remove('active');
+    menu.classList.remove("active");
+    overlay.classList.remove("active");
 
     setTimeout(() => {
       // Ensure menu and overlay are removed from DOM
@@ -938,7 +939,7 @@ class TutorialSystem {
   // Additional cleanup method to ensure no tutorial elements remain
   cleanupTutorialElements() {
     // Remove any stray tutorial elements
-    document.querySelectorAll('.tutorial-overlay, .tutorial-tooltip, .tutorial-spotlight, .tutorial-menu').forEach(el => {
+    document.querySelectorAll(".tutorial-overlay, .tutorial-tooltip, .tutorial-spotlight, .tutorial-menu").forEach(el => {
       if (el.parentNode) {
         el.parentNode.removeChild(el);
       }
@@ -946,32 +947,32 @@ class TutorialSystem {
     
     // Reset any remaining z-index modifications
     document.querySelectorAll('[style*="z-index"]').forEach(el => {
-      if (el.style.zIndex && el.style.zIndex.includes('10000')) {
-        el.style.zIndex = '';
+      if (el.style.zIndex && el.style.zIndex.includes("10000")) {
+        el.style.zIndex = "";
       }
     });
     
     // Reset pointer events on body if accidentally set
     if (document.body.style.pointerEvents) {
-      document.body.style.pointerEvents = '';
+      document.body.style.pointerEvents = "";
     }
   }
 
   createLauncher() {
     // Check if launcher already exists
-    if (document.querySelector('.tutorial-launcher')) return;
+    if (document.querySelector(".tutorial-launcher")) return;
 
     // Create launcher button
-    const launcher = document.createElement('button');
-    launcher.className = 'tutorial-launcher';
-    launcher.innerHTML = '🎓';
-    launcher.title = 'Tutorials & Help';
+    const launcher = document.createElement("button");
+    launcher.className = "tutorial-launcher";
+    launcher.innerHTML = "🎓";
+    launcher.title = "Tutorials & Help";
     
     // Ensure launcher doesn't block interactions
-    launcher.style.pointerEvents = 'auto';
+    launcher.style.pointerEvents = "auto";
     
     // Add click event to show tutorial menu
-    launcher.addEventListener('click', (e) => {
+    launcher.addEventListener("click", (e) => {
       e.stopPropagation(); // Prevent event from bubbling up
       this.showTutorialMenu();
     });
@@ -982,12 +983,17 @@ class TutorialSystem {
     // Ensure launcher is always visible and doesn't interfere
     setTimeout(() => {
       if (launcher && launcher.parentNode) {
-        launcher.style.zIndex = '9997'; // Ensure proper z-index
-        launcher.style.pointerEvents = 'auto'; // Ensure clickable
+        launcher.style.zIndex = "9997"; // Ensure proper z-index
+        launcher.style.pointerEvents = "auto"; // Ensure clickable
       }
     }, 100);
   }
 }
 
-// Create global instance
+// Create global instance and expose it globally
 const tutorialSystem = new TutorialSystem();
+
+// Make tutorialSystem available to other scripts
+if (typeof window !== "undefined") {
+  window.tutorialSystem = tutorialSystem;
+}

@@ -2663,6 +2663,51 @@ html {
   cursor: pointer;
 }
 
+/* Fullscreen Video Viewer */
+.video-viewer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.9);
+  z-index: 10000;
+  opacity: 0;
+  transition: opacity 150ms ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.video-viewer-overlay.active { opacity: 1; }
+
+.video-viewer-container {
+  position: relative;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.video-viewer-player {
+  width: 100%;
+  height: auto;
+  max-height: 90vh;
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+}
+
+.video-viewer-close {
+  position: absolute;
+  top: -12px;
+  right: -12px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+}
+
 /* Additional styles for file progress and conversion actions */
 .file-metadata {
   font-size: 0.8rem;
