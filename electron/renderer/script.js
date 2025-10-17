@@ -48,9 +48,20 @@ class TelegramUtilities {
     this.currentProcessId = null;
     this.currentStickerProcessId = null; // Add specific tracking for sticker processes
     this.currentEmojiIndex = null;
-    this.isSavingEmoji = false; // Flag to prevent multiple emoji saves
-    this.isEmojiModalLocked = false; // Flag to prevent emoji modal lock
-    this.preventEmojiModalClosure = false; // Flag to prevent immediate closure
+    
+    // Consolidated modal state management - cleaner than multiple boolean flags
+    this.modalState = {
+      isEmojiSaving: false,
+      isEmojiLocked: false,
+      preventEmojiClosure: false,
+      isSubmittingCode: false,
+      isSubmittingPassword: false
+    };
+    
+    // Promise-based submission locks to prevent double submissions
+    this._submitCodePromise = null;
+    this._submitPasswordPromise = null;
+    this._saveEmojiPromise = null;
     
     // CRITICAL FIX: Add workflow state tracking to prevent premature completion
     this.workflowState = {
@@ -75,9 +86,7 @@ class TelegramUtilities {
     };
     this.autoScrollEnabled = true; // Initialize auto-scroll
     
-    // Prevent double submission flags
-    this.isSubmittingCode = false;
-    this.isSubmittingPassword = false;
+    // Prevent double submission - handled in modalState now
     this.isConnecting = false;
     
     // OPTIMIZED: Add properties to prevent race conditions and duplicate notifications
@@ -125,6 +134,77 @@ class TelegramUtilities {
       
       if (callNow) func.apply(context, args);
     };
+  }
+
+  // FIXED: Normalize and clamp a user-provided emoji to the first visible grapheme cluster
+  // Properly preserves variation selectors (e.g., U+FE0F) and ZWJ sequences so hearts stay red on Windows
+  normalizeEmoji(input) {
+    try {
+      const str = String(input || '').trim();
+      if (!str) return this.defaultEmoji || '❤️';
+      
+      // Primary: Use Intl.Segmenter for proper grapheme cluster handling (Chrome 87+)
+      if (typeof Intl !== 'undefined' && Intl.Segmenter) {
+        try {
+          const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
+          const segments = Array.from(segmenter.segment(str));
+          if (segments.length > 0 && segments[0].segment) {
+            // This properly preserves ALL variation selectors and ZWJ sequences
+            return segments[0].segment;
+          }
+        } catch (e) {
+          console.warn('[EMOJI] Segmenter failed, using fallback:', e.message);
+        }
+      }
+      
+      // Fallback for older browsers: Manual VS16 preservation
+      // This is critical for Windows to show colored emojis (red heart instead of white)
+      const codePoints = Array.from(str);
+      if (codePoints.length === 0) return this.defaultEmoji || '❤️';
+      
+      let result = codePoints[0];
+      let i = 1;
+      
+      // Append variation selectors, skin tones, and ZWJ sequences
+      while (i < codePoints.length) {
+        const cp = codePoints[i];
+        const code = cp.codePointAt(0);
+        
+        // Check if this is a modifier that should be preserved
+        const isModifier = (
+          cp === '\uFE0F' ||  // VS16 (emoji style) - CRITICAL for Windows
+          cp === '\uFE0E' ||  // VS15 (text style)
+          code === 0x20E3 ||  // Combining enclosing keycap
+          (code >= 0x1F3FB && code <= 0x1F3FF) ||  // Emoji skin tone modifiers
+          code === 0x200D     // Zero-width joiner (for multi-char emojis)
+        );
+        
+        if (isModifier) {
+          result += cp;
+          // If ZWJ, also include the next character (e.g., for family emojis)
+          if (code === 0x200D && i + 1 < codePoints.length) {
+            i++;
+            result += codePoints[i];
+          }
+          i++;
+        } else {
+          // Stop at first non-modifier character
+          break;
+        }
+      }
+      
+      // CRITICAL FIX: Ensure red heart on Windows by adding VS16 if missing
+      // Check if the emoji is a heart or similar that needs VS16
+      const needsVS16 = /^[\u2764\u2665\u2763\u2600-\u26FF\u2700-\u27BF]$/.test(result.charAt(0));
+      if (needsVS16 && !result.includes('\uFE0F')) {
+        result += '\uFE0F';  // Add VS16 to force emoji style
+      }
+      
+      return result;
+    } catch (e) {
+      console.error('[EMOJI] Normalization error:', e);
+      return this.defaultEmoji || '❤️';
+    }
   }
 
   // Utility function to safely add event listeners
@@ -741,7 +821,7 @@ class TelegramUtilities {
         // Allow other modals to close on overlay click
         if (e.target === e.currentTarget) {
           // Check if we should prevent closure for emoji modal
-          if (this.preventEmojiModalClosure && modalId === 'emoji-modal') {
+          if (this.modalState.preventEmojiClosure && modalId === 'emoji-modal') {
             return;
           }
           
@@ -965,15 +1045,8 @@ class TelegramUtilities {
         const filePath = file.path || file.webkitRelativePath || file.name;
         
         if (!this.mediaFiles.some((f) => f.file_path === filePath)) {
-          // Sanitize default emoji
-          let cleanDefaultEmoji = '❤️';
-          if (typeof this.defaultEmoji === 'string') {
-            const sanitized = this.defaultEmoji.replace(/[\x00-\x1f\x7f-\x9f]/g, '');
-            if (sanitized.length > 0) {
-              const emojiChars = Array.from(sanitized);
-              cleanDefaultEmoji = emojiChars[0] || '❤️';
-            }
-          }
+          // Sanitize default emoji while preserving variation selectors (Windows color fix)
+          const cleanDefaultEmoji = this.normalizeEmoji(this.defaultEmoji || '❤️');
           
           this.mediaFiles.push({
             file_path: filePath,
@@ -2833,6 +2906,7 @@ class TelegramUtilities {
   }
 
   stopProgressMonitoring() {
+    // CRITICAL FIX: Clear all monitoring intervals to prevent memory leaks
     if (this.progressInterval) {
       clearInterval(this.progressInterval);
       this.progressInterval = null;
@@ -2840,6 +2914,11 @@ class TelegramUtilities {
     if (this.activeOperationInterval) {
       clearInterval(this.activeOperationInterval);
       this.activeOperationInterval = null;
+    }
+    // Also clear sticker progress interval if it exists
+    if (this.stickerProgressInterval) {
+      clearInterval(this.stickerProgressInterval);
+      this.stickerProgressInterval = null;
     }
   }
 
@@ -3112,9 +3191,8 @@ class TelegramUtilities {
     const RETRY_DELAY = 2000; // 2 seconds
     const LONG_OPERATION_TIMEOUT = 5 * 60 * 1000; // 5 minutes
     
-    if (this.progressInterval) {
-      clearInterval(this.progressInterval);
-    }
+    // CRITICAL FIX: Always clear ALL intervals before starting new ones to prevent memory leaks
+    this.stopProgressMonitoring();
     
     let consecutiveErrors = 0;
     let operationStartTime = Date.now();
@@ -3200,9 +3278,8 @@ class TelegramUtilities {
     const RETRY_DELAY = 1200; // ms
     const LONG_OPERATION_TIMEOUT = 10 * 60 * 1000; // 10 minutes
     
-    if (this.progressInterval) {
-      clearInterval(this.progressInterval);
-    }
+    // CRITICAL FIX: Always clear ALL intervals before starting new ones to prevent memory leaks
+    this.stopProgressMonitoring();
     
     let consecutiveErrors = 0;
     const startTs = Date.now();
@@ -4017,38 +4094,37 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   }
 
   async submitVerificationCode() {
-    // Prevent double submission
-    if (this.isSubmittingCode) {
-      return;
+    // Promise-based lock to prevent double submission
+    if (this._submitCodePromise) {
+      return this._submitCodePromise;
     }
     
-    const codeInput = document.getElementById("verification-code");
-    if (!codeInput) return;
-    
-    const code = codeInput.value.trim();
-    if (!code) {
-      this.showToast(
-        "error",
-        "Missing Code",
-        "Please enter the verification code"
-      );
-      codeInput.focus();
-      return;
-    }
-    
-    if (!/^\d{5}$/.test(code)) {
-      this.showToast(
-        "warning",
-        "Invalid Format",
-        "Verification code should be 5 digits"
-      );
-      codeInput.select();
-      return;
-    }
-    
-    try {
-      // Set flag to prevent double submission
-      this.isSubmittingCode = true;
+    this._submitCodePromise = (async () => {
+      const codeInput = document.getElementById("verification-code");
+      if (!codeInput) return;
+      
+      const code = codeInput.value.trim();
+      if (!code) {
+        this.showToast(
+          "error",
+          "Missing Code",
+          "Please enter the verification code"
+        );
+        codeInput.focus();
+        return;
+      }
+      
+      if (!/^\d{5}$/.test(code)) {
+        this.showToast(
+          "warning",
+          "Invalid Format",
+          "Verification code should be 5 digits"
+        );
+        codeInput.select();
+        return;
+      }
+      
+      try {
       
       const submitBtn = document.getElementById("submit-code");
       if (submitBtn) {
@@ -4102,48 +4178,52 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         );
         codeInput.select();
       }
-    } catch (error) {
-      if (RENDERER_DEBUG) console.error("Error verifying code:", error);
-      this.showToast(
-        "error",
-        "Verification Error",
-        "Failed to verify code: " + error.message
-      );
-    } finally {
-      // Reset submission flag
-      this.isSubmittingCode = false;
-      
-      const submitBtn = document.getElementById("submit-code");
-      if (submitBtn) {
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = '<i class="fas fa-check"></i> Verify Code';
+      } catch (error) {
+        if (RENDERER_DEBUG) console.error("Error verifying code:", error);
+        this.showToast(
+          "error",
+          "Verification Error",
+          "Failed to verify code: " + error.message
+        );
+      } finally {
+        const submitBtn = document.getElementById("submit-code");
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<i class="fas fa-check"></i> Verify Code';
+        }
       }
-    }
+    })();
+    
+    // Always clear the promise lock after completion
+    this._submitCodePromise.finally(() => {
+      this._submitCodePromise = null;
+    });
+    
+    return this._submitCodePromise;
   }
 
   async submitPassword() {
-    // Prevent double submission
-    if (this.isSubmittingPassword) {
-      return;
+    // Promise-based lock to prevent double submission
+    if (this._submitPasswordPromise) {
+      return this._submitPasswordPromise;
     }
     
-    const passwordInput = document.getElementById("two-factor-password");
-    if (!passwordInput) return;
-    
-    const password = passwordInput.value.trim();
-    if (!password) {
-      this.showToast(
-        "error",
-        "Missing Password",
-        "Please enter your 2FA password"
-      );
-      passwordInput.focus();
-      return;
-    }
-    
-    try {
-      // Set flag to prevent double submission
-      this.isSubmittingPassword = true;
+    this._submitPasswordPromise = (async () => {
+      const passwordInput = document.getElementById("two-factor-password");
+      if (!passwordInput) return;
+      
+      const password = passwordInput.value.trim();
+      if (!password) {
+        this.showToast(
+          "error",
+          "Missing Password",
+          "Please enter your 2FA password"
+        );
+        passwordInput.focus();
+        return;
+      }
+      
+      try {
       
       const submitBtn = document.getElementById("submit-password");
       if (submitBtn) {
@@ -4174,23 +4254,28 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         );
         passwordInput.select();
       }
-    } catch (error) {
-      if (RENDERER_DEBUG) console.error("Error verifying password:", error);
-      this.showToast(
-        "error",
-        "Authentication Error",
-        "Failed to verify password: " + error.message
-      );
-    } finally {
-      // Reset submission flag
-      this.isSubmittingPassword = false;
-      
-      const submitBtn = document.getElementById("submit-password");
-      if (submitBtn) {
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = '<i class="fas fa-key"></i> Authenticate';
+      } catch (error) {
+        if (RENDERER_DEBUG) console.error("Error verifying password:", error);
+        this.showToast(
+          "error",
+          "Authentication Error",
+          "Failed to verify password: " + error.message
+        );
+      } finally {
+        const submitBtn = document.getElementById("submit-password");
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<i class="fas fa-key"></i> Authenticate';
+        }
       }
-    }
+    })();
+    
+    // Always clear the promise lock after completion
+    this._submitPasswordPromise.finally(() => {
+      this._submitPasswordPromise = null;
+    });
+    
+    return this._submitPasswordPromise;
   }
 
   async addImages() {
@@ -4231,15 +4316,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         }
         
         if (!this.mediaFiles.some((f) => f.file_path === file)) {
-          // Sanitize default emoji
-          let cleanDefaultEmoji = '❤️';
-          if (typeof this.defaultEmoji === 'string') {
-            const sanitized = this.defaultEmoji.replace(/[\x00-\x1f\x7f-\x9f]/g, '');
-            if (sanitized.length > 0) {
-              const emojiChars = Array.from(sanitized);
-              cleanDefaultEmoji = emojiChars[0] || '❤️';
-            }
-          }
+          // Sanitize default emoji while preserving variation selectors (Windows color fix)
+          const cleanDefaultEmoji = this.normalizeEmoji(this.defaultEmoji || '❤️');
           
           this.mediaFiles.push({
             file_path: file,
@@ -4330,15 +4408,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         }
         
         if (!this.mediaFiles.some((f) => f.file_path === file)) {
-          // Sanitize default emoji
-          let cleanDefaultEmoji = '❤️';
-          if (typeof this.defaultEmoji === 'string') {
-            const sanitized = this.defaultEmoji.replace(/[\x00-\x1f\x7f-\x9f]/g, '');
-            if (sanitized.length > 0) {
-              const emojiChars = Array.from(sanitized);
-              cleanDefaultEmoji = emojiChars[0] || '❤️';
-            }
-          }
+          // Sanitize default emoji while preserving variation selectors (Windows color fix)
+          const cleanDefaultEmoji = this.normalizeEmoji(this.defaultEmoji || '❤️');
           
           this.mediaFiles.push({
             file_path: file,
@@ -4772,14 +4843,14 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     }
     
     // Ensure we're not in a locked state
-    if (this.isEmojiModalLocked) {
+    if (this.modalState.isEmojiLocked) {
         return;
     }
     
     // Prevent immediate closure
-    this.preventEmojiModalClosure = true;
+    this.modalState.preventEmojiClosure = true;
     setTimeout(() => {
-      this.preventEmojiModalClosure = false;
+      this.modalState.preventEmojiClosure = false;
     }, 300);
     
     this.currentEmojiIndex = index;
@@ -4812,51 +4883,54 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   }
 
   saveEmoji() {
-    // Prevent multiple clicks
-    if (this.isSavingEmoji) {
-        return;
+    // Promise-based lock to prevent double submissions
+    if (this._saveEmojiPromise) {
+      return this._saveEmojiPromise;
     }
     
-    if (this.currentEmojiIndex === null || this.currentEmojiIndex < 0) {
-        return;
-    }
+    this._saveEmojiPromise = (async () => {
+      try {
+        // Check if we have a valid emoji index
+        if (this.currentEmojiIndex === null || this.currentEmojiIndex < 0) {
+            return;
+        }
+        
+        const emojiInput = document.getElementById("emoji-input");
+        
+        if (!emojiInput) {
+            return;
+        }
+        
+        const newEmoji = this.normalizeEmoji(emojiInput.value.trim());
+        
+        if (!newEmoji) {
+          this.showToast("warning", "Empty Emoji", "Please enter an emoji");
+          emojiInput.focus();
+          return;
+        }
+        
+        // Update emoji
+        if (this.currentEmojiIndex < this.mediaFiles.length) {
+          this.mediaFiles[this.currentEmojiIndex].emoji = newEmoji;
+          this.updateMediaFileList();
+          this.showToast(
+            "success",
+            "Emoji Updated",
+            `Emoji updated to ${newEmoji}`
+          );
+        }
+        
+        this.hideModal();
+        
+        // Ensure currentEmojiIndex is reset
+        this.currentEmojiIndex = null;
+      } finally {
+        // Always clear the promise lock after completion
+        this._saveEmojiPromise = null;
+      }
+    })();
     
-    const emojiInput = document.getElementById("emoji-input");
-    
-    if (!emojiInput) {
-        return;
-    }
-    
-    const newEmoji = emojiInput.value.trim();
-    
-    if (!newEmoji) {
-      this.showToast("warning", "Empty Emoji", "Please enter an emoji");
-      emojiInput.focus();
-      return;
-    }
-    
-    // Set saving flag to prevent multiple clicks
-    this.isSavingEmoji = true;
-    
-    if (this.currentEmojiIndex < this.mediaFiles.length) {
-      this.mediaFiles[this.currentEmojiIndex].emoji = newEmoji;
-      this.updateMediaFileList();
-      this.showToast(
-        "success",
-        "Emoji Updated",
-        `Emoji updated to ${newEmoji}`
-      );
-    }
-    
-    this.hideModal();
-    
-    // Ensure currentEmojiIndex is reset
-    this.currentEmojiIndex = null;
-    
-    // Reset saving flag after a short delay
-    setTimeout(() => {
-        this.isSavingEmoji = false;
-    }, 100);
+    return this._saveEmojiPromise;
   }
 
   async createStickerPack() {
@@ -4986,7 +5060,9 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         .filter((f) => (stickerType === "video" ? f.type === "video" : f.type === "image"))
         .map((f) => ({
           file_path: String(f.file_path || "").replace(/[\x00-\x1f\x7f-\x9f]/g, '').trim(),
-          emoji: typeof f.emoji === "string" && f.emoji.replace(/[\x00-\x1f\x7f-\x9f]/g, '').length > 0 ? Array.from(f.emoji.replace(/[\x00-\x1f\x7f-\x9f]/g, ''))[0] : this.defaultEmoji,
+          emoji: typeof f.emoji === "string" && f.emoji.replace(/[\x00-\x1f\x7f-\x9f]/g, '').length > 0 
+            ? this.normalizeEmoji(f.emoji)
+            : this.normalizeEmoji(this.defaultEmoji),
           type: f.type === "video" ? "video" : "image",
         }))
         .filter((m) => m.file_path && m.file_path.length > 0 && !/[\x00-\x1f\x7f-\x9f]/.test(m.file_path));
@@ -5005,13 +5081,9 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         
         // Ensure emoji is a single valid character
         if (typeof media.emoji === 'string' && media.emoji.length > 0) {
-          // Remove control characters first
-          const cleanEmoji = media.emoji.replace(/[\x00-\x1f\x7f-\x9f]/g, '');
-          // Use only the first character and ensure it's valid
-          const emojiChars = Array.from(cleanEmoji);
-          media.emoji = emojiChars[0] || this.defaultEmoji;
+          media.emoji = this.normalizeEmoji(media.emoji);
         } else {
-          media.emoji = this.defaultEmoji;
+          media.emoji = this.normalizeEmoji(this.defaultEmoji);
         }
       }
 
@@ -5108,9 +5180,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     }
   }
   startStickerProgressMonitoring(processId) {
-    if (this.stickerProgressInterval) {
-      clearInterval(this.stickerProgressInterval);
-    }
+    // CRITICAL FIX: Always clear previous interval to prevent memory leaks
+    this.stopStickerProgressMonitoring();
     
     // Reset auto-skip flag for this process
     // Removed autoSkipAttempted flag - auto-skip is handled entirely by backend
@@ -5510,10 +5581,10 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   }
 
   stopStickerProgressMonitoring() {
+    // CRITICAL FIX: Clear sticker progress interval to prevent memory leaks
     if (this.stickerProgressInterval) {
       clearInterval(this.stickerProgressInterval);
       this.stickerProgressInterval = null;
-
     }
     
     // Reset the create button
@@ -7158,6 +7229,9 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       setText('total-conversions', s.total_conversions);
       setText('successful-conversions', s.successful_conversions);
       setText('failed-conversions', s.failed_conversions);
+      setText('total-images-converted', s.total_images_converted);
+      setText('successful-images', s.successful_images);
+      setText('failed-images', s.failed_images);
       setText('total-hexedits', s.total_hexedits);
       setText('successful-hexedits', s.successful_hexedits);
       setText('failed-hexedits', s.failed_hexedits);
@@ -7199,6 +7273,9 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         total_conversions: d.total_conversions ?? 0,
         successful_conversions: d.successful_conversions ?? 0,
         failed_conversions: d.failed_conversions ?? 0,
+        total_images_converted: d.total_images_converted ?? 0,
+        successful_images: d.successful_images ?? 0,
+        failed_images: d.failed_images ?? 0,
         total_hexedits: d.total_hexedits ?? 0,
         successful_hexedits: d.successful_hexedits ?? 0,
         failed_hexedits: d.failed_hexedits ?? 0,
