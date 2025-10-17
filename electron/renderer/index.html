@@ -164,19 +164,9 @@
 
         <!-- Image Converter Tab -->
         <div id="image-converter" class="tab-content">
-          <div class="section-header-compact">
-            <div>
-              <h2><i class="fas fa-image"></i> Image Converter</h2>
-              <p>Telegram Sticker Format: 512px, PNG/WEBP, max 512KB</p>
-            </div>
-            <div class="header-actions">
-              <button id="add-images" class="btn btn-primary">
-                <i class="fas fa-plus"></i> Add Images
-              </button>
-              <button id="clear-images" class="btn btn-secondary">
-                <i class="fas fa-trash"></i> Clear
-              </button>
-            </div>
+          <div class="section-header">
+            <h2><i class="fas fa-image"></i> Image Converter</h2>
+            <p>Convert images to Telegram sticker format: 512px, PNG/WEBP, max 512KB</p>
           </div>
 
           <!-- Ultra Compact Layout -->
@@ -186,6 +176,12 @@
               <div class="grid-header">
                 <span><i class="fas fa-images"></i> Images (<span id="image-file-count">0</span>) | Selected: <span id="selected-image-count">0</span></span>
                 <div class="grid-header-actions">
+                  <button id="add-images" class="btn-mini" title="Add Images">
+                    <i class="fas fa-plus"></i>
+                  </button>
+                  <button id="clear-images" class="btn-mini" title="Clear All">
+                    <i class="fas fa-trash"></i>
+                  </button>
                   <button id="select-all-images" class="btn-mini" title="Select All">
                     <i class="fas fa-check-double"></i>
                   </button>
@@ -627,7 +623,7 @@
               </div>
               <div class="card-body">
                 <div class="info-item">
-                  <label>Total Conversions</label>
+                  <label>Total Video Conversions</label>
                   <span id="total-conversions">Loading...</span>
                 </div>
                 <div class="info-item">
@@ -637,6 +633,18 @@
                 <div class="info-item">
                   <label>Failed</label>
                   <span id="failed-conversions" style="color: #dc3545;">Loading...</span>
+                </div>
+                <div class="info-item">
+                  <label>Total Image Conversions</label>
+                  <span id="total-images-converted">Loading...</span>
+                </div>
+                <div class="info-item">
+                  <label>Successful</label>
+                  <span id="successful-images" style="color: #28a745;">Loading...</span>
+                </div>
+                <div class="info-item">
+                  <label>Failed</label>
+                  <span id="failed-images" style="color: #dc3545;">Loading...</span>
                 </div>
                 <div class="info-item">
                   <label>Total Hex Edits</label>
@@ -849,92 +857,97 @@
             </div>
 
             <!-- Support Section -->
-            <div class="support-section">
+            <div class="contact-section fade-in">
               <div class="section-header">
                 <i class="fas fa-heart"></i>
                 <h2>Support My Work</h2>
               </div>
-              <div class="support-content">
-                <p class="support-text">
-                  If you find my projects useful, consider supporting my open source work. 
-                  Every contribution helps create more free tools for the community.
-                </p>
-                <div class="support-options">
-                  <div class="support-option">
-                    <i class="fas fa-coffee"></i>
-                    <h4>Buy Me a Coffee</h4>
-                    <p>Support with a coffee</p>
-                    <button class="support-btn coffee-btn">
+              <div class="contact-content">
+                <p class="contact-intro">If you find my projects useful, consider supporting my open source work. Every contribution helps create more free tools for the community.</p>
+                <div class="contact-methods">
+                  <a href="https://www.buymeacoffee.com/rohitpoul" target="_blank" class="contact-method" rel="noopener noreferrer">
+                    <div class="contact-icon">
                       <i class="fas fa-coffee"></i>
-                      Support
-                    </button>
-                  </div>
-                  <div class="support-option">
-                    <i class="fab fa-paypal"></i>
-                    <h4>PayPal</h4>
-                    <p>Direct donation</p>
-                    <button class="support-btn paypal-btn">
+                    </div>
+                    <div class="contact-info">
+                      <span class="contact-label">Coffee</span>
+                      <span class="contact-handle">• Support</span>
+                    </div>
+                    <i class="fas fa-external-link-alt contact-arrow"></i>
+                  </a>
+                  <a href="https://paypal.me/rohitpoul" target="_blank" class="contact-method" rel="noopener noreferrer">
+                    <div class="contact-icon">
                       <i class="fab fa-paypal"></i>
-                      Donate
-                    </button>
-                  </div>
-                  <div class="support-option">
-                    <i class="fab fa-github"></i>
-                    <h4>GitHub Sponsors</h4>
-                    <p>Monthly support</p>
-                    <button class="support-btn github-btn">
+                    </div>
+                    <div class="contact-info">
+                      <span class="contact-label">PayPal</span>
+                      <span class="contact-handle">• Donate</span>
+                    </div>
+                    <i class="fas fa-external-link-alt contact-arrow"></i>
+                  </a>
+                  <a href="https://github.com/sponsors/Rohitpoul" target="_blank" class="contact-method" rel="noopener noreferrer">
+                    <div class="contact-icon">
                       <i class="fab fa-github"></i>
-                      Sponsor
-                    </button>
-                  </div>
-                  <div class="support-option">
-                    <i class="fas fa-star"></i>
-                    <h4>Star Projects</h4>
-                    <p>Show appreciation</p>
-                    <button class="support-btn star-btn">
+                    </div>
+                    <div class="contact-info">
+                      <span class="contact-label">Sponsor</span>
+                      <span class="contact-handle">• Monthly</span>
+                    </div>
+                    <i class="fas fa-external-link-alt contact-arrow"></i>
+                  </a>
+                  <a href="https://github.com/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader" target="_blank" class="contact-method" rel="noopener noreferrer">
+                    <div class="contact-icon">
                       <i class="fas fa-star"></i>
-                      Star
-                    </button>
-                  </div>
-                  <div class="support-option">
-                    <i class="fas fa-bell"></i>
-                    <h4>Test Notifications</h4>
-                    <p>Check notification system</p>
-                    <button class="support-btn" onclick="window.app?.showToast('success', 'Test Success', 'If you see this, notifications are working perfectly!'); window.app?.showToast('error', 'Test Error', 'This is an error notification test'); window.app?.showToast('info', 'Test Info', 'This is an info notification test');">
-                      <i class="fas fa-bell"></i>
-                      Test
-                    </button>
-                  </div>
+                    </div>
+                    <div class="contact-info">
+                      <span class="contact-label">Star</span>
+                      <span class="contact-handle">• GitHub</span>
+                    </div>
+                    <i class="fas fa-external-link-alt contact-arrow"></i>
+                  </a>
                 </div>
               </div>
             </div>
 
             <!-- Contact & Social -->
-            <div class="contact-section">
+            <div class="contact-section fade-in">
               <div class="section-header">
                 <i class="fas fa-envelope"></i>
                 <h2>Get in Touch</h2>
               </div>
               <div class="contact-content">
+                <p class="contact-intro">Open to collaboration, feedback, and new opportunities. Let's connect!</p>
                 <div class="contact-methods">
-                  <a href="https://github.com/JoonJelly" target="_blank" class="contact-method">
-                    <i class="fab fa-github"></i>
-                    <span>GitHub</span>
+                  <a href="https://github.com/Rohitpoul" target="_blank" class="contact-method" rel="noopener noreferrer">
+                    <div class="contact-icon">
+                      <i class="fab fa-github"></i>
+                    </div>
+                    <div class="contact-info">
+                      <span class="contact-label">GitHub</span>
+                      <span class="contact-handle">• @Rohitpoul</span>
+                    </div>
+                    <i class="fas fa-external-link-alt contact-arrow"></i>
                   </a>
-                  <a href="https://t.me/+QeqFm1Mq0ediOTJl" target="_blank" class="contact-method">
-                    <i class="fab fa-telegram"></i>
-                    <span>Telegram</span>
+                  <a href="mailto:poulrohit258@gmail.com" class="contact-method">
+                    <div class="contact-icon">
+                      <i class="fas fa-envelope"></i>
+                    </div>
+                    <div class="contact-info">
+                      <span class="contact-label">Email</span>
+                      <span class="contact-handle">• Contact me</span>
+                    </div>
+                    <i class="fas fa-paper-plane contact-arrow"></i>
                   </a>
-                  <div class="contact-method">
-                    <i class="fas fa-envelope"></i>
-                    <span>Email (Coming Soon)</span>
-                  </div>
-                </div>
-                <div class="contact-message">
-                  <p>
-                    Open to collaboration, feedback, and helping others learn. 
-                    Feel free to reach out with questions or contributions!
-                  </p>
+                  <a href="https://t.me/+QeqFm1Mq0ediOTJl" target="_blank" class="contact-method" rel="noopener noreferrer">
+                    <div class="contact-icon">
+                      <i class="fab fa-telegram"></i>
+                    </div>
+                    <div class="contact-info">
+                      <span class="contact-label">Telegram</span>
+                      <span class="contact-handle">• Join Group</span>
+                    </div>
+                    <i class="fas fa-external-link-alt contact-arrow"></i>
+                  </a>
                 </div>
               </div>
             </div>
