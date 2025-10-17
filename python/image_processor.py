@@ -4,7 +4,6 @@ import logging
 import json
 from pathlib import Path
 from PIL import Image
-import io
 
 class ImageProcessor:
     """
