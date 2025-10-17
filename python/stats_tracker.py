@@ -32,6 +32,9 @@ class StatisticsTracker:
             "total_hexedits": 0, 
             "successful_hexedits": 0, 
             "failed_hexedits": 0,
+            "total_images_converted": 0,
+            "successful_images": 0,
+            "failed_images": 0,
             "total_stickers_created": 0
         }
 
@@ -120,6 +123,24 @@ class StatisticsTracker:
             f"(@ {self.stats_file})"
         )
 
+    def increment_image_conversion(self, success=True):
+        """Increment image conversion stats."""
+        stats = self.load_stats()
+        before_total = stats.get("total_images_converted", 0)
+        before_ok = stats.get("successful_images", 0)
+        before_fail = stats.get("failed_images", 0)
+        stats["total_images_converted"] = before_total + 1
+        if success:
+            stats["successful_images"] = before_ok + 1
+        else:
+            stats["failed_images"] = before_fail + 1
+        self.save_stats(stats)
+        logger.info(
+            f"[STATS] image +1 ({'success' if success else 'fail'}) → totals: "
+            f"total={stats['total_images_converted']} ok={stats['successful_images']} fail={stats['failed_images']} "
+            f"(@ {self.stats_file})"
+        )
+
     def increment_stickers(self, count=1):
         """Increment sticker creation stats."""
         stats = self.load_stats()
@@ -142,6 +163,7 @@ class StatisticsTracker:
             for key in [
                 "total_conversions", "successful_conversions", "failed_conversions",
                 "total_hexedits", "successful_hexedits", "failed_hexedits",
+                "total_images_converted", "successful_images", "failed_images",
                 "total_stickers_created"
             ]:
                 if key not in stats:
@@ -165,6 +187,9 @@ class StatisticsTracker:
             "total_hexedits": 0, 
             "successful_hexedits": 0, 
             "failed_hexedits": 0,
+            "total_images_converted": 0,
+            "successful_images": 0,
+            "failed_images": 0,
             "total_stickers_created": 0
         }
         self.save_stats(stats)

@@ -4,18 +4,83 @@ This module sets up proper file-based logging with rotation and filtering.
 """
 
 import logging
-import logging.handlers
 import os
 import sys
-from datetime import datetime
-from pathlib import Path
+from logging.handlers import RotatingFileHandler
+
+# Base log directory
+LOG_DIR = os.path.join(os.path.dirname(__file__), 'logs')
+os.makedirs(LOG_DIR, exist_ok=True)
+
+# Ensure log directory exists
+def setup_logger(name, log_file, level=logging.INFO, max_size=10*1024*1024, backup_count=5):
+    """
+    Create a logger with rotating file handler
+    
+    :param name: Name of the logger
+    :param log_file: Path to the log file
+    :param level: Logging level (default: INFO)
+    :param max_size: Maximum log file size before rotation (default: 10MB)
+    :param backup_count: Number of backup log files to keep
+    :return: Configured logger
+    """
+    # Create logger
+    logger = logging.getLogger(name)
+    logger.setLevel(level)
+    
+    # Clear any existing handlers to prevent duplicate logs
+    logger.handlers.clear()
+    
+    # Create file handler
+    file_handler = RotatingFileHandler(
+        log_file, 
+        maxBytes=max_size, 
+        backupCount=backup_count,
+        encoding='utf-8'
+    )
+    file_handler.setLevel(level)
+    
+    # Create formatter
+    formatter = logging.Formatter(
+        '%(asctime)s | %(levelname)-8s | %(name)s | %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    file_handler.setFormatter(formatter)
+    
+    # Add file handler to logger
+    logger.addHandler(file_handler)
+    
+    return logger
+
+# Video Conversion Logger
+video_conversion_log_path = os.path.join(LOG_DIR, 'video_conversion.log')
+video_conversion_logger = setup_logger(
+    'VideoConverter', 
+    video_conversion_log_path, 
+    level=logging.DEBUG
+)
+
+# Hex Edit Logger
+hex_edit_log_path = os.path.join(LOG_DIR, 'hex_edit.log')
+hex_edit_logger = setup_logger(
+    'HexEdit', 
+    hex_edit_log_path, 
+    level=logging.DEBUG
+)
+
+# Export loggers for use in other modules
+__all__ = [
+    'video_conversion_logger', 
+    'hex_edit_logger'
+]
+
 
 class StickerBotLogger:
     """Professional logger configuration for sticker bot operations."""
     
     def __init__(self, log_dir="logs"):
-        self.log_dir = Path(log_dir)
-        self.log_dir.mkdir(exist_ok=True)
+        self.log_dir = os.path.join(os.path.dirname(__file__), log_dir)
+        os.makedirs(self.log_dir, exist_ok=True)
         self.setup_logging()
     
     def setup_logging(self):
@@ -32,28 +97,31 @@ class StickerBotLogger:
             datefmt='%H:%M:%S'
         )
         
+        # Set root logger to ERROR to suppress non-error logs globally
+        logging.getLogger().setLevel(logging.ERROR)
+        
         # Main application logger
         main_logger = logging.getLogger('sticker_bot')
-        main_logger.setLevel(logging.WARNING)  # Only warnings and errors
+        main_logger.setLevel(logging.ERROR)  # Only errors
         
         # Remove existing handlers to avoid duplicates
         main_logger.handlers.clear()
         
         # File handler with rotation (10MB max, keep 5 files)
-        main_log_file = self.log_dir / 'sticker_bot.log'
-        file_handler = logging.handlers.RotatingFileHandler(
+        main_log_file = os.path.join(self.log_dir, 'sticker_bot.log')
+        file_handler = RotatingFileHandler(
             main_log_file,
             maxBytes=10*1024*1024,  # 10MB
             backupCount=5,
             encoding='utf-8'
         )
-        file_handler.setLevel(logging.INFO)
+        file_handler.setLevel(logging.ERROR)
         file_handler.setFormatter(detailed_formatter)
         main_logger.addHandler(file_handler)
         
         # Error-only file handler
-        error_log_file = self.log_dir / 'sticker_bot_errors.log'
-        error_handler = logging.handlers.RotatingFileHandler(
+        error_log_file = os.path.join(self.log_dir, 'sticker_bot_errors.log')
+        error_handler = RotatingFileHandler(
             error_log_file,
             maxBytes=5*1024*1024,  # 5MB
             backupCount=3,
@@ -71,44 +139,43 @@ class StickerBotLogger:
         
         # Sticker creation specific logger
         sticker_logger = logging.getLogger('sticker_bot.creation')
-        sticker_logger.setLevel(logging.INFO)  # Keep INFO for creation progress
+        sticker_logger.setLevel(logging.ERROR)  # Only errors
         
         # Sticker creation log file
-        sticker_log_file = self.log_dir / 'sticker_creation.log'
-        sticker_file_handler = logging.handlers.RotatingFileHandler(
+        sticker_log_file = os.path.join(self.log_dir, 'sticker_creation.log')
+        sticker_file_handler = RotatingFileHandler(
             sticker_log_file,
             maxBytes=5*1024*1024,  # 5MB
             backupCount=3,
             encoding='utf-8'
         )
-        sticker_file_handler.setLevel(logging.INFO)
+        sticker_file_handler.setLevel(logging.ERROR)
         sticker_file_handler.setFormatter(detailed_formatter)
         sticker_logger.addHandler(sticker_file_handler)
         
         # Telegram connection logger
         telegram_logger = logging.getLogger('sticker_bot.telegram')
-        telegram_logger.setLevel(logging.WARNING)  # Only warnings and errors
+        telegram_logger.setLevel(logging.ERROR)  # Only errors
         
         # Telegram connection log file
-        telegram_log_file = self.log_dir / 'telegram_connection.log'
-        telegram_file_handler = logging.handlers.RotatingFileHandler(
+        telegram_log_file = os.path.join(self.log_dir, 'telegram_connection.log')
+        telegram_file_handler = RotatingFileHandler(
             telegram_log_file,
             maxBytes=5*1024*1024,  # 5MB
             backupCount=3,
             encoding='utf-8'
         )
-        telegram_file_handler.setLevel(logging.WARNING)
+        telegram_file_handler.setLevel(logging.ERROR)
         telegram_file_handler.setFormatter(detailed_formatter)
         telegram_logger.addHandler(telegram_file_handler)
         
         # Suppress noisy third-party loggers
-        logging.getLogger('telethon').setLevel(logging.WARNING)
-        logging.getLogger('asyncio').setLevel(logging.WARNING)
-        logging.getLogger('urllib3').setLevel(logging.WARNING)
-        logging.getLogger('requests').setLevel(logging.WARNING)
+        logging.getLogger('telethon').setLevel(logging.ERROR)
+        logging.getLogger('asyncio').setLevel(logging.ERROR)
+        logging.getLogger('urllib3').setLevel(logging.ERROR)
+        logging.getLogger('requests').setLevel(logging.ERROR)
         
-        # Log startup message (only to file, not console)
-        main_logger.info("Sticker Bot logging system initialized")
+        # Startup message removed to keep logs error-only
     
     def get_logger(self, name):
         """Get a logger instance for a specific component."""

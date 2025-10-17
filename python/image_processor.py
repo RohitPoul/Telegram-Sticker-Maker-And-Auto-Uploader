@@ -24,11 +24,13 @@ class ImageProcessor:
         self.TARGET_DIMENSION = 512
         self.SUPPORTED_INPUT_FORMATS = ['.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif', '.tiff', '.tif']
         
-        # Check ImageMagick availability
+        # Check ImageMagick availability and determine command
+        self.imagemagick_cmd = None
         self.imagemagick_available = self._check_imagemagick()
         
     def _check_imagemagick(self):
         """Check if ImageMagick is installed and available"""
+        # Try 'magick' command first (ImageMagick 7+)
         try:
             result = subprocess.run(
                 ['magick', '-version'],
@@ -37,30 +39,27 @@ class ImageProcessor:
                 timeout=5
             )
             if result.returncode == 0:
-                self.logger.info("[IMAGEMAGICK] ImageMagick is available")
+                self.imagemagick_cmd = 'magick'
                 return True
-            else:
-                self.logger.warning("[IMAGEMAGICK] ImageMagick found but version check failed")
-                return False
-        except FileNotFoundError:
-            # Try 'convert' command (older ImageMagick versions)
-            try:
-                result = subprocess.run(
-                    ['convert', '-version'],
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
-                if result.returncode == 0:
-                    self.logger.info("[IMAGEMAGICK] ImageMagick (convert) is available")
-                    return True
-            except:
-                pass
-            self.logger.error("[IMAGEMAGICK] ImageMagick not found. Please install ImageMagick.")
-            return False
-        except Exception as e:
-            self.logger.error(f"[IMAGEMAGICK] Error checking ImageMagick: {e}")
-            return False
+        except (FileNotFoundError, Exception):
+            pass
+        
+        # Try 'convert' command (ImageMagick 6.x)
+        try:
+            result = subprocess.run(
+                ['convert', '-version'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                self.imagemagick_cmd = 'convert'
+                return True
+        except (FileNotFoundError, Exception):
+            pass
+        
+        self.logger.error("[IMAGEMAGICK] ImageMagick not found. Please install ImageMagick.")
+        return False
     
     def get_image_metadata(self, image_path):
         """Extract image metadata including dimensions, format, size, and transparency"""
@@ -228,8 +227,13 @@ class ImageProcessor:
     def _process_with_imagemagick(self, input_path, output_path, output_format, quality, new_width, new_height):
         """Process image using ImageMagick command line"""
         try:
-            # Build ImageMagick command
-            cmd = ['magick', input_path]
+            # Build ImageMagick command using detected command
+            if self.imagemagick_cmd == 'magick':
+                # ImageMagick 7+ syntax: magick input [operations] output
+                cmd = ['magick', input_path]
+            else:
+                # ImageMagick 6.x syntax: convert input [operations] output
+                cmd = ['convert', input_path]
             
             # Resize image
             cmd.extend(['-resize', f'{new_width}x{new_height}!'])

@@ -33,7 +33,7 @@ sticker_logger = setup_sticker_logging()
 from stats_tracker import stats_tracker
 
 # Setup logging (quiet by default: no stdout)
-log_level_name = os.getenv('BACKEND_LOG_LEVEL', 'INFO').upper()  # Temporarily set to INFO for debugging
+log_level_name = os.getenv('BACKEND_LOG_LEVEL', 'ERROR').upper()
 log_level = getattr(logging, log_level_name, logging.ERROR)
 
 handlers = [logging.FileHandler('backend.log', encoding='utf-8')]
@@ -66,11 +66,8 @@ logger = logging.getLogger(__name__)
 
 # Import video converter (after logging configured)
 try:
-    print(f"[IMPORT] Attempting to import video_converter from {current_dir}")
     from video_converter import VideoConverterCore
-    print(f"[IMPORT] VideoConverterCore imported successfully")
     video_converter = VideoConverterCore()
-    print(f"[IMPORT] VideoConverterCore instantiated successfully")
     VIDEO_CONVERTER_AVAILABLE = True
     logger.info("[OK] Video converter imported successfully")
 
@@ -2246,6 +2243,9 @@ def process_batch_images():
                             quality=qual
                         )
 
+                        # Track image conversion stats
+                        stats_tracker.increment_image_conversion(success=result.get('success', False))
+                        
                         results_local.append(result)
                     except Exception as file_err:
                         error_result = {
@@ -2253,6 +2253,8 @@ def process_batch_images():
                             'error': str(file_err),
                             'input_path': input_file
                         }
+                        # Track failed image conversion
+                        stats_tracker.increment_image_conversion(success=False)
                         results_local.append(error_result)
                     finally:
                         # Update per-file progress after each file

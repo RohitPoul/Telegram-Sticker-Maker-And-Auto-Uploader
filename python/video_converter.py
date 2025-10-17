@@ -5,10 +5,15 @@ import time
 import gc
 import psutil
 from pathlib import Path
+import json
+
+# Import the new loggers
+from logging_config import video_conversion_logger, hex_edit_logger
 
 class VideoConverterCore:
     def __init__(self):
-        self.logger = logging.getLogger(__name__)
+        # Use the imported video_conversion_logger instead of creating a new logger
+        self.logger = video_conversion_logger
         # Default to INFO in this module, but respect global level
         if not self.logger.handlers:
             self.logger.propagate = True
@@ -493,10 +498,12 @@ class VideoConverterCore:
 
     def hex_edit_file(self, input_file, output_file, process_id=None, file_index=None):
         """Perform hex editing on a single file with simple 0% → 100% progress tracking"""
+        # Use hex_edit_logger for hex editing logs
+        logger = hex_edit_logger
         filename = os.path.basename(input_file)
 
         try:
-            self.logger.info(f"[HEX] Starting hex edit: {filename}")
+            logger.info(f"[HEX] Starting hex edit: {filename}")
 
             # Start processing - show 0%
             if process_id and file_index is not None:
@@ -524,9 +531,9 @@ class VideoConverterCore:
                 else:
                     raise ValueError("Replacement would exceed file bounds")
                 target_found = True
-                self.logger.info(f"[HEX] Found and replaced hex sequence at position {pos} in {filename}")
+                logger.info(f"[HEX] Found and replaced hex sequence at position {pos} in {filename}")
             else:
-                self.logger.warning(f"[HEX] Target hex sequence not found in {filename}")
+                logger.warning(f"[HEX] Target hex sequence not found in {filename}")
 
             # Write the modified data to output file
             with open(output_file, 'wb') as f:
@@ -541,11 +548,11 @@ class VideoConverterCore:
                     'filename': filename
                 })
 
-            self.logger.info(f"[HEX] Hex edit completed: {filename}")
+            logger.info(f"[HEX] Hex edit completed: {filename}")
             return True
 
         except Exception as e:
-            self.logger.error(f"[HEX] Hex edit failed for {filename}: {e}")
+            logger.error(f"[HEX] Hex edit failed for {filename}: {e}")
             if process_id and file_index is not None:
                 self.update_file_status(process_id, file_index, {
                     'status': 'error',
