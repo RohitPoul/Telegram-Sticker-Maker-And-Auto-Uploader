@@ -664,25 +664,6 @@ class StickerBotCore:
                 raise
         
         return sent_file_ids
-
-        """
-        Initialize StickerBotCore with enhanced connection management
-        """
-        thread_name = threading.current_thread().name
-        logging.info(f"[DEBUG] StickerBotCore.__init__ called from thread: {thread_name}")
-        
-        # Existing initialization
-        self.logger = logger or logging.getLogger(__name__)
-        self.client = None
-        self.bot_peer = None
-        self.conversation_manager = None
-        
-        # Connection state tracking
-        self._connection_lock = threading.Lock()
-        self._last_connection_attempt = None
-        self.session_file = None  # Track current session file
-        
-        logging.info(f"[DEBUG] StickerBotCore initialized successfully in thread: {thread_name}")
     
     def monitor_session_file(self):
         """Monitor session file and log if it gets deleted"""
