@@ -1269,26 +1269,35 @@
             </div>
             
             <div class="emoji-input-section">
-              <div class="emoji-input-wrapper">
-                <label for="emoji-input">Choose Emoji:</label>
-                <input
-                  type="text"
-                  id="emoji-input"
-                  class="form-control emoji-display"
-                  placeholder="❤️"
-                  value="❤️"
-                  maxlength="4"
-                />
-              </div>
-              <div class="emoji-preview">
-                <span id="emoji-preview-icon">❤️</span>
-                <small>Preview</small>
+              <div class="emoji-input-wrapper" style="width: 100%;">
+                <label for="emoji-input">Selected Emoji:</label>
+                <div style="position: relative; width: 100%;">
+                  <input
+                    type="text"
+                    id="emoji-input"
+                    class="form-control emoji-display"
+                    placeholder="❤️"
+                    value="❤️"
+                    maxlength="4"
+                    style="padding-right: 60px;"
+                  />
+                  <button 
+                    id="paste-emoji-btn"
+                    title="Paste emoji from clipboard"
+                    style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); color: #34d399; padding: 0.5rem 0.75rem; border-radius: 8px; cursor: pointer; transition: all 0.2s ease; font-size: 1rem;">
+                    <i class="fas fa-paste"></i>
+                  </button>
+                </div>
               </div>
             </div>
 
             <div class="emoji-quick-actions">
               <h4 class="quick-actions-title">Quick Actions</h4>
               <div class="quick-actions-grid">
+                <button class="quick-action-btn" onclick="window.app?.saveEmoji()" title="Set selected emoji for this file" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-color: rgba(16, 185, 129, 0.4);">
+                  <i class="fas fa-check" style="color: white;"></i>
+                  <span style="color: white;">Set Emoji</span>
+                </button>
                 <button class="quick-action-btn" onclick="window.app?.applyEmojiToAll()" title="Apply current emoji to all files">
                   <i class="fas fa-clone"></i>
                   <span>Apply to All</span>
@@ -1606,8 +1615,9 @@
             </div>
           </div>
           <div class="modal-footer">
-            <button class="btn btn-secondary" id="cancel-emoji">Cancel</button>
-            <button class="btn btn-primary" id="save-emoji">
+            <button class="btn btn-secondary" id="cancel-emoji">Close</button>
+            <!-- Apply Emoji button hidden - emoji now auto-applies on click -->
+            <button class="btn btn-primary" id="save-emoji" style="display: none;">
               <i class="fas fa-check"></i> Apply Emoji
             </button>
           </div>

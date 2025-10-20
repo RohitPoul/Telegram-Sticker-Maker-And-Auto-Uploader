@@ -4869,8 +4869,10 @@ html {
 
 /* Emoji Modal: ensure body scrolls and doesn't crop content */
 #emoji-modal .modal-body {
-  max-height: 60vh;
+  max-height: 75vh;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Optional: improve scrollbar aesthetics */

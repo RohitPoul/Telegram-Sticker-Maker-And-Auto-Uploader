@@ -101,6 +101,10 @@ class TelegramUtilities {
     // Track logged file statuses to prevent duplicate logging
     this.loggedFileStatuses = new Set();
     
+    // Toast debouncing to prevent duplicates
+    this._lastToast = { type: '', title: '', message: '', time: 0 };
+    this._toastDebounceTime = 500; // ms
+    
     // Debouncing for UI updates
     this.debouncedUpdateVideoFileList = this.debounce(this.updateVideoFileList.bind(this), 100);
     this._lastMinorUpdate = 0;
@@ -137,6 +141,32 @@ class TelegramUtilities {
     };
   }
 
+  // Check if input contains a valid emoji
+  isValidEmoji(input) {
+    if (!input || typeof input !== 'string') return false;
+    
+    const str = input.trim();
+    if (!str) return false;
+    
+    // Try to normalize the emoji - if it works, it's valid
+    try {
+      const normalized = this.normalizeEmoji(str);
+      // Check if normalized result is different from default emoji
+      // and actually contains emoji-like characters
+      if (normalized && normalized !== this.defaultEmoji) {
+        return true;
+      }
+      // Also check if it's the same as input (already a valid emoji)
+      if (str.length <= 4 && /\p{Emoji}/u.test(str)) {
+        return true;
+      }
+    } catch (e) {
+      // If normalization fails, it's not a valid emoji
+    }
+    
+    return false;
+  }
+  
   // FIXED: Normalize and clamp a user-provided emoji to the first visible grapheme cluster
   // Properly preserves variation selectors (e.g., U+FE0F) and ZWJ sequences so hearts stay red on Windows
   normalizeEmoji(input) {
@@ -856,10 +886,82 @@ class TelegramUtilities {
       });
     }
     if (emojiInput) {
+      // Track last validation to avoid toast spam
+      let lastInvalidTime = 0;
+      
+      // Block all non-emoji input
+      emojiInput.addEventListener("input", (e) => {
+        const value = e.target.value;
+        
+        // If input exists, validate it's an emoji
+        if (value) {
+          if (!this.isValidEmoji(value)) {
+            // Not a valid emoji - remove the last character typed
+            e.target.value = e.target.value.slice(0, -1);
+            
+            // Only show toast once per second to avoid spam
+            const now = Date.now();
+            if (now - lastInvalidTime > 1000) {
+              this.showToast("warning", "Emoji Only", "Please enter emojis only");
+              lastInvalidTime = now;
+            }
+          } else {
+            // Valid emoji - normalize it
+            const normalizedEmoji = this.normalizeEmoji(value);
+            if (normalizedEmoji !== value) {
+              e.target.value = normalizedEmoji;
+            }
+          }
+        }
+      });
+      
       emojiInput.addEventListener("keypress", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
           this.saveEmoji();
+        }
+      });
+      
+      // Add paste support for emojis (Ctrl+V)
+      emojiInput.addEventListener("paste", (e) => {
+        e.preventDefault();
+        const pastedText = (e.clipboardData || window.clipboardData).getData("text");
+        const trimmed = pastedText.trim();
+        
+        // Try to normalize first - if it works, it's valid
+        const normalizedEmoji = this.normalizeEmoji(trimmed);
+        
+        if (normalizedEmoji && normalizedEmoji.length > 0) {
+          emojiInput.value = normalizedEmoji;
+          this.showToast("success", "Emoji Pasted", `Pasted: ${normalizedEmoji}`);
+        } else {
+          this.showToast("warning", "Invalid Input", "Clipboard doesn't contain a valid emoji");
+        }
+      });
+    }
+    
+    // Paste button for emoji clipboard
+    const pasteEmojiBtn = document.getElementById("paste-emoji-btn");
+    if (pasteEmojiBtn) {
+      pasteEmojiBtn.addEventListener("click", async () => {
+        try {
+          const clipboardText = await navigator.clipboard.readText();
+          const trimmed = clipboardText.trim();
+          
+          // Try to normalize first - if it works, it's valid
+          const normalizedEmoji = this.normalizeEmoji(trimmed);
+          
+          if (normalizedEmoji && normalizedEmoji.length > 0) {
+            const emojiInput = document.getElementById("emoji-input");
+            if (emojiInput) {
+              emojiInput.value = normalizedEmoji;
+            }
+            this.showToast("success", "Emoji Pasted", `Pasted: ${normalizedEmoji}`);
+          } else {
+            this.showToast("warning", "Invalid Emoji", "Clipboard doesn't contain a valid emoji");
+          }
+        } catch (err) {
+          this.showToast("error", "Paste Failed", "Could not read from clipboard");
         }
       });
     }
@@ -4998,54 +5100,41 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   }
 
   saveEmoji() {
-    // Promise-based lock to prevent double submissions
-    if (this._saveEmojiPromise) {
-      return this._saveEmojiPromise;
+    const emojiInput = document.getElementById("emoji-input");
+    if (!emojiInput) return;
+    
+    const newEmoji = this.normalizeEmoji(emojiInput.value.trim());
+    this.saveEmojiDirect(newEmoji);
+  }
+  
+  saveEmojiDirect(emoji) {
+    // Check if we have a valid emoji index
+    if (this.currentEmojiIndex === null || this.currentEmojiIndex < 0) {
+      return;
     }
     
-    this._saveEmojiPromise = (async () => {
-      try {
-        // Check if we have a valid emoji index
-        if (this.currentEmojiIndex === null || this.currentEmojiIndex < 0) {
-            return;
-        }
-        
-        const emojiInput = document.getElementById("emoji-input");
-        
-        if (!emojiInput) {
-            return;
-        }
-        
-        const newEmoji = this.normalizeEmoji(emojiInput.value.trim());
-        
-        if (!newEmoji) {
-          this.showToast("warning", "Empty Emoji", "Please enter an emoji");
-          emojiInput.focus();
-          return;
-        }
-        
-        // Update emoji
-        if (this.currentEmojiIndex < this.mediaFiles.length) {
-          this.mediaFiles[this.currentEmojiIndex].emoji = newEmoji;
-          this.updateMediaFileList();
-          this.showToast(
-            "success",
-            "Emoji Updated",
-            `Emoji updated to ${newEmoji}`
-          );
-        }
-        
-        this.hideModal();
-        
-        // Ensure currentEmojiIndex is reset
-        this.currentEmojiIndex = null;
-      } finally {
-        // Always clear the promise lock after completion
-        this._saveEmojiPromise = null;
-      }
-    })();
+    const newEmoji = this.normalizeEmoji(emoji);
     
-    return this._saveEmojiPromise;
+    if (!newEmoji) {
+      this.showToast("warning", "Empty Emoji", "Please select an emoji");
+      return;
+    }
+    
+    // Update emoji
+    if (this.currentEmojiIndex < this.mediaFiles.length) {
+      this.mediaFiles[this.currentEmojiIndex].emoji = newEmoji;
+      this.updateMediaFileList();
+      this.showToast(
+        "success",
+        "Emoji Set",
+        `Emoji set to ${newEmoji}`
+      );
+    }
+    
+    this.hideModal();
+    
+    // Reset for next use
+    this.currentEmojiIndex = null;
   }
 
   async createStickerPack() {
@@ -6189,9 +6278,9 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       const overlay = document.getElementById("modal-overlay");
       if (overlay) {
         overlay.classList.remove("active");
-        // Remove explicit styles that might interfere with CSS
-        overlay.style.display = "";
-        overlay.style.visibility = "";
+        // Force display none to override !important in CSS
+        overlay.style.setProperty("display", "none", "important");
+        overlay.style.visibility = "hidden";
       }
       
       // Batch all modal hiding operations
@@ -6982,6 +7071,21 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       return;
     }
     
+    // DEBOUNCE: Prevent showing same toast multiple times in quick succession
+    const now = Date.now();
+    const isSameToast = this._lastToast.type === type && 
+                        this._lastToast.title === title && 
+                        this._lastToast.message === message;
+    const isWithinDebounceTime = (now - this._lastToast.time) < this._toastDebounceTime;
+    
+    if (isSameToast && isWithinDebounceTime) {
+      // Skip duplicate toast
+      return;
+    }
+    
+    // Update last toast tracker
+    this._lastToast = { type, title, message, time: now };
+    
     // PREVENT DUPLICATE TOASTS: Check if same toast already exists
     const toastId = `${type}-${title}-${message}`.replace(/[^a-zA-Z0-9]/g, "");
     const existingToast = toastContainer.querySelector(`[data-toast-id="${toastId}"]`);
@@ -7009,6 +7113,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     const toast = document.createElement("div");
     toast.className = `toast ${type}`;
     toast.setAttribute("data-toast-id", toastId);
+    toast.style.cursor = "pointer"; // Show it's clickable
+    toast.title = "Click to dismiss"; // Tooltip
     
     toast.innerHTML = `
       <div class="toast-content">
@@ -7023,6 +7129,9 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     // Append to container - CSS will handle stacking with gap
     toastContainer.appendChild(toast);
     
+    // Track removal state
+    let isRemoving = false;
+    
     // Auto-remove with slide-out animation
     const autoRemoveTimer = setTimeout(() => {
       this.removeToast(toast);
@@ -7033,20 +7142,39 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     if (closeBtn) {
       closeBtn.onclick = (e) => {
         e.stopPropagation();
+        e.preventDefault();
+        if (isRemoving) return; // Prevent double removal
+        isRemoving = true;
         clearTimeout(autoRemoveTimer);
         this.removeToast(toast);
       };
     }
     
     // Click anywhere to dismiss
-    toast.onclick = () => {
+    toast.onclick = (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (isRemoving) return; // Prevent double removal
+      isRemoving = true;
       clearTimeout(autoRemoveTimer);
       this.removeToast(toast);
     };
   }
   
   removeToast(toast) {
-    if (!toast || !toast.parentNode) return;
+    if (!toast) return;
+    
+    // Check if already removed or being removed
+    if (toast.dataset.removing === "true") return;
+    if (!toast.parentNode) return;
+    
+    // Mark as being removed
+    toast.dataset.removing = "true";
+    
+    // Remove event listeners to prevent further clicks
+    toast.onclick = null;
+    const closeBtn = toast.querySelector(".toast-close");
+    if (closeBtn) closeBtn.onclick = null;
     
     // Add slide-out animation
     toast.style.animation = "slideOut 0.3s ease";
@@ -7054,7 +7182,11 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     // Remove after animation completes
     setTimeout(() => {
       if (toast && toast.parentNode) {
-        toast.remove();
+        try {
+          toast.remove();
+        } catch (e) {
+          // Already removed, ignore
+        }
       }
     }, 300);
   }
@@ -8043,7 +8175,7 @@ This action cannot be undone. Are you sure?
     const modal = document.getElementById("emoji-modal");
     if (!modal) return;
     
-    // Use a single event listener for all emoji interactions
+    // Single click - just preview
     modal.addEventListener("click", (e) => {
       const tab = e.target.closest(".emoji-tab");
       if (tab) {
@@ -8054,20 +8186,33 @@ This action cannot be undone. Are you sure?
       const emojiBtn = e.target.closest(".emoji-btn");
       if (emojiBtn) {
         const emoji = emojiBtn.getAttribute("data-emoji");
-        this.selectQuickEmoji(emoji);
+        this.selectQuickEmoji(emoji, false); // false = don't save
+      }
+    });
+    
+    // Double click - save and close
+    modal.addEventListener("dblclick", (e) => {
+      const emojiBtn = e.target.closest(".emoji-btn");
+      if (emojiBtn) {
+        const emoji = emojiBtn.getAttribute("data-emoji");
+        this.selectQuickEmoji(emoji, true); // true = save immediately
       }
     });
   }
   
   // Method to select a quick emoji from the emoji picker
-  selectQuickEmoji(emoji) {
-    // Update emoji input and preview
+  selectQuickEmoji(emoji, shouldSave = false) {
+    // Update emoji input
     const emojiInput = document.getElementById("emoji-input");
-    const emojiPreview = document.getElementById("emoji-preview-icon");
     
-    if (emojiInput && emojiPreview) {
+    if (emojiInput) {
       emojiInput.value = emoji;
-      emojiPreview.textContent = emoji;
+      
+      // If shouldSave is true (double-click), save immediately
+      if (shouldSave) {
+        // Direct save without delay
+        this.saveEmojiDirect(emoji);
+      }
     }
   }
   
@@ -9225,9 +9370,26 @@ This action cannot be undone. Are you sure?
 // Initialize the application when DOM is ready
 let app;
 
+// Ensure modal overlay is hidden on startup
+function ensureModalOverlayHidden() {
+  const overlay = document.getElementById("modal-overlay");
+  if (overlay) {
+    overlay.classList.remove("active");
+    overlay.style.setProperty("display", "none", "important");
+    overlay.style.visibility = "hidden";
+  }
+  // Also hide all modals
+  const modals = document.querySelectorAll(".modal");
+  modals.forEach((modal) => {
+    modal.style.display = "none";
+    modal.style.opacity = "0";
+  });
+}
+
 // Wait for DOM to be fully loaded before initializing
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", () => {
+    ensureModalOverlayHidden();
     app = new TelegramUtilities();
     window.app = app;
     // Force immediate database stats update on app startup
@@ -9236,6 +9398,7 @@ if (document.readyState === "loading") {
   });
 } else {
   // DOM is already loaded (shouldn't happen in normal flow but just in case)
+  ensureModalOverlayHidden();
   app = new TelegramUtilities();
   window.app = app;
   // Force immediate database stats update on app startup
