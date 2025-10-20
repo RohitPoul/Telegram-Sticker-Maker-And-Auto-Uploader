@@ -6221,7 +6221,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         overlay.style.visibility = "";
         
         // CRITICAL FIX: Ensure proper modal positioning
-        modal.style.display = "block";
+        // Use flex for emoji modal to enable column layout
+        modal.style.display = (modalId === "emoji-modal") ? "flex" : "block";
         modal.style.opacity = "1"; // Reset opacity to 1 when showing modal
         
         // Ensure modal is properly centered
@@ -8175,6 +8176,9 @@ This action cannot be undone. Are you sure?
     const modal = document.getElementById("emoji-modal");
     if (!modal) return;
     
+    // Setup drag scrolling for emoji tabs
+    this.setupEmojiScrollNavigation();
+    
     // Single click - just preview
     modal.addEventListener("click", (e) => {
       const tab = e.target.closest(".emoji-tab");
@@ -8280,35 +8284,62 @@ This action cannot be undone. Are you sure?
       }
     });
     
-    // Enable drag scrolling
+    // Enable drag scrolling with click prevention
     let isDown = false;
     let startX;
     let scrollLeft;
+    let hasMoved = false; // Track if mouse moved during drag
     
     tabsContainer.addEventListener("mousedown", (e) => {
+      // Only start drag if not clicking on a tab button directly
       isDown = true;
+      hasMoved = false;
       startX = e.pageX - tabsContainer.offsetLeft;
       scrollLeft = tabsContainer.scrollLeft;
       tabsContainer.style.cursor = "grabbing";
+      tabsContainer.style.userSelect = "none";
     });
     
     tabsContainer.addEventListener("mouseleave", () => {
       isDown = false;
       tabsContainer.style.cursor = "grab";
+      tabsContainer.style.userSelect = "";
     });
     
     tabsContainer.addEventListener("mouseup", () => {
       isDown = false;
       tabsContainer.style.cursor = "grab";
+      tabsContainer.style.userSelect = "";
     });
     
     tabsContainer.addEventListener("mousemove", (e) => {
       if (!isDown) return;
       e.preventDefault();
       const x = e.pageX - tabsContainer.offsetLeft;
-      const walk = (x - startX) * 2; // Scroll speed
+      const walk = (x - startX) * 2.5; // Scroll speed multiplier
+      
+      // If moved more than 5px, consider it a drag
+      if (Math.abs(walk) > 5) {
+        hasMoved = true;
+      }
+      
       tabsContainer.scrollLeft = scrollLeft - walk;
     });
+    
+    // Handle tab clicks - only if not dragging
+    tabsContainer.addEventListener("click", (e) => {
+      // If we just dragged, prevent the click from changing category
+      if (hasMoved) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      
+      const tab = e.target.closest(".emoji-tab");
+      if (tab) {
+        this.handleEmojiTabClick(tab);
+      }
+    }, true); // Use capture phase to intercept before other handlers
     
     // Single delegated event for all emoji buttons
     const emojiContainer = document.querySelector(".emoji-picker-enhanced");

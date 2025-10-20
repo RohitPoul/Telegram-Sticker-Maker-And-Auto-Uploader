@@ -1,12 +1,16 @@
-/* Enhanced Emoji Modal - Dynamic Theme */
+/* Enhanced Emoji Modal - Compact Professional Design */
 .emoji-modal-enhanced {
-  width: 900px !important;
-  max-width: 95vw;
-  max-height: 85vh;
+  width: 850px !important;
+  max-width: 92vw;
+  /* Fixed height to ensure emojis always visible */
+  height: 75vh;
+  max-height: 650px;
+  min-height: 500px;
+  /* Hide overflow at container; delegate scroll to body/category */
   overflow: hidden;
   background: var(--bg-primary);
-  border-radius: 16px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   border: 1px solid var(--border-color);
   z-index: 9000 !important;
   position: fixed !important;
@@ -14,45 +18,50 @@
   left: 50% !important;
   transform: translate(-50%, -50%) !important;
   margin: 0 !important;
+  /* Make modal a flex column so header/body/footer layout is stable */
+  display: flex;
+  flex-direction: column;
 }
 
 .emoji-modal-enhanced .modal-header {
   background: var(--bg-secondary);
   color: var(--text-primary);
-  padding: 24px;
+  padding: 12px 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-radius: 16px 16px 0 0;
-  border-bottom: none;
+  border-radius: 12px 12px 0 0;
+  border-bottom: 1px solid var(--border-color);
   text-align: center;
+  flex-shrink: 0;
 }
 
 .emoji-modal-enhanced .modal-header h3 {
-  font-size: 1.5rem;
-  font-weight: 700;
+  font-size: 1.1rem;
+  font-weight: 600;
   margin: 0;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
   color: var(--text-primary);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .modal-close {
   background: rgba(255, 255, 255, 0.1);
   border: none;
   color: var(--text-primary);
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: background-color 0.2s ease;
-  font-size: 14px;
+  font-size: 13px;
+  flex-shrink: 0;
 }
 
 .modal-close:hover {
@@ -62,39 +71,45 @@
 .emoji-current-file {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  padding: 0.75rem;
-  border-radius: 12px;
-  margin-bottom: 1rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
+  flex-shrink: 0;
 }
 
 .emoji-current-file .label {
   color: var(--text-secondary);
-  font-size: 0.9rem;
-  font-weight: 600;
+  font-size: 0.8rem;
+  font-weight: 500;
 }
 
 .emoji-current-file .filename {
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-primary);
   background: var(--bg-input);
-  padding: 4px 8px;
-  border-radius: 6px;
+  padding: 3px 6px;
+  border-radius: 4px;
   font-family: 'Courier New', monospace;
-  font-size: 0.85rem;
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 300px;
 }
 
 .emoji-input-section {
   display: flex;
-  gap: 1.5rem;
-  margin-bottom: 1rem;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
   align-items: center;
-  padding: 0.75rem;
+  padding: 0.5rem 0.75rem;
   background: var(--bg-secondary);
-  border-radius: 12px;
+  border-radius: 8px;
   border: 1px solid rgba(16, 185, 129, 0.2);
+  flex-shrink: 0;
 }
 
 .emoji-input-wrapper {
@@ -106,19 +121,19 @@
 
 .emoji-input-wrapper label {
   color: #ff8f00;
-  font-size: 0.9rem;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  margin-bottom: 0.3rem;
 }
 
  .emoji-display {
-  font-size: 2.8rem !important;
+  font-size: 2rem !important;
   text-align: center;
-  padding: 0.75rem !important;
+  padding: 0.5rem !important;
   width: 100%;
-  height: 80px;
+  height: 55px;
   border: 2px solid rgba(16, 185, 129, 0.3);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--bg-card);
   font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", "Twemoji Mozilla", "EmojiOne Color", "Segoe UI Symbol", sans-serif;
   line-height: 1;
@@ -141,42 +156,43 @@
   transform: translateY(-50%) scale(0.95) !important;
 }
 
-/* Quick Actions - Simple Dark Theme */
+/* Quick Actions - Compact Layout */
 .emoji-quick-actions {
-  margin-bottom: 1rem;
-  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  padding: 0.5rem;
   background: var(--bg-secondary);
-  border-radius: 12px;
+  border-radius: 8px;
   border: 1px solid rgba(16, 185, 129, 0.2);
+  flex-shrink: 0;
 }
 
 .quick-actions-title {
   color: #34d399;
-  font-size: 0.95rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  margin: 0 0 0.75rem 0;
+  margin: 0 0 0.4rem 0;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .quick-actions-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 0.75rem;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.4rem;
 }
 
 .quick-action-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
-  padding: 1rem;
+  gap: 0.25rem;
+  padding: 0.5rem 0.3rem;
   background: var(--bg-tertiary);
   border: 1px solid rgba(16, 185, 129, 0.2);
-  border-radius: 10px;
+  border-radius: 6px;
   cursor: pointer;
   transition: background 0.15s ease;
-  font-size: 0.9rem;
+  font-size: 0.75rem;
   color: var(--text-primary);
   text-align: center;
 }
@@ -187,15 +203,16 @@
 }
 
 .quick-action-btn i {
-  font-size: 1.4rem;
+  font-size: 1.1rem;
   color: #34d399;
 }
 
 .quick-action-btn span {
-  font-size: 0.8rem;
-  font-weight: 600;
+  font-size: 0.65rem;
+  font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
+  line-height: 1.2;
 }
 
 /* Enhanced Emoji Picker - Performance Optimized */
@@ -206,6 +223,9 @@
   border: 1px solid rgba(16, 185, 129, 0.2);
   width: 100%;
   max-width: 100%;
+  /* Allow picker to grow and shrink within modal body */
+  flex: 1 1 auto;
+  min-height: 0; /* Critical for nested flex scrolling on Windows */
 }
 
 /* Simple Emoji Category Tabs - Natural Scrolling */
@@ -213,7 +233,8 @@
   position: relative;
   background: var(--bg-tertiary);
   border-bottom: 1px solid rgba(16, 185, 129, 0.2);
-  padding: 0.75rem;
+  padding: 0.5rem;
+  flex-shrink: 0;
 }
 
 .emoji-tabs {
@@ -225,7 +246,7 @@
   /* Show scrollbar for clarity */
   scrollbar-width: thin;
   scrollbar-color: rgba(139, 58, 58, 0.5) transparent;
-  min-height: 70px;
+  min-height: 50px;
   width: 100%;
   cursor: grab;
 }
@@ -263,34 +284,34 @@
 }
 
 .emoji-tab {
-  padding: 0.6rem 1rem;
+  padding: 0.4rem 0.75rem;
   background: var(--bg-secondary);
   border: 1px solid rgba(16, 185, 129, 0.2);
-  border-radius: 10px;
+  border-radius: 6px;
   cursor: pointer;
   transition: background 0.2s ease;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: var(--text-secondary);
   font-weight: 500;
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.3rem;
   flex-direction: row;
   text-align: center;
   justify-content: center;
-  min-height: 50px;
+  min-height: 38px;
   white-space: nowrap;
   flex-shrink: 0;
   flex-grow: 0;
-  min-width: 120px;
-  width: 120px;
+  min-width: 90px;
+  width: 90px;
   box-sizing: border-box;
 }
 
 .emoji-tab .tab-emoji {
-  font-size: 1.1rem;
+  font-size: 1rem;
   line-height: 1;
-  margin-right: 0.3rem;
+  margin-right: 0.2rem;
   /* Use emoji fonts for tab icons too */
   font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", "Twemoji Mozilla", "EmojiOne Color", "Segoe UI Symbol", sans-serif;
 }
@@ -302,10 +323,10 @@
 }
 
 .emoji-tab span:last-child {
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0.65rem;
+  font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
   white-space: nowrap;
 }
 
@@ -327,16 +348,18 @@
 }
 
 .emoji-categories {
-  min-height: 350px;
-  max-height: 450px;
-  overflow-y: scroll !important;
+  /* CRITICAL: Fixed minimum height to ensure emojis always visible */
+  flex: 1 1 auto;
+  min-height: 200px; /* Guarantee minimum visible space */
+  /* Enable vertical scroll */
+  overflow-y: auto !important;
   overflow-x: hidden;
-  padding: 1rem;
+  padding: 0.75rem;
   background: var(--bg-card);
   scrollbar-width: thin;
   scrollbar-color: rgba(16, 185, 129, 0.3) transparent;
   border: 1px solid rgba(16, 185, 129, 0.1);
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 .emoji-category {
@@ -349,20 +372,20 @@
 
 .emoji-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
-  gap: 0.8rem;
-  margin-bottom: 1rem;
-  padding: 0.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(45px, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding: 0.25rem;
 }
 
-/* Regular emoji buttons - simplified */
+/* Regular emoji buttons - compact */
  .emoji-btn {
-  width: 50px;
-  height: 50px;
+  width: 45px;
+  height: 45px;
   border: 1px solid rgba(16, 185, 129, 0.2);
   background: var(--bg-tertiary);
-  border-radius: 10px;
-  font-size: 1.6rem;
+  border-radius: 6px;
+  font-size: 1.5rem;
   cursor: pointer;
   transition: background 0.15s ease;
   display: flex;
@@ -544,29 +567,44 @@
   background: rgba(16, 185, 129, 0.7);
 }
 
-/* Emoji Modal Footer - Warm Theme */
+/* Emoji Modal Body - Compact Layout */
+.emoji-modal-enhanced .modal-body {
+  /* Scroll inside body to ensure footer is always visible */
+  padding: 0.75rem;
+  background: var(--bg-secondary);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 0; /* Critical for nested flex scrolling */
+}
+
+/* Emoji Modal Footer - Compact */
 .emoji-modal-enhanced .modal-footer {
-  padding: 20px 24px;
+  padding: 10px 16px;
   background: var(--bg-secondary);
   border-top: 1px solid rgba(16, 185, 129, 0.1);
   display: flex;
-  gap: 16px;
+  gap: 10px;
   justify-content: center;
-  border-radius: 0 0 16px 16px;
+  border-radius: 0 0 12px 12px;
+  flex-shrink: 0;
 }
 
 .emoji-modal-enhanced .modal-footer .btn {
-  padding: 0.8rem 1.5rem;
-  font-size: 0.9rem;
-  border-radius: 10px;
-  font-weight: 600;
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  border-radius: 6px;
+  font-weight: 500;
   border: none;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-width: 120px;
+  gap: 6px;
+  min-width: 100px;
   justify-content: center;
 }
 
