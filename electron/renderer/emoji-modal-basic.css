@@ -1,0 +1,122 @@
+/* BASIC CLEAN EMOJI MODAL OVERRIDES */
+/* High-specificity, minimal neutral theme. Restores classic tab layout with sticky tabs and internal scrolling. */
+
+/* Smart color palette scoped to the emoji modal */
+#emoji-modal {
+  --primary-color: #6ea8fe; /* accent */
+  --text-primary: #e6edf3;
+  --text-secondary: #a9b4c1;
+  --bg-primary: #121318;
+  --bg-secondary: #171a21;
+  --bg-tertiary: #1e222b;
+  --border-color: rgba(230, 237, 243, 0.12);
+}
+
+#emoji-modal.modal.emoji-modal-enhanced {
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  width: 860px;
+  max-width: 95vw;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary, #161616);
+  border: 1px solid var(--border-color, rgba(255,255,255,0.12));
+  border-radius: 12px;
+  overflow: hidden; /* prevent outer scroll */
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+}
+
+#emoji-modal .modal-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--bg-secondary, #1e1e1e);
+  border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.08));
+}
+
+#emoji-modal .modal-header h3 { margin: 0; font-size: 1rem; font-weight: 600; color: var(--text-primary, #fff); display: flex; gap: 8px; align-items: center; }
+#emoji-modal .modal-header h3 i { color: var(--text-secondary, #aaa); }
+#emoji-modal .modal-header .modal-close { width: 28px; height: 28px; border-radius: 6px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); color: #ccc; }
+#emoji-modal .modal-header .modal-close:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+#emoji-modal .modal-body {
+  flex: 1 1 auto;
+  min-height: 0; /* allow children to scroll */
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden; /* body itself doesn't scroll; inner sections will */
+  background: var(--bg-primary, #161616);
+}
+
+/* Top info blocks */
+#emoji-modal .emoji-current-file { display: flex; gap: 8px; align-items: center; padding: 8px 10px; background: var(--bg-secondary, #1e1e1e); border: 1px solid var(--border-color, rgba(255,255,255,0.08)); border-radius: 8px; }
+#emoji-modal .emoji-current-file .label { color: var(--text-secondary, #aaa); font-size: 0.78rem; text-transform: uppercase; letter-spacing: .4px; }
+#emoji-modal .emoji-current-file .filename { color: var(--text-primary, #fff); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 420px; }
+
+#emoji-modal .emoji-input-section { padding: 10px; background: var(--bg-secondary, #1e1e1e); border: 1px solid var(--border-color, rgba(255,255,255,0.08)); border-radius: 8px; }
+#emoji-modal .emoji-input-wrapper { display: grid; grid-template-columns: 80px 1fr; gap: 10px; align-items: center; }
+#emoji-modal .emoji-input-wrapper label { color: var(--text-secondary, #aaa); font-size: 0.8rem; text-transform: uppercase; letter-spacing: .4px; }
+#emoji-modal .emoji-display { height: 48px; font-size: 1.8rem !important; text-align: center; border-radius: 8px; border: 1px solid var(--border-color, rgba(255,255,255,0.12)); background: var(--bg-primary, #161616); transition: border-color .15s; }
+#emoji-modal .emoji-display:focus { outline: none; border-color: var(--primary-color, #6ea8fe); box-shadow: 0 0 0 2px rgba(110,168,254,.2); }
+
+#emoji-modal #paste-emoji-btn { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); border-radius: 6px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #ddd; padding: 6px 10px; cursor: pointer; }
+#emoji-modal #paste-emoji-btn:hover { background: rgba(255,255,255,0.12); }
+
+/* Quick actions */
+#emoji-modal .emoji-quick-actions { background: var(--bg-secondary, #1e1e1e); border: 1px solid var(--border-color, rgba(255,255,255,0.08)); border-radius: 8px; padding: 8px; }
+#emoji-modal .quick-actions-grid { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 8px; }
+#emoji-modal .quick-action-btn { padding: 8px; border-radius: 6px; background: var(--bg-tertiary, #232323); border: 1px solid var(--border-color, rgba(255,255,255,0.08)); color: var(--text-primary, #fff); display: grid; place-items: center; gap: 4px; font-size: .75rem; cursor: pointer; }
+#emoji-modal .quick-action-btn:hover { background: rgba(255,255,255,0.08); }
+#emoji-modal .quick-action-btn i { color: var(--primary-color, #6ea8fe); }
+
+/* Picker */
+#emoji-modal .emoji-picker-enhanced { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; background: var(--bg-secondary, #1e1e1e); border: 1px solid var(--border-color, rgba(255,255,255,0.08)); border-radius: 8px; overflow: hidden; }
+
+/* Sticky tab bar */
+#emoji-modal .emoji-tabs-wrapper { display: block; position: sticky; top: 0; z-index: 2; background: var(--bg-secondary, #1e1e1e); border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.08)); padding: 6px; }
+#emoji-modal .emoji-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: thin; }
+#emoji-modal .emoji-tabs::-webkit-scrollbar { height: 6px; }
+#emoji-modal .emoji-tabs::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+#emoji-modal .emoji-tabs-container { display: inline-flex; gap: 6px; }
+#emoji-modal .emoji-tab { padding: 6px 10px; background: var(--bg-tertiary, #232323); border: 1px solid var(--border-color, rgba(255,255,255,0.08)); border-radius: 6px; color: var(--text-secondary, #aaa); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; cursor: pointer; }
+#emoji-modal .emoji-tab .tab-emoji { font-size: 1rem; }
+#emoji-modal .emoji-tab:hover { background: rgba(255,255,255,0.08); color: var(--text-primary, #fff); }
+#emoji-modal .emoji-tab.active { background: var(--bg-primary, #161616); color: var(--text-primary, #fff); border-color: var(--primary-color, #6ea8fe); box-shadow: 0 0 0 2px rgba(110,168,254,0.25) inset; }
+
+/* Scrollable categories */
+#emoji-modal .emoji-categories { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 10px; scroll-behavior: smooth; }
+#emoji-modal .emoji-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 8px; }
+#emoji-modal .emoji-btn { height: 44px; border-radius: 8px; background: var(--bg-tertiary, #232323); border: 1px solid var(--border-color, rgba(255,255,255,0.08)); display: grid; place-items: center; font-size: 1.4rem; cursor: pointer; transition: transform .08s ease, background .15s; }
+#emoji-modal .emoji-btn:hover { background: rgba(255,255,255,0.08); transform: scale(1.06); }
+
+/* Category sticky titles */
+#emoji-modal .category-title { position: sticky; top: 0; z-index: 1; margin: -10px -10px 8px -10px; padding: 6px 12px; font-weight: 700; font-size: 0.85rem; letter-spacing: .4px; color: var(--text-primary); background: linear-gradient(180deg, rgba(110,168,254,0.10), rgba(110,168,254,0)); border-left: 4px solid var(--cat-color, var(--primary-color)); }
+
+/* Category accent colors */
+#emoji-modal #category-smileys { --cat-color: #f59e0b; }
+#emoji-modal #category-people { --cat-color: #60a5fa; }
+#emoji-modal #category-hearts { --cat-color: #ef4444; }
+#emoji-modal #category-animals { --cat-color: #22c55e; }
+#emoji-modal #category-nature { --cat-color: #34d399; }
+#emoji-modal #category-food { --cat-color: #f97316; }
+#emoji-modal #category-travel { --cat-color: #38bdf8; }
+#emoji-modal #category-activities { --cat-color: #a78bfa; }
+#emoji-modal #category-objects { --cat-color: #94a3b8; }
+#emoji-modal #category-symbols { --cat-color: #eab308; }
+#emoji-modal #category-flags { --cat-color: #fb7185; }
+
+#emoji-modal .emoji-category .emoji-btn:hover { box-shadow: 0 0 0 2px var(--cat-color, var(--primary-color)) inset; }
+
+/* Footer */
+#emoji-modal .modal-footer { flex: 0 0 auto; padding: 10px 12px; display: flex; gap: 10px; justify-content: flex-end; background: var(--bg-secondary, #1e1e1e); border-top: 1px solid var(--border-color, rgba(255,255,255,0.08)); }
+#emoji-modal .modal-footer .btn { padding: 8px 14px; border-radius: 6px; border: 1px solid var(--border-color, rgba(255,255,255,0.12)); background: var(--bg-tertiary, #232323); color: var(--text-primary, #fff); cursor: pointer; }
+#emoji-modal .modal-footer .btn-primary { background: var(--primary-color, #2b7bff); border-color: var(--primary-color, #2b7bff); }
+#emoji-modal .modal-footer .btn-primary:hover { filter: brightness(1.1); }
+#emoji-modal .modal-footer .btn-secondary:hover { background: rgba(255,255,255,0.12); }

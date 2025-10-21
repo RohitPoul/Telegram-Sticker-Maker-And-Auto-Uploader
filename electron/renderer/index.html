@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Telegram Utilities - Advanced Video Converter & Sticker Bot</title>
     <link rel="stylesheet" href="styles.css" />
-    <link rel="stylesheet" href="emoji-modal.css" />
+<link rel="stylesheet" href="emoji-modal.css" />
+    <link rel="stylesheet" href="emoji-modal-basic.css" />
     <link
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
       rel="stylesheet"
@@ -1254,24 +1255,28 @@
           </div>
         </div>
 
-        <!-- Enhanced Emoji Selection Modal -->
+        <!-- NEW COMPACT EMOJI MODAL - Sidebar Design -->
         <div class="modal emoji-modal-enhanced" id="emoji-modal" style="display: none">
+          <!-- Header -->
           <div class="modal-header">
-            <h3><i class="fas fa-smile"></i> Emoji Selection</h3>
+<h3><i class="fas fa-smile"></i> Emoji Selection</h3>
             <button class="modal-close" onclick="window.app?.hideModal()">
               <i class="fas fa-times"></i>
             </button>
           </div>
+
           <div class="modal-body">
+            <!-- Current file info -->
             <div class="emoji-current-file">
-              <span class="label">Current file:</span>
+              <span class="label">File:</span>
               <span id="emoji-filename" class="filename">filename.mp4</span>
             </div>
             
+            <!-- Emoji input -->
             <div class="emoji-input-section">
-              <div class="emoji-input-wrapper" style="width: 100%;">
-                <label for="emoji-input">Selected Emoji:</label>
-                <div style="position: relative; width: 100%;">
+              <div class="emoji-input-wrapper">
+                <label for="emoji-input">Emoji</label>
+                <div style="position: relative; flex: 1;">
                   <input
                     type="text"
                     id="emoji-input"
@@ -1279,48 +1284,46 @@
                     placeholder="❤️"
                     value="❤️"
                     maxlength="4"
-                    style="padding-right: 60px;"
+                    style="padding-right: 50px;"
                   />
                   <button 
                     id="paste-emoji-btn"
-                    title="Paste emoji from clipboard"
-                    style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); color: #34d399; padding: 0.5rem 0.75rem; border-radius: 8px; cursor: pointer; transition: all 0.2s ease; font-size: 1rem;">
+                    title="Paste emoji from clipboard">
                     <i class="fas fa-paste"></i>
                   </button>
                 </div>
               </div>
             </div>
 
+            <!-- Quick actions -->
             <div class="emoji-quick-actions">
-              <h4 class="quick-actions-title">Quick Actions</h4>
               <div class="quick-actions-grid">
-                <button class="quick-action-btn" onclick="window.app?.saveEmoji()" title="Set selected emoji for this file" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-color: rgba(16, 185, 129, 0.4);">
-                  <i class="fas fa-check" style="color: white;"></i>
-                  <span style="color: white;">Set Emoji</span>
+                <button class="quick-action-btn" onclick="window.app?.saveEmoji()" title="Set emoji">
+                  <i class="fas fa-check"></i>
+                  <span>Set</span>
                 </button>
-                <button class="quick-action-btn" onclick="window.app?.applyEmojiToAll()" title="Apply current emoji to all files">
+                <button class="quick-action-btn" onclick="window.app?.applyEmojiToAll()" title="Apply to all">
                   <i class="fas fa-clone"></i>
-                  <span>Apply to All</span>
+                  <span>All</span>
                 </button>
-                <button class="quick-action-btn" onclick="window.app?.applyRandomEmojis()" title="Apply random emojis to all files">
+                <button class="quick-action-btn" onclick="window.app?.applyRandomEmojis()" title="Random">
                   <i class="fas fa-dice"></i>
-                  <span>Random Emojis</span>
+                  <span>Random</span>
                 </button>
-                <button class="quick-action-btn" onclick="window.app?.applySequentialEmojis()" title="Apply emojis in sequence">
+                <button class="quick-action-btn" onclick="window.app?.applySequentialEmojis()" title="Sequential">
                   <i class="fas fa-sort-numeric-up"></i>
-                  <span>Sequential</span>
+                  <span>1-2-3</span>
                 </button>
-                <button class="quick-action-btn" onclick="window.app?.applyThemeEmojis()" title="Apply emojis by theme">
+                <button class="quick-action-btn" onclick="window.app?.applyThemeEmojis()" title="By theme">
                   <i class="fas fa-palette"></i>
-                  <span>By Theme</span>
+                  <span>Theme</span>
                 </button>
               </div>
             </div>
             
+            <!-- Emoji picker -->
             <div class="emoji-picker-enhanced">
-              <!-- Tab Navigation with Drag Scrolling -->
               <div class="emoji-tabs-wrapper">
-                <!-- Scrollable tabs container -->
                 <div class="emoji-tabs">
                   <div class="emoji-tabs-container">
                     <button class="emoji-tab active" data-category="smileys" title="Smiley faces and expressions">
@@ -1370,10 +1373,9 @@
                   </div>
                 </div>
               </div>
-              
-              <!-- Emoji Categories -->
               <div class="emoji-categories">
-                <div class="emoji-category active" id="category-smileys">
+<div class="emoji-category active" id="category-smileys">
+                  <div class="category-title">Smileys</div>
                   <div class="emoji-grid">
                     <button class="emoji-btn" data-emoji="😀">😀</button>
                     <button class="emoji-btn" data-emoji="😃">😃</button>
@@ -1478,7 +1480,8 @@
                   </div>
                 </div>
                 
-                <div class="emoji-category" id="category-people">
+<div class="emoji-category" id="category-people">
+                  <div class="category-title">People</div>
                   <div class="emoji-grid">
                     <button class="emoji-btn" data-emoji="👋">👋</button>
                     <button class="emoji-btn" data-emoji="🤚">🤚</button>
@@ -1606,7 +1609,8 @@
                   </div>
                 </div>
                 
-                <div class="emoji-category" id="category-hearts">
+<div class="emoji-category" id="category-hearts">
+                  <div class="category-title">Hearts</div>
                   <div class="emoji-grid">
                     <button class="emoji-btn" data-emoji="❤️">❤️</button>
                     <button class="emoji-btn" data-emoji="🧡">🧡</button>
@@ -1631,7 +1635,8 @@
                   </div>
                 </div>
                 
-                <div class="emoji-category" id="category-animals">
+<div class="emoji-category" id="category-animals">
+                  <div class="category-title">Animals</div>
                   <div class="emoji-grid">
                     <button class="emoji-btn" data-emoji="🐶">🐶</button>
                     <button class="emoji-btn" data-emoji="🐱">🐱</button>
@@ -1725,7 +1730,8 @@
                   </div>
                 </div>
                 
-                <div class="emoji-category" id="category-food">
+<div class="emoji-category" id="category-food">
+                  <div class="category-title">Food</div>
                   <div class="emoji-grid">
                     <button class="emoji-btn" data-emoji="🍏">🍏</button>
                     <button class="emoji-btn" data-emoji="🍎">🍎</button>
@@ -1838,7 +1844,8 @@
                 </div>
                 
                 <!-- Nature Category -->
-                <div class="emoji-category" id="category-nature">
+<div class="emoji-category" id="category-nature">
+                  <div class="category-title">Nature</div>
                   <div class="emoji-grid">
                     <button class="emoji-btn" data-emoji="🌸">🌸</button>
                     <button class="emoji-btn" data-emoji="💮">💮</button>
@@ -1911,7 +1918,8 @@
                 </div>
                 
                 <!-- Travel Category -->
-                <div class="emoji-category" id="category-travel">
+<div class="emoji-category" id="category-travel">
+                  <div class="category-title">Travel</div>
                   <div class="emoji-grid">
                     <button class="emoji-btn" data-emoji="🚗">🚗</button>
                     <button class="emoji-btn" data-emoji="🚕">🚕</button>
@@ -2000,7 +2008,8 @@
                 </div>
                 
                 <!-- Flags Category -->
-                <div class="emoji-category" id="category-flags">
+<div class="emoji-category" id="category-flags">
+                  <div class="category-title">Flags</div>
                   <div class="emoji-grid">
                     <button class="emoji-btn" data-emoji="🏳️">🏳️</button>
                     <button class="emoji-btn" data-emoji="🏴">🏴</button>
@@ -2146,7 +2155,8 @@
                   </div>
                 </div>
                 
-                <div class="emoji-category" id="category-activities">
+<div class="emoji-category" id="category-activities">
+                  <div class="category-title">Activities</div>
                   <div class="emoji-grid">
                     <button class="emoji-btn" data-emoji="⚽">⚽</button>
                     <button class="emoji-btn" data-emoji="🏀">🏀</button>
@@ -2171,7 +2181,8 @@
                   </div>
                 </div>
                 
-                <div class="emoji-category" id="category-objects">
+<div class="emoji-category" id="category-objects">
+                  <div class="category-title">Objects</div>
                   <div class="emoji-grid">
                     <button class="emoji-btn" data-emoji="💡">💡</button>
                     <button class="emoji-btn" data-emoji="🔦">🔦</button>
@@ -2196,7 +2207,8 @@
                   </div>
                 </div>
                 
-                <div class="emoji-category" id="category-symbols">
+<div class="emoji-category" id="category-symbols">
+                  <div class="category-title">Symbols</div>
                   <div class="emoji-grid">
                     <button class="emoji-btn" data-emoji="✨">✨</button>
                     <button class="emoji-btn" data-emoji="⭐">⭐</button>
