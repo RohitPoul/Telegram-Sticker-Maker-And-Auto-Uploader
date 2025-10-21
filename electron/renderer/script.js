@@ -5124,6 +5124,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     if (this.currentEmojiIndex < this.mediaFiles.length) {
       this.mediaFiles[this.currentEmojiIndex].emoji = newEmoji;
       this.updateMediaFileList();
+      // Keep modal input/preview in sync
+      this.syncEmojiModalWithCurrent();
       this.showToast(
         "success",
         "Emoji Set",
@@ -7130,6 +7132,13 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     // Append to container - CSS will handle stacking with gap
     toastContainer.appendChild(toast);
     
+    // Ensure any slide-out animation actually removes the node
+    toast.addEventListener("animationend", (evt) => {
+      if (evt.animationName === "slideOut" && toast.parentNode) {
+        try { toast.remove(); } catch (_) {}
+      }
+    });
+    
     // Track removal state
     let isRemoving = false;
     
@@ -7180,16 +7189,23 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     // Add slide-out animation
     toast.style.animation = "slideOut 0.3s ease";
     
-    // Remove after animation completes
-    setTimeout(() => {
-      if (toast && toast.parentNode) {
-        try {
-          toast.remove();
-        } catch (e) {
-          // Already removed, ignore
+    // Robust removal: prefer animationend, fallback to timeout
+    const onAnimEnd = (evt) => {
+      if (evt.animationName === "slideOut") {
+        toast.removeEventListener("animationend", onAnimEnd);
+        if (toast && toast.parentNode) {
+          try { toast.remove(); } catch (_) {}
         }
       }
-    }, 300);
+    };
+    toast.addEventListener("animationend", onAnimEnd);
+    
+    // Fallback in case animationend doesn't fire
+    setTimeout(() => {
+      if (toast && toast.parentNode) {
+        try { toast.remove(); } catch (_) {}
+      }
+    }, 400);
   }
 
   repositionToasts() {
@@ -8381,6 +8397,8 @@ This action cannot be undone. Are you sure?
     });
     
     this.updateMediaFileList();
+    // Keep the emoji modal input in sync with the item being edited
+    this.syncEmojiModalWithCurrent();
     this.showToast("success", "Emoji Applied", `Applied ${currentEmoji} to all files`);
   }
 
@@ -8406,6 +8424,8 @@ This action cannot be undone. Are you sure?
     });
     
     this.updateMediaFileList();
+    // Keep modal in sync if it's open
+    this.syncEmojiModalWithCurrent();
     this.showToast("success", "Random Emojis", "Applied random emojis to all files");
   }
 
@@ -8425,7 +8445,26 @@ This action cannot be undone. Are you sure?
     });
     
     this.updateMediaFileList();
+    // Keep modal in sync if it's open
+    this.syncEmojiModalWithCurrent();
     this.showToast("success", "Sequential Emojis", "Applied sequential emojis to all files");
+  }
+
+  // Keep emoji modal controls in sync with the currently selected media item
+  syncEmojiModalWithCurrent() {
+    try {
+      if (this.currentEmojiIndex !== null && this.currentEmojiIndex >= 0) {
+        const emojiInput = document.getElementById("emoji-input");
+        const preview = document.getElementById("emoji-preview-icon");
+        const current = this.mediaFiles[this.currentEmojiIndex]?.emoji;
+        if (emojiInput && typeof current === "string") {
+          emojiInput.value = current;
+        }
+        if (preview && typeof current === "string") {
+          preview.textContent = current;
+        }
+      }
+    } catch (_) {}
   }
 
   applyThemeEmojis() {
@@ -8448,6 +8487,8 @@ This action cannot be undone. Are you sure?
     });
     
     this.updateMediaFileList();
+    // Keep modal in sync if it's open
+    this.syncEmojiModalWithCurrent();
     this.showToast("success", "Theme Emojis", `Applied ${selectedTheme} theme emojis to all files`);
   }
   

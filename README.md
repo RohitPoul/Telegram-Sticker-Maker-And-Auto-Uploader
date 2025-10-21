@@ -1,180 +1,164 @@
-# Telegram Sticker Maker & Auto Uploader
+<h1 align="center">Telegram Sticker Maker & Auto Uploader</h1>
+<p align="center">Convert videos and images to Telegram‑ready stickers, then publish full packs in minutes — no terminal needed.</p>
 
-A cross‑platform desktop app (Electron + Python) to:
-- Convert videos and images into Telegram‑compatible sticker media
-- Create sticker packs and upload them to Telegram via an integrated, guided UI
-- Track usage statistics and manage sessions/logs locally
+<p align="center">
+  <img alt="Electron" src="https://img.shields.io/badge/Electron-47848F?logo=electron&logoColor=white&style=for-the-badge" />
+  <img alt="Python" src="https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white&style=for-the-badge" />
+  <img alt="Flask" src="https://img.shields.io/badge/Flask-000000?logo=flask&logoColor=white&style=for-the-badge" />
+  <img alt="Telethon" src="https://img.shields.io/badge/Telethon-2CA5E0?logo=telegram&logoColor=white&style=for-the-badge" />
+  <img alt="FFmpeg" src="https://img.shields.io/badge/FFmpeg-007808?logo=ffmpeg&logoColor=white&style=for-the-badge" />
+  <img alt="ImageMagick" src="https://img.shields.io/badge/ImageMagick-000000?style=for-the-badge" />
+  <img alt="Cross platform" src="https://img.shields.io/badge/OS-Windows%20%7C%20macOS%20%7C%20Linux-555?style=for-the-badge" />
+</p>
+<p align="center">
+  <a href="#-installers"><img alt="Release" src="https://img.shields.io/badge/Release-Coming%20Soon-ff9800?style=for-the-badge" /></a>
+  <a href="https://github.com/USER/REPO/releases"><img alt="Downloads" src="https://img.shields.io/badge/Downloads-GitHub%20Releases-2ea44f?style=for-the-badge" /></a>
+  <img alt="PRs Welcome" src="https://img.shields.io/badge/PRs-Welcome-0aa8d1?style=for-the-badge" />
+  <img alt="License" src="https://img.shields.io/badge/License-All%20rights%20reserved-555?style=for-the-badge" />
+</p>
 
-This README documents the real features present in this repository. No placeholders are used.
+<p align="center">
+  <img src="https://readme-typing-svg.demolab.com?font=Inter&size=20&duration=3500&pause=1000&color=36C5F0&center=true&vCenter=true&width=700&lines=Convert+videos+%E2%86%92+WebM;Convert+images+%E2%86%92+512px+PNG%2FWEBP;Auto-upload+entire+sticker+packs;Guided+Telegram+auth+%26+pack+creation" alt="Typing animation" />
+</p>
 
-## Contents
-- Overview
-- Features
-- Tech stack
-- Requirements
-- Quick start
-- Usage (step‑by‑step)
-  - Video Converter
-  - Image Converter
-  - Sticker Pack automation
-  - Settings and Stats
-- Keyboard shortcuts
-- Configuration (env vars)
-- Data and logs
-- API (local backend)
-- Troubleshooting
-- Roadmap (installer)
-- Contributing
-- Security & privacy
-- License
+<!-- HERO: Add a wide screenshot or GIF at assets/hero.png (recommended width ~1200px) -->
+<!-- Example placeholder: assets/hero.png -->
 
-## Overview
-- GUI: Electron app under `electron/` with tabs for Video Converter, Image Converter, Sticker Bot, Settings, and About.
-- Backend: Flask server under `python/` (spawns automatically from the Electron app) exposing REST APIs for conversion, images, Telegram auth, and sticker automation.
-- System tools: FFmpeg (video) and ImageMagick (images) are used when available.
+<p align="center">
+  <a href="#-features">Features</a> •
+  <a href="#-installers">Installers</a> •
+  <a href="#-quickstart">Quickstart</a> •
+  <a href="#-usage">Usage</a> •
+  <a href="#-feature-tour">Feature Tour</a> •
+  <a href="#-configuration">Configuration</a> •
+  <a href="#-troubleshooting">Troubleshooting</a> •
+  <a href="#-faq">FAQ</a>
+</p>
 
-## Features
-- Video Converter (GUI)
-  - Batch add videos; choose output directory; start/pause/resume processing
-  - Progress per file and for the whole batch; drag & drop supported
-  - Optional “Hex Edit” post‑processing step (batch)
-  - Live system stats (CPU, RAM) in the UI
-- Image Converter (GUI)
-  - Batch convert to Telegram sticker constraints: 512 px max dimension, PNG/WEBP, up to 512 KB
-  - Adjustable quality, transparency preserved, drag & drop, per‑file preview
-- Sticker Pack automation (GUI + Telethon)
-  - Connect to Telegram using API ID, API Hash, and phone number (with code and optional 2FA)
-  - Prepare a pack (image or video stickers), assign emojis (including apply‑to‑all, random, sequential, theme groups), set Pack Name and URL Name
-  - Icon handling: upload a WebM icon (100x100, ≤ 32 KB) or auto‑skip to use the first sticker
-  - URL Name conflict flow: guided retries with up to 3 attempts; success modal with shareable link
-  - Supports up to 120 media items per pack
-- Settings & Stats
-  - Clear logs and credentials, export/reset usage stats, kill app‑related Python processes safely
-  - Stats stored locally at `logs/stats.json`; visible in Settings
+---
 
-## Tech stack
-- Desktop UI: Electron (HTML/CSS/Vanilla JS) — see `electron/`
-- Backend: Python + Flask + Flask‑CORS — see `python/backend.py`
-- Telegram client: Telethon (sticker automation) — see `python/sticker_bot.py`, `python/telegram_connection_handler.py`
-- Media tooling: FFmpeg (video), ImageMagick (images), Pillow (metadata)
-- System info: psutil
-- Logging: rotating log files under `python/logs/`
+## ✨ Features (What you get)
+- Batch Video Converter: drag & drop, per‑file and overall progress, pause/resume, optional Hex‑Edit post‑step
+- Batch Image Converter: 512px max, PNG/WEBP, ≤ 512KB, transparency preserved
+- One‑click Sticker Pack Creator: Telethon‑powered flow, no @Stickers chat needed
+- Smart Emojis: set per‑file or bulk (All / Random / Sequential / Theme groups)
+- Icon Handling: upload 100x100 ≤ 32KB WebM icon or auto‑skip to use the first sticker
+- URL Name Flow: guided retries (up to 3 attempts) until you get an available link
+- Local‑only Data: stats, logs, and credentials stay on your machine; clear/reset anytime
 
-## Requirements
-- Node.js (for running Electron via `npx electron`)
-- Python 3.8+ (tested with modern 3.x)
-- FFmpeg in PATH (video features)
-- ImageMagick in PATH (image features)
-- Python deps (pip): `python/requirements.txt`
+## 📦 Installers
+Installers are coming soon for a pro, one‑click setup. When you publish, replace these links with real release assets:
 
-Install FFmpeg + ImageMagick
-- Linux (Debian/Ubuntu):
-  ```bash
-  sudo apt-get update && sudo apt-get install -y ffmpeg imagemagick
-  ```
-- macOS (Homebrew):
-  ```bash
-  brew install ffmpeg imagemagick
-  ```
-- Windows (Chocolatey):
-  ```bash
-  choco install ffmpeg imagemagick -y
-  ```
+<p align="center">
+  <a href="https://github.com/USER/REPO/releases/latest"><img src="https://img.shields.io/badge/Windows-EXE-0078D6?style=for-the-badge&logo=windows&logoColor=white" alt="Windows installer"/></a>
+  <a href="https://github.com/USER/REPO/releases/latest"><img src="https://img.shields.io/badge/macOS-DMG-000000?style=for-the-badge&logo=apple&logoColor=white" alt="macOS installer"/></a>
+  <a href="https://github.com/USER/REPO/releases/latest"><img src="https://img.shields.io/badge/Linux-AppImage%2FDEB-FCC624?style=for-the-badge&logo=linux&logoColor=black" alt="Linux installer"/></a>
+</p>
 
-Install Python dependencies
+Or run from source now (see Quickstart).
+
+## 🚀 Quickstart
+
+1) Install FFmpeg & ImageMagick
+- Linux: `sudo apt-get update && sudo apt-get install -y ffmpeg imagemagick`
+- macOS: `brew install ffmpeg imagemagick`
+- Windows: `choco install ffmpeg imagemagick -y`
+
+2) Install Python deps
 ```bash
 python3 -m venv .venv && source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r python/requirements.txt
 ```
 
-## Quick start
-Run the desktop app from source
+3) Get Telegram API credentials
+- Visit https://my.telegram.org/apps → create app → copy your API ID & API Hash
+
+4) Run the desktop app
 ```bash
-# from repo root
 npx electron electron/main.js
 ```
-Backend only (for API testing)
-```bash
-python3 python/backend.py
-```
 
-## Usage (step‑by‑step)
-### 1) Video Converter
-1) Open the “Video Converter” tab
-2) Add videos (button or drag & drop)
-3) Choose “Output Directory”
-4) Start Conversion; monitor per‑file and overall progress
-5) Use Pause/Resume when needed
-6) Optional: Run “Hex Edit” on resulting WebM files
+## 🧭 Usage (60‑second overview)
+1) Convert your media (Video/Image tabs) → pick output → Convert
+2) Open Sticker Bot tab → enter API ID, API Hash, phone → Connect → enter code (and 2FA if set)
+3) Add stickers → set emojis (bulk options available) → set Pack Name + URL → Create Pack → get shareable link
 
-Notes
-- FFmpeg must be installed and visible in PATH
-- Converted files are written to your selected output directory
+## 🎬 Feature Tour
 
-### 2) Image Converter
-1) Open “Image Converter” tab
-2) Add images (PNG/JPG/WEBP) and optionally preview
-3) Choose output format (PNG/WEBP) and quality
-4) Pick output directory
-5) Click Convert; watch the status area for progress
+<!-- Add GIFs/screenshots to the paths below. Keep width ~900–1200px for readability. -->
 
-Notes
-- ImageMagick must be installed and visible in PATH
-- Output meets Telegram rules: 512 px max side, PNG/WEBP, ≤ 512 KB, transparency preserved
+### Video Converter (WebM stickers)
+- Batch add, drag & drop, progress bars, pause/resume, optional Hex‑Edit
+- Output is Telegram‑ready video stickers
+<!-- Add GIF: assets/screens/video-converter.gif -->
 
-### 3) Sticker Pack automation
-1) Connect to Telegram (Sticker Bot tab)
-   - Enter API ID, API Hash, and phone number
-   - Click “Connect to Telegram” and complete code + optional 2FA prompts
-2) Import media and assign emojis
-   - Choose “Images” or “Videos”, then “Add” (drag & drop supported)
-   - Open Emoji modal to set per‑file emojis (Set/All/Random/Sequential/Theme)
-3) Configure the pack
-   - Pack Name and URL Name (validated in UI)
-   - Choose sticker type (image or video)
-   - Icon: upload WebM 100x100 ≤ 32 KB, or enable Auto‑skip to use the first sticker
-4) Create the pack
-   - Progress shows current file and counts; Cancel if needed
-   - If URL Name is taken, a retry dialog guides up to three attempts
-   - On success, a shareable link is shown with “Open in Telegram”
+### Image Converter (PNG/WEBP)
+- Auto‑resize to 512px max, quality controls, transparency preserved
+<!-- Add GIF: assets/screens/image-converter.gif -->
 
-### 4) Settings and Stats
-- System Information panel (app version, FFmpeg status, platform)
-- Database Info (totals for conversions, hex edits, image conversions, stickers)
-- Export Stats (JSON) and Reset Stats
-- Clear Logs and Clear Credentials
-- Kill Python Processes (critical; terminates this app’s backend and related processes)
+### Sticker Pack Automation
+- Connect via Telethon, add media, smart emoji assignment, icon flow, URL retries
+<!-- Add GIF: assets/screens/sticker-bot-connect.gif -->
+<!-- Add GIF: assets/screens/create-pack.gif -->
+<!-- Add PNG: assets/screens/success-link.png -->
 
-## Keyboard shortcuts
-- Ctrl/Cmd + N: Add files (contextual)
-- Ctrl/Cmd + Enter: Start conversion/creation (contextual)
-- Ctrl/Cmd + R: Reset Sticker form
-- Esc: Close modals
-- F5: Refresh backend status
+## ⚙️ Configuration
 
-## Configuration (env vars)
-Electron (app startup)
-- ENABLE_GPU=1 — opt‑in GPU acceleration (default is software rendering)
-- ELECTRON_DEVTOOLS=1 — open DevTools on launch (dev only)
+Electron (startup)
+- `ENABLE_GPU=1` — opt‑in GPU acceleration
+- `ELECTRON_DEVTOOLS=1` — open DevTools on launch (dev only)
 
 Backend (Python)
-- BACKEND_LOG_LEVEL=INFO|WARNING|ERROR (default WARNING)
-- BACKEND_LOG_TO_STDOUT=1 — also log to stdout
+- `BACKEND_LOG_LEVEL=INFO|WARNING|ERROR` (default WARNING)
+- `BACKEND_LOG_TO_STDOUT=1` — also log to stdout
 
 Example
 ```bash
 BACKEND_LOG_LEVEL=INFO BACKEND_LOG_TO_STDOUT=1 npx electron electron/main.js
 ```
 
-## Data and logs
-- Stats: `logs/stats.json` (project root)
-- Backend log: `python/backend.log`
-- Rotating module logs: `python/logs/`
-  - `video_conversion.log`
-  - `hex_edit.log`
-  - `sticker_bot.log`, `sticker_bot_errors.log`, `telegram_connection.log`
+## ⌨️ Keyboard Shortcuts
+- Ctrl/Cmd + N — Add files (contextual)
+- Ctrl/Cmd + Enter — Start conversion/creation (contextual)
+- Ctrl/Cmd + R — Reset Sticker form
+- Esc — Close modals
+- F5 — Refresh backend status
 
-## API (local backend)
+## 🗂 Project Structure
+```text
+.
+├─ electron/
+│  ├─ main.js
+│  └─ preload.js
+├─ python/
+│  ├─ backend.py
+│  ├─ video_converter.py
+│  ├─ image_processor.py
+│  ├─ sticker_bot.py
+│  ├─ telegram_connection_handler.py
+│  └─ ...
+├─ logs/
+│  └─ stats.json
+├─ assets/                # Put your media here
+│  ├─ hero.png            # Top hero banner (screenshot or GIF)
+│  └─ screens/
+│     ├─ video-converter.gif
+│     ├─ image-converter.gif
+│     ├─ sticker-bot-connect.gif
+│     ├─ create-pack.gif
+│     └─ success-link.png
+└─ README.md
+```
+
+## 🧾 Data & Logs
+- Stats: `logs/stats.json`
+- Backend log: `python/backend.log`
+- Rotating logs: `python/logs/` (video_conversion.log, hex_edit.log, sticker_bot*.log, telegram_connection.log)
+- Credentials: `python/telegram_credentials.json` (encrypted if `cryptography` is installed)
+
+<details>
+<summary><b>📚 Local backend API (for developers)</b></summary>
+
 Base URL: `http://127.0.0.1:5000`
 
 Health & system
@@ -215,26 +199,32 @@ Maintenance
 - POST `/api/clear-session`
 - POST `/api/clear-credentials`
 - POST `/api/kill-our-processes`
+</details>
 
-## Troubleshooting
-- FFmpeg/ImageMagick not found: install and ensure they’re in PATH; use the checks in Settings
-- Telegram code invalid or 2FA failed: retry carefully; respect Telegram rate limits (the UI surfaces wait messages)
-- URL name taken: follow the guided retry dialog (up to 3 attempts)
-- Backend unresponsive: use “Kill Python Processes” from Settings, then relaunch the app
+## 🧩 Troubleshooting
+- FFmpeg/ImageMagick not found → install and ensure they’re in PATH (check in Settings)
+- Telegram code invalid or 2FA failed → retry carefully; respect rate limits
+- URL name taken → use the guided retry dialog (up to 3 attempts)
+- Backend unresponsive → use “Kill Python Processes” in Settings, then relaunch
 
-## Roadmap (installer)
-- Packaged installers (e.g., AppImage/DEB, Windows .exe, macOS .dmg) are planned but not included yet in this repository. For now, run from source as shown above.
+## ❓ FAQ
+- Do I need to chat with @Stickers? → No, the app handles pack creation via Telethon.
+- What sticker limits apply? → Up to 120 items per pack (Telegram limit at the time of writing).
+- Can I skip the icon? → Yes; enable Auto‑skip and the first sticker will be used.
+- Where is my data stored? → Locally on your machine (see Data & Logs).
 
-## Contributing
-- Open issues and PRs with clear reproduction steps
-- Keep changes scoped; follow existing patterns in `electron/` and `python/`
-- Do not commit secrets; use environment variables locally
+## 🔒 Security & Privacy
+- Credentials are kept at `python/telegram_credentials.json` (encrypted when possible)
+- No external telemetry; usage stats are stored locally only
 
-## Security & privacy
-- Telegram credentials are stored at `python/telegram_credentials.json`
-  - If `cryptography` is installed, they are encrypted; otherwise stored as plain text
-  - You can clear credentials from Settings or via POST `/api/clear-credentials`
-- No external telemetry; stats are local (`logs/stats.json`).
+## 🤝 Contributing
+PRs are welcome — please follow existing patterns in `electron/` and `python/` and keep changes focused.
 
-## License
-No LICENSE file is present in this repository. By default, all rights are reserved by the author. If you plan to use or distribute this project, please contact the author or add an explicit license to the repository.
+## 📜 License
+No LICENSE file is present. By default, all rights are reserved by the author. If you plan to use or distribute this project, please contact the author or add an explicit license.
+
+---
+
+<p align="center">
+  If this helped you, consider starring the repo ⭐ and sharing your sticker pack!
+</p>
