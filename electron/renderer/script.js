@@ -8065,13 +8065,9 @@ This action cannot be undone. Are you sure?
         <div class="modal kill-processes-modal-content">
           <div class="modal-header">
             <h3>
-              <i class="fas fa-skull-crossbones" style="color: #ff6b6b;"></i>
+              <i class="fas fa-skull-crossbones"></i>
               Kill Python Processes
-              <span class="status-badge" style="background: rgba(220, 53, 69, 0.2); color: #ff6b6b;">CRITICAL</span>
             </h3>
-            <div class="info-details">
-              This will terminate all Python processes on your system
-            </div>
           </div>
           
           <div class="modal-body">
@@ -8080,50 +8076,43 @@ This action cannot be undone. Are you sure?
                 <div class="warning-icon">
                   <i class="fas fa-exclamation-triangle"></i>
                 </div>
-                <div class="warning-title">⚠️ WARNING: Destructive Operation</div>
-                <div class="warning-details">
-                  This action will <strong>immediately terminate</strong> all active Python processes
+                <div class="warning-text">
+                  Terminates all Python processes including:
                 </div>
               </div>
               
-              <div class="affected-processes-section">
-                <div class="section-label">
-                  <i class="fas fa-list"></i>
-                  Affected Processes:
+              <div class="process-list">
+                <div class="process-item">
+                  <i class="fas fa-server"></i>
+                  <span>Backend server</span>
                 </div>
-                <div class="process-list">
-                  <div class="process-item">
-                    <i class="fas fa-server"></i>
-                    <span>This app's backend server</span>
-                  </div>
-                  <div class="process-item">
-                    <i class="fas fa-code"></i>
-                    <span>Any running Python scripts</span>
-                  </div>
-                  <div class="process-item">
-                    <i class="fas fa-book"></i>
-                    <span>Jupyter notebooks</span>
-                  </div>
-                  <div class="process-item">
-                    <i class="fas fa-laptop-code"></i>
-                    <span>Python IDEs and debuggers</span>
-                  </div>
+                <div class="process-item">
+                  <i class="fas fa-code"></i>
+                  <span>Python scripts</span>
+                </div>
+                <div class="process-item">
+                  <i class="fas fa-book"></i>
+                  <span>Jupyter notebooks</span>
+                </div>
+                <div class="process-item">
+                  <i class="fas fa-laptop-code"></i>
+                  <span>IDEs & debuggers</span>
                 </div>
               </div>
               
               <div class="important-note">
                 <i class="fas fa-info-circle"></i>
-                <span><strong>Important:</strong> You will need to restart this application after killing processes</span>
+                <span>Restart required after killing processes</span>
               </div>
             </div>
           </div>
           
           <div class="modal-footer">
             <button class="btn btn-secondary" onclick="window.app?.hideKillProcessesModal()">
-              <i class="fas fa-times"></i> Cancel
+              Cancel
             </button>
             <button class="btn btn-danger" onclick="window.app?.confirmKillProcesses();">
-              <i class="fas fa-skull-crossbones"></i> Kill All Processes
+              Kill Processes
             </button>
           </div>
         </div>
@@ -8726,7 +8715,7 @@ This action cannot be undone. Are you sure?
       let url = "";
       switch(type) {
         case "coffee":
-          url = "https://buymeacoffee.com/JoonJelly"; // Updated with actual link
+          url = "https://buymeacoffee.com/joonjelly"; // Updated with actual link
           break;
         case "paypal":
           url = "https://paypal.me/"; // Replace with your actual link
