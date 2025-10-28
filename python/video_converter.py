@@ -260,6 +260,22 @@ class VideoConverterCore:
             start_time = time.time()
 
             while attempt <= max_attempts:
+                # Check for pause before each attempt
+                if process_id:
+                    try:
+                        with self.process_lock:
+                            if process_id in self.active_processes:
+                                # Wait while paused
+                                while self.active_processes[process_id].get("paused", False):
+                                    self.logger.info(f"[PAUSE] Conversion paused for {filename}")
+                                    time.sleep(1)
+                                    # Check if stopped while paused
+                                    if self.active_processes[process_id]["status"] == "stopped":
+                                        self.logger.info(f"[ABORT] Conversion stopped while paused")
+                                        return False
+                    except Exception as e:
+                        self.logger.error(f"[PAUSE] Error checking pause in conversion: {e}")
+                
                 conversion_attempts += 1
                 self.logger.debug(f"Conversion Attempt {conversion_attempts} - CRF: {crf}, Bitrate: {initial_bitrate} kbps")
                 
@@ -641,13 +657,25 @@ class VideoConverterCore:
                     'filename': filename
                 })
 
-                # Abort if user pressed STOP in GUI
+                # Check for pause or stop
                 try:
                     with self.process_lock:
-                        if process_id in self.active_processes and self.active_processes[process_id]["status"] == "stopped":
-                            self.logger.info(f"[ABORT] Process {process_id} stopped by user")
-                            break
-                except Exception:
+                        if process_id in self.active_processes:
+                            # Check if stopped
+                            if self.active_processes[process_id]["status"] == "stopped":
+                                self.logger.info(f"[ABORT] Process {process_id} stopped by user")
+                                break
+                            
+                            # Check if paused - wait until resumed
+                            while self.active_processes[process_id].get("paused", False):
+                                self.logger.info(f"[PAUSE] Process {process_id} is paused, waiting...")
+                                time.sleep(1)  # Check every second
+                                # Check if stopped while paused
+                                if self.active_processes[process_id]["status"] == "stopped":
+                                    self.logger.info(f"[ABORT] Process {process_id} stopped while paused")
+                                    break
+                except Exception as e:
+                    self.logger.error(f"[PAUSE] Error checking pause state: {e}")
                     pass
 
                 # Convert the file - CPU mode only
