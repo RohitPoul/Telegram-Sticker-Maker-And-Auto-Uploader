@@ -392,7 +392,7 @@ class TutorialSystem {
         outline-offset: 1px;
       }
       
-      /* Tutorial Launcher Button - Enhanced glass effect */
+      /* Tutorial Launcher Button - Enhanced glass effect with subtle glow */
       .tutorial-launcher {
         position: fixed;
         bottom: 20px;
@@ -402,10 +402,10 @@ class TutorialSystem {
         border-radius: 50%;
         background: rgba(20, 20, 20, 0.6);
         color: #f5f5f5;
-        border: 1px solid rgba(255, 255, 255, 0.18);
+        border: 1px solid rgba(102, 126, 234, 0.4);
         font-size: 20px;
         cursor: pointer;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25), 0 0 12px rgba(102, 126, 234, 0.3);
         z-index: 9997;
         transition: all 0.2s ease;
         display: flex;
@@ -416,8 +416,9 @@ class TutorialSystem {
 
       .tutorial-launcher:hover {
         transform: scale(1.05);
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3), 0 0 16px rgba(102, 126, 234, 0.5);
         background: rgba(30, 30, 30, 0.7);
+        border-color: rgba(102, 126, 234, 0.6);
       }
 
       .tutorial-launcher.hidden {
