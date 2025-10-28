@@ -492,16 +492,7 @@ class TelegramUtilities {
     }
 
     // Add hex edit pause/resume event listeners
-    const pauseHexBtn = document.getElementById("pause-hex-edit");
-    const resumeHexBtn = document.getElementById("resume-hex-edit");
-
-    if (pauseHexBtn) {
-      pauseHexBtn.addEventListener("click", () => this.pauseOperation());
-    }
-
-    if (resumeHexBtn) {
-      resumeHexBtn.addEventListener("click", () => this.resumeOperation());
-    }
+    // Hex edit pause/resume removed - not needed for quick operations
 
     // Sticker Bot Events - with null checks
     const connectTelegramBtn = document.getElementById("connect-telegram");
@@ -3271,8 +3262,6 @@ class TelegramUtilities {
       // Update UI - Disable conversion button, enable hex edit pause, disable conversion
       const startBtn = document.getElementById("start-conversion");
       const hexBtn = document.getElementById("start-hex-edit");
-      const pauseBtn = document.getElementById("pause-hex-edit");
-      const resumeBtn = document.getElementById("resume-hex-edit");
 
       if (startBtn) {
         startBtn.disabled = true;
@@ -3284,15 +3273,7 @@ class TelegramUtilities {
         hexBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Hex Editing...';
       }
 
-      if (pauseBtn) {
-        pauseBtn.style.display = "inline-block";
-        pauseBtn.disabled = false;
-      }
-
-      if (resumeBtn) {
-        resumeBtn.style.display = "none";
-      }
-
+      // No pause/resume for hex edit - it's too fast
       this.updateButtonStates();
 
       const processId = `hex_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -3607,19 +3588,29 @@ class TelegramUtilities {
     this.currentOperation = null;
     this.currentProcessId = null;
 
-    // Re-enable buttons
+    // Re-enable buttons and hide pause/resume
     const startBtn = document.getElementById("start-conversion");
     const hexBtn = document.getElementById("start-hex-edit");
+    const pauseBtn = document.getElementById("pause-conversion");
+    const resumeBtn = document.getElementById("resume-conversion");
 
     if (startBtn) {
       startBtn.disabled = false;
       startBtn.innerHTML = '<i class="fas fa-play"></i> Start Conversion';
+      startBtn.style.display = "inline-flex";
+      startBtn.style.opacity = "1";
     }
 
     if (hexBtn) {
       hexBtn.disabled = false;
       hexBtn.innerHTML = '<i class="fas fa-edit"></i> Hex Edit';
+      hexBtn.style.display = "inline-flex";
+      hexBtn.style.opacity = "1";
     }
+
+    // Hide pause/resume buttons
+    if (pauseBtn) pauseBtn.style.display = "none";
+    if (resumeBtn) resumeBtn.style.display = "none";
 
     if (progress.status === "completed") {
       const operationType = wasHexEdit ? "Hex Edit" : "Conversion";
@@ -3724,6 +3715,9 @@ class TelegramUtilities {
 
     // Force immediate stats refresh to show updated counters
     await this.forceUpdateDatabaseStats();
+
+    // Reset button states to show Start/Hex Edit buttons
+    this.updateButtonStates();
   }
 
   updateOverallProgress(progress) {
@@ -7821,14 +7815,11 @@ This action cannot be undone. Are you sure?
     const pauseConversionBtn = document.getElementById("pause-conversion");
     const resumeConversionBtn = document.getElementById("resume-conversion");
     const startHexEditBtn = document.getElementById("start-hex-edit");
-    const pauseHexEditBtn = document.getElementById("pause-hex-edit");
-    const resumeHexEditBtn = document.getElementById("resume-hex-edit");
 
     // Reset all buttons first
-    [startConversionBtn, pauseConversionBtn, resumeConversionBtn,
-      startHexEditBtn, pauseHexEditBtn, resumeHexEditBtn].forEach(btn => {
-        if (btn) btn.style.display = "none";
-      });
+    [startConversionBtn, pauseConversionBtn, resumeConversionBtn, startHexEditBtn].forEach(btn => {
+      if (btn) btn.style.display = "none";
+    });
 
     if (!this.currentOperation) {
       // No operation running
@@ -7857,21 +7848,18 @@ This action cannot be undone. Are you sure?
         if (pauseConversionBtn) pauseConversionBtn.style.display = "inline-flex";
       }
     } else if (this.currentOperation === "hexediting") {
-      // Hex editing running
+      // Hex editing running - no pause/resume for hex edit (too fast)
       if (startConversionBtn) {
         startConversionBtn.style.display = "inline-flex";
         startConversionBtn.disabled = true;
-      }
-
-      if (this.isPaused) {
-        if (resumeHexEditBtn) resumeHexEditBtn.style.display = "inline-flex";
-      } else {
-        if (pauseHexEditBtn) pauseHexEditBtn.style.display = "inline-flex";
       }
     }
   }
 
   async pauseOperation() {
+    // NOTE: This only sets a pause flag - it doesn't actually suspend the Python process
+    // The conversion will continue running but UI shows "paused" state
+    // True process suspension would require OS-level process control (SIGSTOP/SIGCONT)
     if (!this.currentProcessId || this.isPaused) return;
 
     try {
