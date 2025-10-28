@@ -1000,14 +1000,15 @@ html {
 }
 
 /* File Lists */
-.file-list {
-  min-height: 150px;
-  max-height: 250px;
+.file-list,
+.media-list {
+  height: 350px;
   overflow-y: auto;
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius);
   background: var(--bg-input);
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 0.5rem;
 }
 
 .file-item,
@@ -1265,6 +1266,8 @@ html {
   padding: 3rem 1rem;
   text-align: center;
   color: var(--text-muted);
+  height: 100%;
+  min-height: 350px;
 }
 
 .empty-state i {
@@ -2415,17 +2418,20 @@ html {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 1rem;
+    padding: 0.5rem 0.75rem;
     border-bottom: 1px solid var(--border-color);
     transition: var(--transition);
     border-left: 4px solid transparent;
     position: relative;
-    border-radius: 10px;
+    border-radius: 6px;
     background: var(--bg-tertiary);
+    margin-bottom: 4px;
+    min-height: 70px;
+    box-sizing: border-box;
 }
 
 .file-item + .file-item {
-    margin-top: 6px;
+    margin-top: 0;
 }
 
 .file-item:hover {
@@ -7052,7 +7058,7 @@ html {
 /* Ultra Compact 3-Column Layout */
 .image-ultra-compact-layout {
   display: grid;
-  grid-template-columns: 380px 1fr 320px;
+  grid-template-columns: 450px 1fr 320px;
   gap: 1rem;
   padding: 1rem;
   height: calc(100vh - 240px);
@@ -7843,13 +7849,13 @@ html {
 /* Responsive */
 @media (max-width: 1600px) {
   .image-ultra-compact-layout {
-    grid-template-columns: 320px 1fr 300px;
+    grid-template-columns: 380px 1fr 300px;
   }
 }
 
 @media (max-width: 1400px) {
   .image-ultra-compact-layout {
-    grid-template-columns: 280px 1fr 280px;
+    grid-template-columns: 320px 1fr 280px;
   }
   
   .image-grid-compact {
@@ -7887,4 +7893,11 @@ html {
   .image-preview-container {
     min-height: 300px;
   }
+}
+
+/* Video File List Compact Layout */
+#video-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
