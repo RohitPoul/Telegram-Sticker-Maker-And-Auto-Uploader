@@ -11,10 +11,10 @@ window.addEventListener("error", (event) => {
     colno: event.colno,
     stack: event.error?.stack
   });
-  
+
   // Prevent app from crashing completely
   event.preventDefault();
-  
+
   // Show error toast if possible
   if (window.app && window.app.showToast) {
     window.app.showToast("error", "Application Error", `Error: ${event.message}`);
@@ -23,10 +23,10 @@ window.addEventListener("error", (event) => {
 
 window.addEventListener("unhandledrejection", (event) => {
   console.error("🚫 [GLOBAL_ERROR] Unhandled promise rejection:", event.reason);
-  
+
   // Prevent app from crashing
   event.preventDefault();
-  
+
   // Show error toast if possible
   if (window.app && window.app.showToast) {
     window.app.showToast("error", "Promise Error", `Promise rejection: ${event.reason}`);
@@ -48,7 +48,7 @@ class TelegramUtilities {
     this.currentProcessId = null;
     this.currentStickerProcessId = null; // Add specific tracking for sticker processes
     this.currentEmojiIndex = null;
-    
+
     // Consolidated modal state management - cleaner than multiple boolean flags
     this.modalState = {
       isEmojiSaving: false,
@@ -57,12 +57,12 @@ class TelegramUtilities {
       isSubmittingCode: false,
       isSubmittingPassword: false
     };
-    
+
     // Promise-based submission locks to prevent double submissions
     this._submitCodePromise = null;
     this._submitPasswordPromise = null;
     this._saveEmojiPromise = null;
-    
+
     // CRITICAL FIX: Add workflow state tracking to prevent premature completion
     this.workflowState = {
       iconUploaded: false,
@@ -85,10 +85,10 @@ class TelegramUtilities {
       totalStickers: 0
     };
     this.autoScrollEnabled = true; // Initialize auto-scroll
-    
+
     // Prevent double submission - handled in modalState now
     this.isConnecting = false;
-    
+
     // OPTIMIZED: Add properties to prevent race conditions and duplicate notifications
     this.lastStageWasQueue = false;
     this.lastStatusMessage = null;
@@ -97,46 +97,46 @@ class TelegramUtilities {
     this.lastStage = null;
     this.telegramConnectionData = null;
     this.mediaData = {};
-    
+
     // Track logged file statuses to prevent duplicate logging
     this.loggedFileStatuses = new Set();
-    
+
     // Toast debouncing to prevent duplicates
     this._lastToast = { type: '', title: '', message: '', time: 0 };
     this._toastDebounceTime = 500; // ms
-    
+
     // Debouncing for UI updates
     this.debouncedUpdateVideoFileList = this.debounce(this.updateVideoFileList.bind(this), 100);
     this._lastMinorUpdate = 0;
-    
+
     this.init();
     this.initializeNavigation(); // Add this line to initialize navigation
     this.initializeTelegramForm(); // Add this to load saved Telegram credentials
-    
+
     // Initialize Image Handler
     /* global ImageHandler */
     if (typeof ImageHandler !== "undefined") {
       this.imageHandler = new ImageHandler(this);
     }
   }
-  
+
   // Add a debouncing utility function
   debounce(func, wait, immediate) {
     let timeout;
     return function executedFunction() {
       const context = this;
       const args = arguments;
-          
-      const later = function() {
+
+      const later = function () {
         timeout = null;
         if (!immediate) func.apply(context, args);
       };
-  
+
       const callNow = immediate && !timeout;
-      
+
       clearTimeout(timeout);
       timeout = setTimeout(later, wait);
-      
+
       if (callNow) func.apply(context, args);
     };
   }
@@ -144,10 +144,10 @@ class TelegramUtilities {
   // Check if input contains a valid emoji
   isValidEmoji(input) {
     if (!input || typeof input !== 'string') return false;
-    
+
     const str = input.trim();
     if (!str) return false;
-    
+
     // Try to normalize the emoji - if it works, it's valid
     try {
       const normalized = this.normalizeEmoji(str);
@@ -163,17 +163,17 @@ class TelegramUtilities {
     } catch (e) {
       // If normalization fails, it's not a valid emoji
     }
-    
+
     return false;
   }
-  
+
   // FIXED: Normalize and clamp a user-provided emoji to the first visible grapheme cluster
   // Properly preserves variation selectors (e.g., U+FE0F) and ZWJ sequences so hearts stay red on Windows
   normalizeEmoji(input) {
     try {
       const str = String(input || "").trim();
       if (!str) return this.defaultEmoji || "❤️";
-      
+
       // Primary: Use Intl.Segmenter for proper grapheme cluster handling (Chrome 87+)
       if (typeof Intl !== "undefined" && Intl.Segmenter) {
         try {
@@ -187,20 +187,20 @@ class TelegramUtilities {
           console.warn("[EMOJI] Segmenter failed, using fallback:", e.message);
         }
       }
-      
+
       // Fallback for older browsers: Manual VS16 preservation
       // This is critical for Windows to show colored emojis (red heart instead of white)
       const codePoints = Array.from(str);
       if (codePoints.length === 0) return this.defaultEmoji || "❤️";
-      
+
       let result = codePoints[0];
       let i = 1;
-      
+
       // Append variation selectors, skin tones, and ZWJ sequences
       while (i < codePoints.length) {
         const cp = codePoints[i];
         const code = cp.codePointAt(0);
-        
+
         // Check if this is a modifier that should be preserved
         const isModifier = (
           cp === "\uFE0F" ||  // VS16 (emoji style) - CRITICAL for Windows
@@ -209,7 +209,7 @@ class TelegramUtilities {
           (code >= 0x1F3FB && code <= 0x1F3FF) ||  // Emoji skin tone modifiers
           code === 0x200D     // Zero-width joiner (for multi-char emojis)
         );
-        
+
         if (isModifier) {
           result += cp;
           // If ZWJ, also include the next character (e.g., for family emojis)
@@ -223,14 +223,14 @@ class TelegramUtilities {
           break;
         }
       }
-      
+
       // CRITICAL FIX: Ensure red heart on Windows by adding VS16 if missing
       // Check if the emoji is a heart or similar that needs VS16
       const needsVS16 = /^[\u2764\u2665\u2763\u2600-\u26FF\u2700-\u27BF]$/.test(result.charAt(0));
       if (needsVS16 && !result.includes("\uFE0F")) {
         result += "\uFE0F";  // Add VS16 to force emoji style
       }
-      
+
       return result;
     } catch (e) {
       console.error("[EMOJI] Normalization error:", e);
@@ -257,17 +257,17 @@ class TelegramUtilities {
       this.loadSettings();
       this.startSystemStatsMonitoring();
       await this.initializeTelegramConnection();
-      
+
       // Update stats immediately on startup
       this.updateSystemInfo();
       this.updateDatabaseStats();
-      
+
       // Add manual refresh function for testing
       window.forceRefreshStats = () => {
         this.updateSystemInfo();
         this.updateDatabaseStats();
       };
-      
+
       // Initialize button states
       this.updateButtonStates();
     } catch (error) {
@@ -286,15 +286,15 @@ class TelegramUtilities {
   startSystemStatsMonitoring() {
     // Initial stats fetch only
     this.updateSystemStats();
-    
+
     // Reduced frequency monitoring - only update every 30 seconds
     setInterval(() => {
       this.updateSystemStats();
     }, 30000);
   }
-  
 
-  
+
+
 
 
   async updateSystemStats() {
@@ -303,13 +303,13 @@ class TelegramUtilities {
       const payload = response?.data || response || {};
       const stats = payload.stats;
       if (response?.success && stats) {
-        
+
         // Update CPU stats with live percentage and color coding
         const cpuUsage = document.getElementById("cpu-usage");
         if (cpuUsage && stats.cpu) {
           const percent = stats.cpu.percent;
           cpuUsage.textContent = `${percent.toFixed(1)}%`;
-          
+
           // Color code based on usage
           if (percent > 80) {
             cpuUsage.style.color = "#ff4444";
@@ -319,7 +319,7 @@ class TelegramUtilities {
             cpuUsage.style.color = "#44ff44";
           }
         }
-        
+
         // Update RAM stats with live usage and color coding
         const ramUsage = document.getElementById("ram-usage");
         if (ramUsage && stats.memory) {
@@ -327,7 +327,7 @@ class TelegramUtilities {
           const total = (stats.memory.total / 1024).toFixed(1);
           const percent = stats.memory.percent;
           ramUsage.textContent = `${used}GB / ${total}GB`;
-          
+
           // Color code based on usage
           if (percent > 90) {
             ramUsage.style.color = "#ff4444";
@@ -363,28 +363,28 @@ class TelegramUtilities {
     if (!path || typeof path !== "string") {
       throw new Error("Invalid API path");
     }
-    
+
     // ENHANCED: Sanitize path to prevent [Errno 22] Invalid argument
     // Remove all control characters which can cause OS errors
     const sanitizedPath = path.replace(/[\x00-\x1f\x7f-\x9f]/g, "").trim();
-    
+
     if (!sanitizedPath || sanitizedPath.length === 0) {
       throw new Error("Invalid API path after sanitization");
     }
-    
+
     // FIXED: Direct path usage - backend handles sanitization
     const url = `http://127.0.0.1:5000${sanitizedPath}`;
-    
+
     // OPTIMIZED: Add timeout to prevent hanging requests
     // Use longer timeout for batch operations and status checks
     let timeoutDuration = 30000; // Default 30 seconds
     if (sanitizedPath.includes("/process-batch") || sanitizedPath.includes("/process-status")) {
       timeoutDuration = 120000; // 2 minutes for batch operations
     }
-    
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutDuration);
-    
+
     try {
       // ENHANCED: Validate and sanitize request body before sending
       let sanitizedBody = null;
@@ -400,24 +400,24 @@ class TelegramUtilities {
           throw new Error("Invalid request data - unable to serialize. Please check your inputs.");
         }
       }
-      
+
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: sanitizedBody,
         signal: controller.signal
       });
-      
+
       clearTimeout(timeoutId);
-      
+
       const text = await res.text();
       let json;
       try {
-        json = text ? JSON.parse(text) : {}; 
-      } catch (e) { 
-        json = { raw: text }; 
+        json = text ? JSON.parse(text) : {};
+      } catch (e) {
+        json = { raw: text };
       }
-      
+
       if (!res.ok) {
         const err = new Error(json?.error || `${res.status} ${res.statusText}`);
         err.status = res.status;
@@ -426,7 +426,7 @@ class TelegramUtilities {
       return json;
     } catch (error) {
       clearTimeout(timeoutId);
-      
+
       // FIXED: Better error handling for specific error types
       if (error.name === "AbortError") {
         throw new Error("Request timeout - server may be overloaded. Please try again.");
@@ -435,80 +435,80 @@ class TelegramUtilities {
       if (error.message && error.message.includes("timeout")) {
         throw new Error("Request timeout - server may be overloaded. Please try again.");
       }
-      
+
       // ENHANCED: Handle [Errno 22] Invalid argument errors specifically
       if (error.message && (error.message.includes("Invalid argument") || error.message.includes("Errno 22"))) {
         console.error("[API] Invalid argument error");
         throw new Error("Invalid request data - contains invalid characters. Please check your inputs and try again.");
       }
-      
+
       throw error;
     }
   }
   setupEventListeners() {
     // quiet
-    
+
     // Video Converter Events
     const addVideosBtn = document.getElementById("add-videos");
     const clearVideosBtn = document.getElementById("clear-videos");
     const browseOutputBtn = document.getElementById("browse-video-output");
     const startConversionBtn = document.getElementById("start-conversion");
-    
+
     const startHexEditBtn = document.getElementById("start-hex-edit");
-    
+
     if (addVideosBtn) {
       addVideosBtn.addEventListener("click", () => this.addVideoFiles());
     }
-    
+
     // Setup emoji modal enhancements
     this.setupEmojiModal();
-    
+
     if (clearVideosBtn) {
       clearVideosBtn.addEventListener("click", () => this.clearVideoFiles());
     }
-    
+
     if (browseOutputBtn) {
       browseOutputBtn.addEventListener("click", () => this.browseVideoOutput());
     }
-    
+
     if (startConversionBtn) {
       startConversionBtn.addEventListener("click", () => this.startVideoConversion());
     }
-    
+
     if (startHexEditBtn) {
       startHexEditBtn.addEventListener("click", () => this.startHexEdit());
     }
-      
+
     // Add pause/resume event listeners
     const pauseBtn = document.getElementById("pause-conversion");
     const resumeBtn = document.getElementById("resume-conversion");
-    
+
     if (pauseBtn) {
       pauseBtn.addEventListener("click", () => this.pauseOperation());
     }
-    
+
     if (resumeBtn) {
       resumeBtn.addEventListener("click", () => this.resumeOperation());
     }
-    
+
     // Add hex edit pause/resume event listeners
     const pauseHexBtn = document.getElementById("pause-hex-edit");
     const resumeHexBtn = document.getElementById("resume-hex-edit");
-    
+
     if (pauseHexBtn) {
       pauseHexBtn.addEventListener("click", () => this.pauseOperation());
     }
-    
+
     if (resumeHexBtn) {
       resumeHexBtn.addEventListener("click", () => this.resumeOperation());
     }
-    
+
     // Sticker Bot Events - with null checks
     const connectTelegramBtn = document.getElementById("connect-telegram");
     const clearMediaBtn = document.getElementById("clear-media");
     const createStickerPackBtn = document.getElementById("create-sticker-pack");
     const resetStickerFormBtn = document.getElementById("reset-sticker-form");
-    
+
     if (connectTelegramBtn) {
       connectTelegramBtn.addEventListener("click", () => this.connectTelegram());
     }
@@ -521,13 +521,13 @@ class TelegramUtilities {
     if (resetStickerFormBtn) {
       resetStickerFormBtn.addEventListener("click", () => this.resetStickerForm());
     }
-    
+
     // Icon Selection Modal Events - with null checks
     const uploadIconBtn = document.getElementById("upload-icon-btn");
     const skipIconBtn = document.getElementById("skip-icon-btn");
     const confirmIconUploadBtn = document.getElementById("confirm-icon-upload");
     const cancelIconSelectionBtn = document.getElementById("cancel-icon-selection");
-    
+
     if (uploadIconBtn) {
       uploadIconBtn.addEventListener("click", () => this.selectIconFile());
     }
@@ -540,11 +540,11 @@ class TelegramUtilities {
     if (cancelIconSelectionBtn) {
       cancelIconSelectionBtn.addEventListener("click", () => this.hideIconModal());
     }
-    
+
     // URL Name Retry Modal Events - with null checks
     const submitNewUrlBtn = document.getElementById("submit-new-url");
     const cancelUrlRetryBtn = document.getElementById("cancel-url-retry");
-    
+
     if (submitNewUrlBtn) {
       submitNewUrlBtn.addEventListener("click", (e) => {
         e.preventDefault();
@@ -555,59 +555,59 @@ class TelegramUtilities {
     if (cancelUrlRetryBtn) {
       cancelUrlRetryBtn.addEventListener("click", () => this.hideUrlNameModal());
     }
-    
+
     // Auto-skip icon setting - with null checks
     const autoSkipIconInput = document.getElementById("auto-skip-icon");
     const autoSkipHelpBtn = document.getElementById("auto-skip-help");
-    
+
     if (autoSkipIconInput) {
       autoSkipIconInput.addEventListener("change", () => {
         this.saveSettings();
         this.updateToggleText();
       });
     }
-    
+
     if (autoSkipHelpBtn) {
       autoSkipHelpBtn.addEventListener("click", () => {
         this.showAutoSkipHelp();
       });
     }
-    
+
     // Success modal buttons - with null checks
     // Note: Success modal buttons are dynamically created, so we don't add permanent listeners here
     // Event listeners for success modal buttons are added when the modal is created
-    
+
     // Real-time validation for pack name and URL name - with null checks
     const packNameInput = document.getElementById("pack-name");
     const packUrlNameInput = document.getElementById("pack-url-name");
-    
+
     if (packNameInput) {
       packNameInput.addEventListener("input", (e) => {
         const validation = this.validatePackName(e.target.value);
         this.updateValidationDisplay("pack-name", validation);
       });
     }
-    
+
     if (packUrlNameInput) {
       packUrlNameInput.addEventListener("input", (e) => {
         const validation = this.validateUrlName(e.target.value);
         this.updateValidationDisplay("pack-url-name", validation);
       });
     }
-    
+
     // Update toggle text on page load
     this.updateToggleText();
-    
+
     // Initialize validation display (empty state - no validation shown)
     // Validation will show as user types
-    
+
     // Media type selection
     const selectImageBtn = document.getElementById("select-image-type");
     const selectVideoBtn = document.getElementById("select-video-type");
     const mediaControls = document.getElementById("media-controls");
     const addMediaBtn = document.getElementById("add-media");
     const mediaTypeText = document.getElementById("media-type-text");
-    
+
     if (selectImageBtn) {
       selectImageBtn.addEventListener("click", () => {
         this.selectedMediaType = "image";
@@ -625,7 +625,7 @@ class TelegramUtilities {
         }
       });
     }
-    
+
     if (selectVideoBtn) {
       selectVideoBtn.addEventListener("click", () => {
         this.selectedMediaType = "video";
@@ -643,7 +643,7 @@ class TelegramUtilities {
         }
       });
     }
-    
+
     if (addMediaBtn) {
       addMediaBtn.addEventListener("click", () => {
         if (this.selectedMediaType === "image") {
@@ -655,14 +655,14 @@ class TelegramUtilities {
         }
       });
     }
-    
 
-    
+
+
     // Sort functionality
     const sortBtn = document.getElementById("sort-media");
     const sortOptions = document.getElementById("media-sort-options");
     const sortSelect = document.getElementById("sort-select");
-    
+
     if (sortBtn) {
       sortBtn.addEventListener("click", () => {
         if (sortOptions.style.display === "none") {
@@ -672,14 +672,14 @@ class TelegramUtilities {
         }
       });
     }
-    
+
     if (sortSelect) {
       sortSelect.addEventListener("change", (e) => {
         this.sortMedia(e.target.value);
         sortOptions.style.display = "none";
       });
     }
-    
+
     // Visibility Toggle Events for Credential Fields
     document.querySelectorAll(".btn-toggle-visibility").forEach(button => {
       button.addEventListener("click", (e) => {
@@ -687,7 +687,7 @@ class TelegramUtilities {
         const targetId = button.getAttribute("data-target");
         const targetInput = document.getElementById(targetId);
         const icon = button.querySelector("i");
-        
+
         if (targetInput.type === "password") {
           targetInput.type = "text";
           icon.classList.remove("fa-eye-slash");
@@ -701,38 +701,38 @@ class TelegramUtilities {
         }
       });
     });
-    
+
     // Paste from Clipboard Events
     document.querySelectorAll(".btn-paste").forEach(button => {
       button.addEventListener("click", async (e) => {
         e.preventDefault();
         const targetId = button.getAttribute("data-target");
         const targetInput = document.getElementById(targetId);
-        
+
         try {
           const text = await navigator.clipboard.readText();
           if (text) {
             targetInput.value = text.trim();
             targetInput.focus();
-            
+
             // Show temporary success feedback with smooth animation
             const icon = button.querySelector("i");
-            
+
             // Add success animation class
             button.style.transition = "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)";
             button.style.transform = "scale(1.1)";
-            
+
             icon.classList.remove("fa-paste");
             icon.classList.add("fa-check");
             button.style.color = "#28a745";
             button.style.backgroundColor = "rgba(40, 167, 69, 0.2)";
             button.style.borderColor = "rgba(40, 167, 69, 0.5)";
-            
+
             // Reset after animation
             setTimeout(() => {
               button.style.transform = "scale(1)";
             }, 200);
-            
+
             setTimeout(() => {
               icon.classList.remove("fa-check");
               icon.classList.add("fa-paste");
@@ -740,7 +740,7 @@ class TelegramUtilities {
               button.style.backgroundColor = "";
               button.style.borderColor = "";
             }, 1500);
-            
+
             // Save settings after paste
             this.saveSettings();
           }
@@ -749,7 +749,7 @@ class TelegramUtilities {
         }
       });
     });
-    
+
     // Modal Events - with null checks
     const submitCodeBtn = document.getElementById("submit-code");
     const cancelCodeBtn = document.getElementById("cancel-code");
@@ -757,7 +757,7 @@ class TelegramUtilities {
     const cancelPasswordBtn = document.getElementById("cancel-password");
     const saveEmojiBtn = document.getElementById("save-emoji");
     const cancelEmojiBtn = document.getElementById("cancel-emoji");
-    
+
     if (submitCodeBtn) {
       submitCodeBtn.addEventListener("click", () => this.submitVerificationCode());
     }
@@ -776,7 +776,7 @@ class TelegramUtilities {
     if (cancelEmojiBtn) {
       cancelEmojiBtn.addEventListener("click", () => this.hideModal());
     }
-    
+
     // Settings Events - with null checks
     const clearDataBtn = document.getElementById("clear-data");
     const exportSettingsBtn = document.getElementById("export-settings");
@@ -784,7 +784,7 @@ class TelegramUtilities {
     const clearLogsBtn = document.getElementById("clear-logs");
     const clearCredentialsBtn = document.getElementById("clear-credentials");
     const killPythonBtn = document.getElementById("kill-python-processes");
-    
+
     if (clearDataBtn) {
       clearDataBtn.addEventListener("click", () => this.clearApplicationData());
     }
@@ -803,7 +803,7 @@ class TelegramUtilities {
     if (killPythonBtn) {
       killPythonBtn.addEventListener("click", () => this.killPythonProcesses());
     }
-    
+
     // Theme selector
     const themeSelector = document.getElementById("theme-selector");
     if (themeSelector) {
@@ -811,13 +811,13 @@ class TelegramUtilities {
         this.applyTheme(e.target.value);
         localStorage.setItem("app_theme", e.target.value);
       });
-      
+
       // Set initial theme
       const savedTheme = localStorage.getItem("app_theme") || "dark";
       themeSelector.value = savedTheme;
       this.applyTheme(savedTheme);
     }
-    
+
     // Modal overlay click handling - prevent accidental closure
     const modalOverlay = document.getElementById("modal-overlay");
     if (modalOverlay) {
@@ -827,35 +827,35 @@ class TelegramUtilities {
         if (!activeModal) {
           return;
         }
-        
+
         const modalId = activeModal.id;
-        
+
         const isCritical = activeModal.hasAttribute("data-critical");
-        
+
         // Critical modals that should NOT close on overlay click
         const criticalModals = ["success-modal", "url-name-modal", "icon-modal"];
-        
+
         if (criticalModals.includes(modalId) || isCritical) {
           // Add shake animation to indicate modal cannot be dismissed
           activeModal.classList.add("modal-shake");
           setTimeout(() => {
             activeModal.classList.remove("modal-shake");
           }, 500);
-          
+
           // Show helpful toast for success modal
           if (modalId === "success-modal") {
             this.showToast("info", "Modal Protected", "Use the buttons to interact with your sticker pack!");
           }
           return;
         }
-        
+
         // Allow other modals to close on overlay click
         if (e.target === e.currentTarget) {
           // Check if we should prevent closure for emoji modal
           if (this.modalState.preventEmojiClosure && modalId === "emoji-modal") {
             return;
           }
-          
+
           // Add a small delay to prevent immediate closure
           setTimeout(() => {
             this.hideModal();
@@ -863,12 +863,12 @@ class TelegramUtilities {
         }
       });
     }
-    
+
     // Enter key handlers for modals - with null checks
     const verificationCodeInput = document.getElementById("verification-code");
     const twoFactorPasswordInput = document.getElementById("two-factor-password");
     const emojiInput = document.getElementById("emoji-input");
-    
+
     if (verificationCodeInput) {
       verificationCodeInput.addEventListener("keypress", (e) => {
         if (e.key === "Enter") {
@@ -888,17 +888,17 @@ class TelegramUtilities {
     if (emojiInput) {
       // Track last validation to avoid toast spam
       let lastInvalidTime = 0;
-      
+
       // Block all non-emoji input
       emojiInput.addEventListener("input", (e) => {
         const value = e.target.value;
-        
+
         // If input exists, validate it's an emoji
         if (value) {
           if (!this.isValidEmoji(value)) {
             // Not a valid emoji - remove the last character typed
             e.target.value = e.target.value.slice(0, -1);
-            
+
             // Only show toast once per second to avoid spam
             const now = Date.now();
             if (now - lastInvalidTime > 1000) {
@@ -914,23 +914,23 @@ class TelegramUtilities {
           }
         }
       });
-      
+
       emojiInput.addEventListener("keypress", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
           this.saveEmoji();
         }
       });
-      
+
       // Add paste support for emojis (Ctrl+V)
       emojiInput.addEventListener("paste", (e) => {
         e.preventDefault();
         const pastedText = (e.clipboardData || window.clipboardData).getData("text");
         const trimmed = pastedText.trim();
-        
+
         // Try to normalize first - if it works, it's valid
         const normalizedEmoji = this.normalizeEmoji(trimmed);
-        
+
         if (normalizedEmoji && normalizedEmoji.length > 0) {
           emojiInput.value = normalizedEmoji;
           this.showToast("success", "Emoji Pasted", `Pasted: ${normalizedEmoji}`);
@@ -939,7 +939,7 @@ class TelegramUtilities {
         }
       });
     }
-    
+
     // Paste button for emoji clipboard
     const pasteEmojiBtn = document.getElementById("paste-emoji-btn");
     if (pasteEmojiBtn) {
@@ -947,10 +947,10 @@ class TelegramUtilities {
         try {
           const clipboardText = await navigator.clipboard.readText();
           const trimmed = clipboardText.trim();
-          
+
           // Try to normalize first - if it works, it's valid
           const normalizedEmoji = this.normalizeEmoji(trimmed);
-          
+
           if (normalizedEmoji && normalizedEmoji.length > 0) {
             const emojiInput = document.getElementById("emoji-input");
             if (emojiInput) {
@@ -965,22 +965,22 @@ class TelegramUtilities {
         }
       });
     }
-    
+
     // Theme switching
     const themeToggle = document.getElementById("theme-toggle");
     if (themeToggle) {
       themeToggle.addEventListener("click", () => this.toggleTheme());
     }
-    
+
     // Drag and drop for video files
     this.setupDragAndDrop();
-    
+
     // Advanced settings
     this.setupAdvancedSettings();
-    
+
     // Status list controls
     this.setupStatusControls();
-    
+
     // Keyboard shortcuts
     this.setupKeyboardShortcuts();
   }
@@ -988,7 +988,7 @@ class TelegramUtilities {
   setupTabSwitching() {
     const navItems = document.querySelectorAll(".nav-item");
     const tabContents = document.querySelectorAll(".tab-content");
-    
+
     navItems.forEach((item) => {
       item.addEventListener("click", () => {
         const tabId = item.getAttribute("data-tab");
@@ -1009,13 +1009,13 @@ class TelegramUtilities {
 
   handleTabSwitch(tabId) {
     const tabContents = document.querySelectorAll(".tab-content");
-    
+
     tabContents.forEach((content) => {
       content.classList.remove("active");
     });
-    
+
     const targetTab = document.getElementById(tabId);
-    
+
     if (targetTab) {
       targetTab.classList.add("active");
     }
@@ -1063,29 +1063,29 @@ class TelegramUtilities {
 
   setupDragAndDrop() {
     const dropZones = [
-      { 
+      {
         element: document.getElementById("video-file-list"),
         handler: this.handleDroppedVideoFiles.bind(this),
         validExtensions: ["mp4", "avi", "mov", "mkv", "flv", "webm"]
       },
-      { 
+      {
         element: document.getElementById("sticker-media-list"),
         handler: this.handleDroppedMediaFiles.bind(this),
         validExtensions: ["png", "jpg", "jpeg", "webp", "webm"]
       }
     ];
-    
+
     dropZones.forEach(zone => {
       if (!zone.element) return;
-      
+
       // Prevent default drag behaviors
       ["dragenter", "dragover", "dragleave", "drop"].forEach(eventName => {
         zone.element.addEventListener(eventName, this.preventDefaults, false);
       });
-      
+
       zone.element.addEventListener("dragover", () => zone.element.classList.add("drag-over"));
       zone.element.addEventListener("dragleave", () => zone.element.classList.remove("drag-over"));
-      
+
       zone.element.addEventListener("drop", (e) => {
         zone.element.classList.remove("drag-over");
         const files = Array.from(e.dataTransfer.files)
@@ -1093,7 +1093,7 @@ class TelegramUtilities {
             const extension = file.name.split(".").pop().toLowerCase();
             return zone.validExtensions.includes(extension);
           });
-        
+
         zone.handler(files);
       });
     });
@@ -1102,20 +1102,20 @@ class TelegramUtilities {
   async handleDroppedVideoFiles(files) {
     const videoExtensions = ["mp4", "avi", "mov", "mkv", "flv", "webm"];
     let addedCount = 0;
-    
+
     for (let index = 0; index < files.length; index++) {
       const file = files[index];
-      
+
       const extension = file.name.split(".").pop().toLowerCase();
-      
+
       if (videoExtensions.includes(extension)) {
         // Use file.path if available (Electron), otherwise use name
         const filePath = file.path || file.name;
-        
+
         if (!this.videoFiles.some((f) => f.path === filePath)) {
           // Get file metadata first
           const metadata = await this.getFileMetadata(filePath);
-          
+
           this.videoFiles.push({
             path: filePath,
             name: file.name,
@@ -1129,7 +1129,7 @@ class TelegramUtilities {
             fileObject: file // Store the actual file object for later use
           });
           addedCount++;
-          
+
           // IMMEDIATE UI UPDATE - Update file count instantly
           const counter = document.getElementById("video-file-count");
           if (counter) {
@@ -1138,8 +1138,8 @@ class TelegramUtilities {
         }
       }
     }
-    
-    
+
+
     if (addedCount > 0) {
       this.updateVideoFileList();
       this.showToast("success", "Files Added", `Added ${addedCount} video files via drag & drop`);
@@ -1152,7 +1152,7 @@ class TelegramUtilities {
     const imageExtensions = ["png", "jpg", "jpeg", "webp"];
     const videoExtensions = ["webm"];
     let addedCount = 0;
-    
+
     files.forEach((file) => {
       const extension = file.name.split(".").pop().toLowerCase();
       let type = null;
@@ -1164,11 +1164,11 @@ class TelegramUtilities {
       if (type && this.mediaFiles.length < 120) {
         // For drag & drop, we need to get the actual file path
         const filePath = file.path || file.webkitRelativePath || file.name;
-        
+
         if (!this.mediaFiles.some((f) => f.file_path === filePath)) {
           // Sanitize default emoji while preserving variation selectors (Windows color fix)
           const cleanDefaultEmoji = this.normalizeEmoji(this.defaultEmoji || "❤️");
-          
+
           this.mediaFiles.push({
             file_path: filePath,
             name: file.name,
@@ -1180,7 +1180,7 @@ class TelegramUtilities {
         }
       }
     });
-    
+
     if (addedCount > 0) {
       this.updateMediaFileList();
       this.showToast(
@@ -1198,7 +1198,7 @@ class TelegramUtilities {
   }
 
   setupAdvancedSettings() {
-    
+
     // Quality settings
     const qualityRange = document.getElementById("quality-range");
     const qualityValue = document.getElementById("quality-value");
@@ -1208,7 +1208,7 @@ class TelegramUtilities {
         localStorage.setItem("quality_setting", e.target.value);
       });
     }
-    
+
     // Auto-conversion toggle
     const autoConvert = document.getElementById("auto-convert");
     if (autoConvert) {
@@ -1216,7 +1216,7 @@ class TelegramUtilities {
         localStorage.setItem("auto_convert", e.target.checked);
       });
     }
-    
+
     // Load saved advanced settings
     this.loadAdvancedSettings();
   }
@@ -1235,7 +1235,6 @@ class TelegramUtilities {
       if (autoConvert) autoConvert.checked = savedAutoConvert === "true";
     }
   }
-
   setupStatusControls() {
     // Copy status log button
     const copyBtn = document.getElementById("copy-status-log");
@@ -1245,7 +1244,7 @@ class TelegramUtilities {
         this.showToast("info", "Copy Log", "Status log copied to clipboard");
       });
     }
-    
+
     // Clear status history button
     const clearBtn = document.getElementById("clear-status-history");
     if (clearBtn) {
@@ -1254,13 +1253,13 @@ class TelegramUtilities {
         this.showToast("info", "Status History", "Status history cleared");
       });
     }
-    
+
     // Toggle auto-scroll button
     const toggleBtn = document.getElementById("toggle-auto-scroll");
     if (toggleBtn) {
       toggleBtn.addEventListener("click", () => {
         this.toggleAutoScroll();
-        this.showToast("info", "Auto Scroll", 
+        this.showToast("info", "Auto Scroll",
           this.autoScrollEnabled ? "Auto scroll enabled" : "Auto scroll disabled");
       });
     }
@@ -1277,7 +1276,7 @@ class TelegramUtilities {
           this.addImages();
         }
       }
-      
+
       // Ctrl/Cmd + Enter: Start conversion/creation
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
         e.preventDefault();
@@ -1287,7 +1286,7 @@ class TelegramUtilities {
           this.createStickerPack();
         }
       }
-      
+
       // Ctrl/Cmd + R: Reset form (sticker bot only)
       if ((e.ctrlKey || e.metaKey) && e.key === "r") {
         if (document.querySelector(".tab-content.active").id === "sticker-bot") {
@@ -1295,12 +1294,12 @@ class TelegramUtilities {
           this.resetStickerForm();
         }
       }
-      
+
       // Escape: Close modals
       if (e.key === "Escape") {
         this.hideModal();
       }
-      
+
       // F5: Refresh/update status
       if (e.key === "F5") {
         e.preventDefault();
@@ -1318,7 +1317,7 @@ class TelegramUtilities {
   async checkBackendStatus() {
     try {
       const response = await this.apiRequest("GET", "/api/health");
-      
+
       if (!response.success) {
         this.updateBackendStatus(false);
         document.getElementById("backend-status-text").textContent = "Disconnected";
@@ -1327,20 +1326,20 @@ class TelegramUtilities {
         document.getElementById("ffmpeg-status").style.color = "#dc3545";
         return;
       }
-      
+
       this.updateBackendStatus(true);
       document.getElementById("backend-status-text").textContent = "Connected";
       document.getElementById("backend-status-text").style.color = "#28a745";
-      
+
       // Check FFmpeg status from the health response
       if (response.data && response.data.ffmpeg_available !== undefined) {
         document.getElementById("ffmpeg-status").textContent = response.data.ffmpeg_available ? "Available" : "Not Available";
         document.getElementById("ffmpeg-status").style.color = response.data.ffmpeg_available ? "#28a745" : "#dc3545";
       } else {
-      document.getElementById("ffmpeg-status").textContent = "Available";
+        document.getElementById("ffmpeg-status").textContent = "Available";
         document.getElementById("ffmpeg-status").style.color = "#28a745";
       }
-      
+
 
     } catch (error) {
       this.updateBackendStatus(false);
@@ -1367,10 +1366,10 @@ class TelegramUtilities {
   updateTelegramStatus(status) {
     const statusElement = document.getElementById("telegram-status");
     const connectionStatus = document.getElementById("telegram-connection-status");
-    
+
     if (statusElement) {
       statusElement.classList.remove("connected", "disconnected", "connecting");
-      
+
       switch (status) {
         case "connected": {
           statusElement.classList.add("connected");
@@ -1435,7 +1434,7 @@ class TelegramUtilities {
     const savedOutputDir = localStorage.getItem("video_output_dir");
     const savedTheme = localStorage.getItem("app_theme");
     const savedAutoSkipIcon = localStorage.getItem("auto_skip_icon");
-    
+
     if (savedApiId) {
       const apiIdInput = document.getElementById("api-id");
       if (apiIdInput) apiIdInput.value = savedApiId;
@@ -1470,7 +1469,7 @@ class TelegramUtilities {
     const apiHashInput = document.getElementById("api-hash");
     const phoneInput = document.getElementById("phone-number");
     const autoSkipIconCheckbox = document.getElementById("auto-skip-icon");
-    
+
     if (apiIdInput) localStorage.setItem("telegram_api_id", apiIdInput.value);
     if (apiHashInput) localStorage.setItem("telegram_api_hash", apiHashInput.value);
     if (phoneInput) localStorage.setItem("telegram_phone", phoneInput.value);
@@ -1484,7 +1483,7 @@ class TelegramUtilities {
     const autoSkipIconCheckbox = document.getElementById("auto-skip-icon");
     const toggleTitle = document.getElementById("toggle-title");
     const toggleSubtitle = document.getElementById("toggle-subtitle");
-    
+
     if (autoSkipIconCheckbox && toggleTitle && toggleSubtitle) {
       if (autoSkipIconCheckbox.checked) {
         toggleTitle.textContent = "Auto-skip Icon Selection";
@@ -1517,16 +1516,16 @@ class TelegramUtilities {
         </div>
       </div>
     `;
-    
+
     this.showToast("info", "Auto-skip Icon", helpText, 5000);
   }
 
   showSuccessModal(shareableLink) {
     const successModalInDOM = document.getElementById("success-modal");
-    
+
     // If success modal is missing, try to inject it from the original HTML
     if (!successModalInDOM) {
-      
+
       // Try to find the modal overlay to inject the success modal into it
       const overlay = document.getElementById("modal-overlay");
       if (overlay) {
@@ -1589,10 +1588,10 @@ class TelegramUtilities {
             </div>
           </div>
         `;
-        
+
         // Inject the modal into the overlay
         overlay.insertAdjacentHTML("beforeend", successModalHTML);
-        
+
         // Add CSS animations if not already present
         if (!document.getElementById("success-modal-animations")) {
           const style = document.createElement("style");
@@ -1634,11 +1633,11 @@ class TelegramUtilities {
           `;
           document.head.appendChild(style);
         }
-        
+
         // Now proceed with normal flow
         const injectedModal = document.getElementById("success-modal");
         const linkInput = document.getElementById("shareable-link");
-        
+
         if (injectedModal) {
           // Apply centering styles immediately after injection
           injectedModal.style.position = "fixed";
@@ -1646,13 +1645,13 @@ class TelegramUtilities {
           injectedModal.style.left = "50%";
           injectedModal.style.transform = "translate(-50%, -50%)";
           injectedModal.style.zIndex = "10000";
-          
+
           this.displaySuccessModal(injectedModal, overlay, linkInput, shareableLink);
           return;
         }
       }
     }
-    
+
     // Wait for DOM to be ready if necessary
     const ensureDOMReady = () => {
       return new Promise((resolve) => {
@@ -1671,31 +1670,31 @@ class TelegramUtilities {
         }
       });
     };
-    
+
     // ENHANCED: DOM check with detailed debugging
     const findModalElements = () => {
       const modal = document.getElementById("success-modal");
       const overlay = document.getElementById("modal-overlay");
       const linkInput = document.getElementById("shareable-link");
-      
+
       return { modal, overlay, linkInput };
     };
-    
+
     // Ensure DOM is ready and then try to find elements
     ensureDOMReady().then(() => {
       let elements = findModalElements();
-    
+
       // If modal still not found after DOM ready, try additional retries
       if (!elements.modal) {
         // Try multiple retries with increasing delays
         let retryCount = 0;
         const maxRetries = 3;
-        
+
         const retryFind = () => {
           retryCount++;
           setTimeout(() => {
             elements = findModalElements();
-            
+
             if (elements.modal) {
               this.displaySuccessModal(elements.modal, elements.overlay, elements.linkInput, shareableLink);
               return;
@@ -1705,7 +1704,7 @@ class TelegramUtilities {
               retryFind();
               return;
             }
-            
+
             // EMERGENCY: Try to create and inject the success modal if it doesn't exist
             const modalHTML = `
               <div class="modal success-modal-enhanced" id="success-modal-fallback" style="display: none">
@@ -1745,13 +1744,13 @@ class TelegramUtilities {
                 </div>
               </div>
             `;
-            
+
             // Inject the modal into the document
             const tempDiv = document.createElement("div");
             tempDiv.innerHTML = modalHTML.trim();
             const fallbackModal = tempDiv.firstChild;
             document.body.appendChild(fallbackModal);
-            
+
             // Add event listener for the fallback open button to prevent double opening
             const fallbackOpenBtn = document.getElementById("open-telegram-btn-fallback");
             if (fallbackOpenBtn) {
@@ -1762,22 +1761,22 @@ class TelegramUtilities {
                 this.showToast("success", "Opening Telegram", "Opening your sticker pack in Telegram!");
               };
             }
-            
-              // Get the overlay (should exist)
-              const overlay = document.getElementById("modal-overlay");
-              
-              if (overlay) {
-                // Show the fallback modal
-                overlay.classList.add("active");
-                fallbackModal.style.display = "flex";
-                fallbackModal.style.zIndex = "9999";
-                return;
-              }
-            
+
+            // Get the overlay (should exist)
+            const overlay = document.getElementById("modal-overlay");
+
+            if (overlay) {
+              // Show the fallback modal
+              overlay.classList.add("active");
+              fallbackModal.style.display = "flex";
+              fallbackModal.style.zIndex = "9999";
+              return;
+            }
+
             // Ultimate fallback: Show success via toast and status
             this.showToast("success", "🎉 Pack Created!", `Sticker pack created successfully! Link: ${shareableLink}`, 15000);
             this.addStatusItem(`🎉 Success! Shareable link: ${shareableLink}`, "completed");
-            
+
             // Try to trigger Telegram opening directly
             if (shareableLink) {
               try {
@@ -1792,7 +1791,7 @@ class TelegramUtilities {
             }
           }, 50 * retryCount); // Increasing delay: 50ms, 100ms, 150ms
         };
-        
+
         retryFind();
       } else {
         this.displaySuccessModal(elements.modal, elements.overlay, elements.linkInput, shareableLink);
@@ -1808,36 +1807,36 @@ class TelegramUtilities {
       console.error("🎉 [SUCCESS_MODAL] Cannot display modal - modal element is null");
       return;
     }
-    
+
     if (!overlay) {
       console.error("🎉 [SUCCESS_MODAL] Cannot display modal - overlay element is null");
       return;
     }
-    
+
     // Set the shareable link
     if (linkInput && shareableLink) {
       linkInput.value = shareableLink;
     }
-    
+
     // Reset any previous states and ensure modal is ready with proper centering
     modal.style.display = "none";
     modal.style.opacity = "0";
     modal.style.visibility = "visible";
     modal.style.zIndex = "10000"; // Ensure highest z-index
-    
+
     // CRITICAL FIX: Ensure proper positioning using fixed positioning
     modal.style.position = "fixed";
     modal.style.top = "50%";
     modal.style.left = "50%";
     modal.style.transform = "translate(-50%, -50%)";
     modal.style.margin = "0";
-    
+
     // Ensure modal is brought to front
     modal.style.setProperty("z-index", "10000", "important");
-    
+
     modal.style.maxWidth = "700px";
     modal.style.width = "90%";
-    
+
     // Ensure overlay is ready
     overlay.style.display = "block";
     overlay.style.visibility = "visible";
@@ -1848,29 +1847,29 @@ class TelegramUtilities {
     overlay.style.width = "100%";
     overlay.style.height = "100%";
     overlay.style.backgroundColor = "rgba(0, 0, 0, 0.8)";
-    
+
     // Show modal with proper overlay (following project specifications)
     overlay.classList.add("active");
     modal.style.display = "flex";
-    
+
     // Use requestAnimationFrame for smooth display
     requestAnimationFrame(() => {
       modal.style.opacity = "1";
     });
-    
+
     // Add critical modal protection (prevent outside click dismissal)
     modal.setAttribute("data-critical", "true");
-    
+
     // CRITICAL FIX: Ensure modal stays in view by recalculating position
     setTimeout(() => {
       // Force reflow to ensure proper positioning
       modal.style.transform = "translate(-50%, -50%)";
       modal.style.top = "50%";
       modal.style.left = "50%";
-      
+
       // Verify visibility after a short delay
       const computedStyle = getComputedStyle(modal);
-      
+
       // If modal is still not visible, attempt to fix it
       if (computedStyle.display === "none" || parseFloat(computedStyle.opacity) < 0.5) {
         console.warn("Modal visibility issue detected - attempting to fix");
@@ -1879,7 +1878,7 @@ class TelegramUtilities {
         modal.style.opacity = "1";
         modal.style.visibility = "visible";
       }
-      
+
       // CRITICAL FIX: Scroll to modal if it's not in view
       const rect = modal.getBoundingClientRect();
       const isInViewport = (
@@ -1888,19 +1887,19 @@ class TelegramUtilities {
         rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
         rect.right <= (window.innerWidth || document.documentElement.clientWidth)
       );
-      
+
       if (!isInViewport) {
         modal.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
       }
-      
+
       // CRITICAL FIX: Ensure modal is above all other elements
       modal.style.zIndex = "10000";
       overlay.style.zIndex = "9999";
     }, 200);
-    
+
     // Setup event listeners for modal buttons
     this.setupSuccessModalEventListeners(shareableLink);
-    
+
     // Focus management for accessibility
     setTimeout(() => {
       const copyBtn = document.getElementById("copy-link-btn");
@@ -1913,7 +1912,7 @@ class TelegramUtilities {
   hideSuccessModal() {
     const modal = document.getElementById("success-modal");
     const overlay = document.getElementById("modal-overlay");
-    
+
     if (modal) {
       modal.style.display = "none";
       modal.style.opacity = "0";
@@ -1925,27 +1924,27 @@ class TelegramUtilities {
       modal.style.transform = "";
       modal.style.margin = "";
     }
-    
+
     if (overlay) {
       overlay.classList.remove("active");
       overlay.style.display = "none";
       overlay.style.visibility = "hidden";
     }
-    
+
     // Clean up keyboard event listeners
     if (this.successModalKeyHandler) {
       document.removeEventListener("keydown", this.successModalKeyHandler);
       this.successModalKeyHandler = null;
     }
   }
-  
+
   setupSuccessModalEventListeners(shareableLink) {
     // Copy link button
     const copyBtn = document.getElementById("copy-link-btn");
     if (copyBtn) {
       copyBtn.onclick = () => this.copyShareableLink();
     }
-    
+
     // Open in Telegram button - prevent double opening
     const openBtn = document.getElementById("open-telegram-btn");
     if (openBtn) {
@@ -1957,13 +1956,13 @@ class TelegramUtilities {
         this.openTelegramLink();
       };
     }
-    
+
     // Create another pack button
     const anotherBtn = document.getElementById("create-another-btn");
     if (anotherBtn) {
       anotherBtn.onclick = () => this.createAnotherPack();
     }
-    
+
     // Add keyboard support
     const keyHandler = (e) => {
       if (e.key === "c" && (e.ctrlKey || e.metaKey)) {
@@ -1973,9 +1972,9 @@ class TelegramUtilities {
         this.openTelegramLink();
       }
     };
-    
+
     document.addEventListener("keydown", keyHandler);
-    
+
     // Store handler for cleanup
     this.successModalKeyHandler = keyHandler;
   }
@@ -2004,7 +2003,7 @@ class TelegramUtilities {
       this.showToast("error", "No Link", "Shareable link not available");
     }
   }
-  
+
   // TEST METHOD - Remove in production
   testSuccessModal() {
     const testLink = "https://t.me/addstickers/test_sticker_pack_123";
@@ -2013,43 +2012,43 @@ class TelegramUtilities {
   }
   createAnotherPack() {
     console.log("🔄 [RESET] Starting complete process reset...");
-    
+
     this.hideSuccessModal();
-    
+
     // STEP 1: Clear form inputs and reset to initial state
     const packNameInput = document.getElementById("pack-name");
     const urlNameInput = document.getElementById("pack-url-name");
-    
+
     if (packNameInput) packNameInput.value = "";
     if (urlNameInput) urlNameInput.value = "";
-    
+
     // STEP 2: Clear media files and reset arrays
     this.mediaFiles = [];
     this.updateMediaFileList();
     this.updatePackActions();
-    
+
     // STEP 3: Reset validation display (clear any existing validation)
     const packNameValidation = document.getElementById("pack-name-validation");
     const urlNameValidation = document.getElementById("pack-url-name-validation");
-    
+
     if (packNameInput && packNameValidation) {
       packNameInput.classList.remove("valid", "invalid");
       packNameValidation.classList.remove("valid", "invalid");
       packNameValidation.textContent = "";
     }
-    
+
     if (urlNameInput && urlNameValidation) {
       urlNameInput.classList.remove("valid", "invalid");
       urlNameValidation.classList.remove("valid", "invalid");
       urlNameValidation.textContent = "";
     }
-    
+
     // STEP 4: Reset progress monitoring and UI state
     this.stopStickerProgressMonitoring();
-    
+
     // STEP 5: Clear status history and reset to ready state
     this.clearStatusHistory();
-    
+
     // STEP 6: Reset progress bar
     const progressBar = document.getElementById("sticker-progress-bar");
     const progressText = document.getElementById("sticker-progress-text");
@@ -2059,24 +2058,24 @@ class TelegramUtilities {
     if (progressText) {
       progressText.textContent = "0/0 files processed";
     }
-    
+
     // STEP 7: Reset create button to initial state (but respect connection status)
     const createBtn = document.getElementById("create-sticker-pack");
     if (createBtn) {
       // Don't just enable the button - check all conditions properly
       const packName = packNameInput?.value.trim() || "";
       const urlName = urlNameInput?.value.trim() || "";
-      
+
       const isPackNameValid = packName.length > 0 && packName.length <= 64;
       const isUrlNameValid = /^[a-zA-Z][a-zA-Z0-9_]{4,31}$/.test(urlName);
       const hasMedia = this.mediaFiles.length > 0;
       const isConnected = this.telegramConnected;
-      
+
       const canCreate = isPackNameValid && isUrlNameValid && hasMedia && isConnected;
       createBtn.disabled = !canCreate;
       createBtn.innerHTML = '<i class="fas fa-magic"></i> Create Sticker Pack';
     }
-    
+
     // STEP 8: Reset any internal flags
     // Removed autoSkipAttempted flag - auto-skip is handled entirely by backend
     this.lastStage = null;
@@ -2087,13 +2086,13 @@ class TelegramUtilities {
     this.currentUrlAttempt = null;
     this.maxUrlAttempts = null;
     this.currentEmojiIndex = null;
-    
+
     // STEP 9: Hide any modals that might be open
     this.hideModal();
     this.hideIconModal();
     this.hideUrlNameModal();
     this.hideLoadingOverlay();
-    
+
     // CRITICAL FIX: Reset workflow state for new sticker pack
     this.workflowState = {
       iconUploaded: false,
@@ -2101,20 +2100,20 @@ class TelegramUtilities {
       packCompleted: false,
       currentStep: "initial"
     };
-    
+
     // STEP 10: Focus on pack name input and update button state (preserve telegram connection)
     setTimeout(() => {
       // Update button state using existing connection status (don't change it)
       this.updatePackActions();
-      
+
       // Focus on pack name input for immediate use
       if (packNameInput) {
         packNameInput.focus();
       }
-      
+
       console.log("🔄 [RESET] Form reset completed - Telegram connection preserved");
     }, 100);
-    
+
     console.log("🔄 [RESET] Complete process reset finished!");
     this.showToast("success", "Ready for New Pack", "Form cleared - ready to create another sticker pack!");
     this.addStatusItem("🔄 Ready to create new sticker pack", "ready");
@@ -2122,22 +2121,22 @@ class TelegramUtilities {
 
   resetStickerForm() {
     // Ask for confirmation if there are files or form data
-    const hasData = this.mediaFiles.length > 0 || 
-                    document.getElementById("pack-name").value.trim() !== "" ||
-                    document.getElementById("pack-url-name").value.trim() !== "";
-    
+    const hasData = this.mediaFiles.length > 0 ||
+      document.getElementById("pack-name").value.trim() !== "" ||
+      document.getElementById("pack-url-name").value.trim() !== "";
+
     if (hasData) {
       const confirmed = confirm("This will clear all your current form data and media files. Are you sure?");
       if (!confirmed) {
         return;
       }
     }
-    
+
     console.log("🔄 [MANUAL_RESET] User initiated form reset...");
-    
+
     // Optional: Clear any active sticker processes in the backend
     this.clearActiveProcesses();
-    
+
     // Call the same comprehensive reset function used by "Create Another Pack"
     this.createAnotherPack();
   }
@@ -2158,15 +2157,15 @@ class TelegramUtilities {
   updatePackActions() {
     const createBtn = document.getElementById("create-sticker-pack");
     if (!createBtn) return;
-    
+
     const packName = document.getElementById("pack-name")?.value.trim() || "";
     const urlName = document.getElementById("pack-url-name")?.value.trim() || "";
-    
+
     const isPackNameValid = packName.length > 0 && packName.length <= 64;
     const isUrlNameValid = /^[a-zA-Z][a-zA-Z0-9_]{4,31}$/.test(urlName);
     const hasMedia = this.mediaFiles.length > 0;
     const isConnected = this.telegramConnected;
-    
+
     // CRITICAL FIX: Button should only be disabled if Telegram is disconnected
     // If Telegram is connected, keep button enabled so user can see they can fill fields
     // The actual validation will happen when they click the button
@@ -2217,7 +2216,7 @@ class TelegramUtilities {
   updateValidationDisplay(inputId, validation) {
     const input = document.getElementById(inputId);
     const validationDiv = document.getElementById(`${inputId}-validation`);
-    
+
     if (!input || !validationDiv) return;
 
     // Remove existing validation classes
@@ -2248,7 +2247,7 @@ class TelegramUtilities {
         this.showToast("error", "System Error", "Electron API not available");
         return;
       }
-      
+
       const files = await window.electronAPI.selectFiles({
         filters: [
           {
@@ -2258,20 +2257,20 @@ class TelegramUtilities {
           { name: "All Files", extensions: ["*"] },
         ],
       });
-      
+
       // selectFiles returns an array directly
       if (!Array.isArray(files) || files.length === 0) {
         return;
       }
-      
+
       let addedCount = 0;
       for (let index = 0; index < files.length; index++) {
         const file = files[index];
-        
+
         if (!this.videoFiles.some((f) => f.path === file)) {
           // Get file metadata first
           const metadata = await this.getFileMetadata(file);
-          
+
           this.videoFiles.push({
             path: file,
             name: file.split(/[\\/]/).pop(),
@@ -2284,7 +2283,7 @@ class TelegramUtilities {
             height: metadata.height
           });
           addedCount++;
-          
+
           // IMMEDIATE UI UPDATE - Update file count instantly
           const counter = document.getElementById("video-file-count");
           if (counter) {
@@ -2292,17 +2291,17 @@ class TelegramUtilities {
           }
         }
       }
-      
-      
+
+
       // Force immediate update
       this.updateVideoFileList();
-      
+
       if (addedCount > 0) {
         this.showToast("success", "Files Added", `Added ${addedCount} video files`);
       } else {
         this.showToast("info", "No New Files", "All selected files were already in the list");
       }
-      
+
     } catch (error) {
       this.showToast("error", "Error", "Failed to add video files: " + error.message);
     }
@@ -2319,37 +2318,37 @@ class TelegramUtilities {
       this.showToast("info", "Already Empty", "No video files to clear");
       return;
     }
-    
+
     const count = this.videoFiles.length;
-    
+
     // Stop all pollers
     this.videoFiles.forEach(file => {
       if (file.poller) {
         clearInterval(file.poller);
       }
     });
-    
+
     this.videoFiles = [];
-    
+
     // IMMEDIATE UI UPDATE - Update file count instantly
     const counter = document.getElementById("video-file-count");
     if (counter) {
       counter.textContent = this.videoFiles.length;
     }
-    
+
     // Reset GUI to original state
     const convertBtn = document.getElementById("start-conversion");
     if (convertBtn) {
       convertBtn.disabled = false;
       convertBtn.innerHTML = '<i class="fas fa-play"></i> Start Conversion';
     }
-    
+
     // Clear any status messages
     const statusElement = document.querySelector(".status");
     if (statusElement) {
       statusElement.textContent = "Ready";
     }
-    
+
     // Reset virtual list container completely
     const container = document.getElementById("video-file-list");
     if (container) {
@@ -2362,21 +2361,21 @@ class TelegramUtilities {
         clearTimeout(container._scrollTimeout);
         container._scrollTimeout = null;
       }
-      
+
       // Clear all virtual list properties
       delete container._virtualSpacer;
       delete container._virtualItemHeight;
-      
+
       // Reset container styles
       container.style.height = "";
       container.style.overflowY = "";
       container.style.overflowX = "";
       container.style.position = "";
-      
+
       // Clear all content
       container.innerHTML = "";
     }
-    
+
     // Force a complete UI refresh
     this.updateVideoFileList();
     this.showToast("info", "Cleared", `Removed ${count} video files`);
@@ -2387,30 +2386,33 @@ class TelegramUtilities {
     if (!this._updateVideoFileListDebounce) {
       this._updateVideoFileListDebounce = null;
     }
-    
+
     // Clear existing timeout
     if (this._updateVideoFileListDebounce) {
       clearTimeout(this._updateVideoFileListDebounce);
     }
-    
+
     // Update counter immediately
     const counter = document.getElementById("video-file-count");
     if (counter) {
       counter.textContent = this.videoFiles.length;
     }
-    
+
     // Debounce the actual list update
     this._updateVideoFileListDebounce = setTimeout(() => {
       this._updateVideoFileListInternal();
     }, 50);
   }
-  
+
   _updateVideoFileListInternal() {
     const container = document.getElementById("video-file-list");
     if (!container) {
+      console.error("❌ video-file-list container not found!");
       return;
     }
-    
+
+    console.log(`📋 Updating video list: ${this.videoFiles.length} files`);
+
     if (this.videoFiles.length === 0) {
       container.innerHTML = `
         <div class="empty-state">
@@ -2421,60 +2423,70 @@ class TelegramUtilities {
       `;
       return;
     }
-    
-    // Implement virtual scrolling for large lists
-    if (this.videoFiles.length > 100) {
-      this.renderVirtualVideoList(container);
-    } else {
-      this.updateVideoFileListRegular(container);
-    }
+
+    // Force container to be visible
+    container.style.display = "block";
+
+    // Always use regular rendering for consistent appearance
+    console.log("🔄 Using regular rendering");
+    this.updateVideoFileListRegular(container);
   }
 
   // Regular list update for smaller datasets
   updateVideoFileListRegular(container) {
+    console.log(`📝 Rendering ${this.videoFiles.length} video files (regular mode)`);
+
     // Use DocumentFragment for better performance
     const fragment = document.createDocumentFragment();
-    
+
     this.videoFiles.forEach((file, index) => {
       const element = this.createVideoFileElement(file, index);
       fragment.appendChild(element);
     });
-    
+
     // Clear and append in one operation for better performance
     container.innerHTML = "";
     container.appendChild(fragment);
+
+    console.log(`✅ Rendered ${container.children.length} elements in container`);
   }
-  
+
   // Virtual scrolling implementation for video files
   renderVirtualVideoList(container) {
-    const itemHeight = 100;
-    const visibleHeight = Math.min(600, container.parentElement.clientHeight || 600);
+    console.log(`🚀 Virtual scrolling: ${this.videoFiles.length} files`);
+
+    // Match CSS: min-height (70px) + margin (4px) = 74px per item
+    const itemHeight = 74;
+    const visibleHeight = 350; // Fixed height from CSS
     const totalHeight = this.videoFiles.length * itemHeight;
-    
+
+    console.log(`📐 Container height: ${visibleHeight}px, Total height: ${totalHeight}px`);
+
     // Setup container
     container.innerHTML = "";
     container.style.height = visibleHeight + "px";
     container.style.overflowY = "auto";
     container.style.position = "relative";
-    
+    container.style.display = "block";
+
     // Create spacer for scrollbar
     const spacer = document.createElement("div");
     spacer.style.height = totalHeight + "px";
     spacer.style.position = "relative";
-    
+
     // Create items container
     const itemsContainer = document.createElement("div");
     itemsContainer.style.position = "absolute";
     itemsContainer.style.top = "0";
     itemsContainer.style.left = "0";
     itemsContainer.style.right = "0";
-    
+
     spacer.appendChild(itemsContainer);
     container.appendChild(spacer);
-    
+
     let lastRenderTop = 0;
     const renderBuffer = 5;
-    
+
     const renderVisibleItems = () => {
       const scrollTop = container.scrollTop;
       const startIndex = Math.max(0, Math.floor(scrollTop / itemHeight) - renderBuffer);
@@ -2482,84 +2494,96 @@ class TelegramUtilities {
         this.videoFiles.length,
         Math.ceil((scrollTop + visibleHeight) / itemHeight) + renderBuffer
       );
-      
+
+      console.log(`👁️ Rendering items ${startIndex} to ${endIndex}`);
+
       // Only re-render if scrolled significantly
-      if (Math.abs(scrollTop - lastRenderTop) < itemHeight / 2) return;
+      if (Math.abs(scrollTop - lastRenderTop) < itemHeight / 2 && itemsContainer.children.length > 0) return;
       lastRenderTop = scrollTop;
-      
+
       // Create visible items
       const fragment = document.createDocumentFragment();
-      
+
       for (let i = startIndex; i < endIndex; i++) {
         const element = this.createVideoFileElement(this.videoFiles[i], i);
         element.style.position = "absolute";
         element.style.top = (i * itemHeight) + "px";
         element.style.left = "0";
         element.style.right = "0";
-        element.style.height = itemHeight + "px";
+        element.style.height = (itemHeight - 4) + "px"; // Subtract margin
+        element.style.marginBottom = "4px";
+        element.style.boxSizing = "border-box";
         fragment.appendChild(element);
       }
-      
+
       itemsContainer.innerHTML = "";
       itemsContainer.appendChild(fragment);
+
+      console.log(`✅ Rendered ${itemsContainer.children.length} visible items`);
     };
-    
+
     // Debounced scroll handler
     let scrollTimeout;
     container.addEventListener("scroll", () => {
       if (scrollTimeout) clearTimeout(scrollTimeout);
       scrollTimeout = setTimeout(renderVisibleItems, 16);
     });
-    
+
     // Initial render
     renderVisibleItems();
   }
 
   // Create a single video file element
   createVideoFileElement(file, index) {
-    const statusClass = file.status || "pending";
+    const statusClass = (file.status || "pending").toLowerCase();
     const progressWidth = file.progress || 0;
     const statusIcon = this.getStatusIcon(file.status);
-    
+
     const fileElement = document.createElement("div");
     fileElement.className = `file-item ${statusClass}`;
     fileElement.setAttribute("data-index", index);
-    
+
     const progressText = progressWidth === 100 ? "✔" : `${progressWidth}%`;
     const statusText = file.stage || "Ready to convert";
-    
+
     fileElement.innerHTML = `
-      <div class="file-info">
-        <div class="file-icon">
-          <i class="${statusIcon}"></i>
+      <div class="file-icon">
+        <i class="${statusIcon}"></i>
+      </div>
+      <div class="file-details">
+        <div class="file-name" title="${file.path}">${this.truncateFileName(file.name, 30)}</div>
+        <div class="file-meta-compact">
+          <span class="file-status">${statusText}</span>
+          ${file.hexEdited ? '<span class="hex-edited-badge" title="Hex edited">🔧</span>' : ""}
+          ${file.size ? `| Size: ${file.size} | Duration: ${file.duration}` : ""}
         </div>
-        <div class="file-details">
-          <div class="file-name" title="${file.path}">${file.name}</div>
-          <div class="file-status">
-            ${statusText}
-            ${file.hexEdited ? '<span class="hex-edited-badge" title="Hex edited">🔧</span>' : ""}
+        <div class="file-progress-compact">
+          <div class="file-progress-bar">
+            <div class="file-progress-fill" style="width: ${progressWidth}%"></div>
           </div>
-          <div class="file-progress-container">
-            <div class="file-progress-bar">
-              <div class="file-progress-fill" style="width: ${progressWidth}%"></div>
-            </div>
-            <div class="file-progress-text">${progressText}</div>
-          </div>
-          ${file.size ? `<div class="file-meta">Size: ${file.size} | Duration: ${file.duration}</div>` : ""}
+          <div class="file-progress-text">${progressText}</div>
         </div>
       </div>
-      <div class="file-actions">
-        <button class="btn btn-sm btn-info" onclick="app.showFileInfo(${index})" title="File Info">
+      <div class="file-actions-compact">
+        <button class="btn-mini btn-info" onclick="app.showFileInfo(${index})" title="File Info">
           <i class="fas fa-info-circle"></i>
         </button>
-        <button class="btn btn-sm btn-danger" onclick="app.removeVideoFile(${index})" 
+        <button class="btn-mini btn-danger" onclick="app.removeVideoFile(${index})" 
                 ${file.status === "converting" ? "disabled" : ""} title="Remove File">
           <i class="fas fa-trash"></i>
         </button>
       </div>
     `;
-    
+
     return fileElement;
+  }
+
+  // Helper method to truncate file names
+  truncateFileName(name, maxLength) {
+    if (name.length <= maxLength) return name;
+    const extension = name.split('.').pop();
+    const nameWithoutExt = name.slice(0, name.lastIndexOf('.'));
+    return `${nameWithoutExt.slice(0, maxLength - extension.length - 4)}...${extension}`;
   }
 
   getStatusIcon(status) {
@@ -2594,7 +2618,7 @@ class TelegramUtilities {
   async showFileInfo(index) {
     const file = this.videoFiles[index];
     if (!file) return;
-    
+
     // Get detailed file metadata from backend
     let fileInfo = {
       name: file.name,
@@ -2603,12 +2627,12 @@ class TelegramUtilities {
       format: "Unknown",
       dimensions: "Unknown"
     };
-    
+
     try {
-      const result = await this.apiRequest("POST", "/api/get-file-info", { 
-        path: file.path 
+      const result = await this.apiRequest("POST", "/api/get-file-info", {
+        path: file.path
       });
-      
+
       if (result && result.success && result.data) {
         fileInfo = {
           name: result.data.name || file.name,
@@ -2623,7 +2647,7 @@ class TelegramUtilities {
     } catch (error) {
       // Error getting file info, continue without it
     }
-    
+
     // Format additional info
     let additionalInfo = "";
     if (fileInfo.codec) {
@@ -2632,7 +2656,7 @@ class TelegramUtilities {
     if (fileInfo.fps && fileInfo.fps > 0) {
       additionalInfo += `<strong style="color: #667eea;">Frame Rate:</strong> <span style="color: #ccc;">${fileInfo.fps.toFixed(1)} fps</span><br>`;
     }
-    
+
     const info = `
       <div style="font-size: 0.9rem; line-height: 1.8; max-width: 400px;">
         <div style="margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.1);">
@@ -2688,24 +2712,24 @@ class TelegramUtilities {
         </div>
       </div>
     `;
-    
+
     this.showDetailedMessage("Video File Details", info);
   }
 
   async removeVideoFile(index) {
     const removed = this.videoFiles.splice(index, 1)[0];
-    
+
     // Stop any ongoing polling for this file
     if (removed.poller) {
       clearInterval(removed.poller);
     }
-    
+
     // IMMEDIATE UI UPDATE - Update file count instantly
     const counter = document.getElementById("video-file-count");
     if (counter) {
       counter.textContent = this.videoFiles.length;
     }
-    
+
     // Reset GUI to original state if no files left
     if (this.videoFiles.length === 0) {
       // Reset conversion button
@@ -2714,16 +2738,16 @@ class TelegramUtilities {
         convertBtn.disabled = false;
         convertBtn.innerHTML = '<i class="fas fa-play"></i> Start Conversion';
       }
-      
+
       // Clear any status messages
       const statusElement = document.querySelector(".status");
       if (statusElement) {
         statusElement.textContent = "Ready";
       }
     }
-    
+
     this.updateVideoFileList();
-    
+
     // Tell backend to stop if file still converting
     if (removed && removed.process_id) {
       try {
@@ -2732,7 +2756,7 @@ class TelegramUtilities {
         // Error stopping process, continue without it
       }
     }
-    
+
     this.showToast("info", "Removed", `Removed ${removed.name}`);
   }
 
@@ -2742,9 +2766,9 @@ class TelegramUtilities {
       if (!window.electronAPI || !window.electronAPI.selectDirectory) {
         throw new Error("Electron directory selection API not available");
       }
-      
+
       const directory = await window.electronAPI.selectDirectory();
-      
+
       if (directory) {
         this.currentVideoOutput = directory;
         const outputInput = document.getElementById("video-output-dir");
@@ -2765,33 +2789,33 @@ class TelegramUtilities {
     }
   }
   async startVideoConversion() {
-    
+
     // Basic validation
     if (this.videoFiles.length === 0) {
       this.showToast("warning", "No Files", "Please add videos to convert.");
       return;
     }
-    
+
     // Force immediate database stats update when starting conversion
     await this.forceUpdateDatabaseStats();
-    
+
     if (!this.currentVideoOutput) {
       this.showToast("error", "No Output Folder", "Please select an output directory.");
       await this.browseVideoOutput();
       if (!this.currentVideoOutput) {
         return;
+      }
     }
-    }
-    
+
     if (this.currentOperation === "converting") {
       this.showToast("warning", "Operation in Progress", "A conversion is already running.");
       return;
     }
-    
+
     // Check backend connectivity
     try {
       const healthCheck = await this.apiRequest("GET", "/api/health");
-      
+
       if (!healthCheck.success) {
         this.showToast("error", "Backend Error", "Backend server is not responding");
         return;
@@ -2801,10 +2825,10 @@ class TelegramUtilities {
       this.showToast("error", "Connection Error", "Cannot connect to backend server");
       return;
     }
-    
+
     // Prepare conversion data
     const filesToConvert = this.videoFiles.map(f => f.path);
-    
+
     // Check if any file paths are invalid
     const invalidFiles = filesToConvert.filter(path => !path || path === "undefined");
     if (invalidFiles.length > 0) {
@@ -2812,41 +2836,41 @@ class TelegramUtilities {
       this.showToast("error", "Invalid Files", "Some files have invalid paths. Please re-add them.");
       return;
     }
-    
+
     // Set operation state
     this.currentOperation = "converting";
     this.isPaused = false;
-    
+
     // Update UI - Disable conversion button, enable pause, disable hex edit
     const startBtn = document.getElementById("start-conversion");
     const hexBtn = document.getElementById("start-hex-edit");
     const pauseBtn = document.getElementById("pause-conversion");
     const resumeBtn = document.getElementById("resume-conversion");
-    
+
     if (startBtn) {
       startBtn.disabled = true;
       startBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Converting...';
       startBtn.style.display = "inline-flex";
     }
-    
+
     if (hexBtn) {
       hexBtn.disabled = true;
       hexBtn.style.opacity = "0.5";
       hexBtn.style.display = "inline-flex";
     }
-    
+
     if (pauseBtn) {
       pauseBtn.style.display = "inline-block";
       pauseBtn.disabled = false;
     }
-    
+
     if (resumeBtn) {
       resumeBtn.style.display = "none";
     }
-    
+
     // Force update button states
     this.updateButtonStates();
-    
+
     try {
       const requestData = {
         files: filesToConvert,
@@ -2856,13 +2880,13 @@ class TelegramUtilities {
           quality: Number(localStorage.getItem("quality_setting") || 75)
         }
       };
-      
+
       const response = await this.apiRequest("POST", "/api/convert-videos", requestData);
-      
+
       if (response.success) {
         // Standardize process ID extraction
         let processId = null;
-        
+
         // Try direct access first
         // Standardized structure - backend returns data.process_id inside data
         if (response.data && response.data.data && response.data.data.process_id) {
@@ -2872,24 +2896,24 @@ class TelegramUtilities {
         else if (response.data && response.data.process_id) {
           processId = response.data.process_id;
         }
-        
+
         if (processId) {
           this.currentProcessId = processId;
-          
+
           // Add process to activeProcesses
           this.activeProcesses.set(this.currentProcessId, {
             startTime: Date.now(),
             files: this.videoFiles,
             type: "conversion"
           });
-          
+
           // Start progress monitoring
           this.monitorProcess(this.currentProcessId);
           this.showToast("success", "Conversion Started", `Conversion of ${filesToConvert.length} files started!`);
-          
+
           // Force immediate stats refresh to show conversion started
           await this.updateDatabaseStats();
-          
+
           if (startBtn) {
             startBtn.innerHTML = '<i class="fas fa-cog fa-spin"></i> Converting...';
           }
@@ -2901,12 +2925,12 @@ class TelegramUtilities {
       } else {
         throw new Error(response.error || "Failed to start conversion process");
       }
-      
+
     } catch (error) {
       console.error("Conversion start error:", error);
       this.showToast("error", "Conversion Error", error.message);
       this.resetOperationState();
-      
+
       // Ensure button is reset even if resetOperationState fails
       const startBtn = document.getElementById("start-conversion");
       if (startBtn) {
@@ -2914,11 +2938,11 @@ class TelegramUtilities {
         startBtn.innerHTML = '<i class="fas fa-play"></i> Start Conversion';
         startBtn.style.display = "inline-flex";
       }
-      
+
       // Force update button states
       this.updateButtonStates();
     }
-    
+
   }
 
   // Unified progress monitoring system with enhanced debouncing
@@ -2927,26 +2951,26 @@ class TelegramUtilities {
     const POLLING_INTERVAL = 2000; // Reduced from 1000ms to 2000ms
     const MAX_OPERATION_TIME = 30 * 60 * 1000; // 30 minutes
     let consecutiveErrors = 0;
-    
+
     // Clear any existing intervals
     if (this.progressInterval) {
       clearInterval(this.progressInterval);
     }
-    
+
     // Store process info
     this.activeProcesses.set(processId, {
       startTime: Date.now(),
       files: this.videoFiles,
       type: "video"
     });
-    
+
     this.progressInterval = setInterval(async () => {
       try {
         // Update database stats during active monitoring (reduced frequency)
         if (consecutiveErrors === 0) { // Only update on successful operations
           await this.updateDatabaseStats();
         }
-        
+
         // Check timeout
         const processInfo = this.activeProcesses.get(processId);
         if (!processInfo || Date.now() - processInfo.startTime > MAX_OPERATION_TIME) {
@@ -2956,10 +2980,10 @@ class TelegramUtilities {
           this.showToast("warning", "Timeout", "Operation took too long");
           return;
         }
-        
+
         // Get progress from backend
         const response = await this.apiRequest("GET", `/api/conversion-progress/${processId}`);
-        
+
         if (!response.success) {
           consecutiveErrors++;
           if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
@@ -2967,18 +2991,18 @@ class TelegramUtilities {
           }
           return;
         }
-        
+
         // Reset error counter on success
         consecutiveErrors = 0;
-        
+
         // Unwrap nested response shape { success, data: {...} }
         const progress = (response && response.data && response.data.data) ? response.data.data : response.data;
-        
+
         // Update file statuses (only log on significant changes)
         if (progress && progress.file_statuses) {
           let hasChanges = false;
           let significantChange = false;
-          
+
           Object.entries(progress.file_statuses).forEach(([index, fileStatus]) => {
             const file = this.videoFiles[parseInt(index)];
             if (file) {
@@ -2987,19 +3011,19 @@ class TelegramUtilities {
               file.status = fileStatus.status;
               file.progress = fileStatus.progress || 0;
               file.stage = fileStatus.stage || "Processing";
-              
+
               // Check for any change
               if (oldStatus !== file.status || oldProgress !== file.progress) {
                 hasChanges = true;
               }
-              
+
               // Only trigger UI update for significant changes (progress > 5% change or status change)
               if (oldStatus !== file.status || Math.abs(oldProgress - file.progress) > 5) {
                 significantChange = true;
               }
             }
           });
-          
+
           // Only update UI for significant changes
           if (significantChange && this.debouncedUpdateVideoFileList) {
             this.debouncedUpdateVideoFileList();
@@ -3011,13 +3035,13 @@ class TelegramUtilities {
             }
           }
         }
-        
+
         // Check if process is complete
         if (progress && (progress.status === "completed" || progress.status === "error")) {
           this.stopProgressMonitoring();
           await this.handleProcessCompletion(progress);
         }
-        
+
       } catch (error) {
         if (RENDERER_DEBUG) console.error("Progress monitoring error:", error);
         consecutiveErrors++;
@@ -3049,15 +3073,15 @@ class TelegramUtilities {
 
   // Improved process completion handler
   async handleProcessCompletion(processData) {
-    
+
     // Clean up process tracking
     if (this.currentProcessId) {
       this.activeProcesses.delete(this.currentProcessId);
     }
-    
+
     // Determine overall success based on process status
     const isSuccessful = processData.status === "completed";
-    
+
     // Update all file statuses based on results
     if (processData.file_statuses) {
       if (RENDERER_DEBUG) console.log("🔄 Updating file statuses from completion data:", processData.file_statuses);
@@ -3068,7 +3092,7 @@ class TelegramUtilities {
           const oldStatus = file.status;
           const oldProgress = file.progress;
           const oldStage = file.stage;
-          
+
           file.status = fileStatus.status;
           // Ensure progress shows 100% for completed files
           if (fileStatus.status === "completed") {
@@ -3081,7 +3105,7 @@ class TelegramUtilities {
             file.progress = fileStatus.progress || 0;
             file.stage = fileStatus.stage || "Processing";
           }
-          
+
           if (RENDERER_DEBUG) console.log(`📁 File ${index} (${file.name}):`);
           if (RENDERER_DEBUG) console.log(`   Status: ${oldStatus} → ${file.status}`);
           if (RENDERER_DEBUG) console.log(`   Progress: ${oldProgress}% → ${file.progress}%`);
@@ -3093,17 +3117,17 @@ class TelegramUtilities {
     } else {
       if (RENDERER_DEBUG) console.warn("⚠️ No file_statuses in completion data");
     }
-    
+
     // Update UI
     this.updateVideoFileList();
-    
+
     // Check if ALL files are completed
     const allFilesCompleted = this.videoFiles.every(file => file.status === "completed");
     const anyFilesFailed = this.videoFiles.some(file => file.status === "error");
-    
+
     if (RENDERER_DEBUG) console.log("🎯 All files completed:", allFilesCompleted);
     if (RENDERER_DEBUG) console.log("🎯 Any files failed:", anyFilesFailed);
-    
+
     // Show toast notification
     if (allFilesCompleted) {
       this.showToast(
@@ -3121,15 +3145,15 @@ class TelegramUtilities {
       this.showToast(
         isSuccessful ? "success" : "error",
         `Conversion ${isSuccessful ? "Completed" : "Failed"}`,
-        isSuccessful 
-          ? `Successfully converted ${processData.completed_files}/${processData.total_files} files` 
+        isSuccessful
+          ? `Successfully converted ${processData.completed_files}/${processData.total_files} files`
           : `Conversion failed: ${processData.current_stage || "Unknown error"}`
       );
     }
-    
+
     // Force immediate stats refresh to show updated counters
     await this.updateDatabaseStats();
-    
+
     // Only reset operation state if ALL files are completed
     if (allFilesCompleted) {
       if (RENDERER_DEBUG) console.log("🎯 ALL files completed, resetting operation state");
@@ -3138,7 +3162,7 @@ class TelegramUtilities {
       if (RENDERER_DEBUG) console.log("🎯 Not all files completed, keeping operation state active");
       if (RENDERER_DEBUG) console.log("🎯 Remaining files:", this.videoFiles.filter(f => f.status !== "completed").map(f => f.name));
     }
-    
+
     if (RENDERER_DEBUG) console.log("=== PROCESS COMPLETION END ===");
   }
 
@@ -3149,55 +3173,55 @@ class TelegramUtilities {
     if (RENDERER_DEBUG) console.log("Before reset - Current process ID:", this.currentProcessId);
     if (RENDERER_DEBUG) console.log("Before reset - Is paused:", this.isPaused);
     if (RENDERER_DEBUG) console.log("Before reset - Progress interval:", this.progressInterval);
-    
+
     // Clear all operation flags
     this.currentOperation = null;
     this.currentProcessId = null;
     this.isPaused = false;
-    
+
     // Clear any active monitoring
     this.stopProgressMonitoring();
-    
+
     // Reset all buttons to default state
     const startBtn = document.getElementById("start-conversion");
     const hexBtn = document.getElementById("start-hex-edit");
     const pauseBtn = document.getElementById("pause-conversion");
     const resumeBtn = document.getElementById("resume-conversion");
-    
+
     if (startBtn) {
       startBtn.disabled = false;
       startBtn.innerHTML = '<i class="fas fa-play"></i> Start Conversion';
       startBtn.style.display = "inline-flex";
     }
-    
+
     if (hexBtn) {
       hexBtn.disabled = false;
       hexBtn.style.opacity = "1";
       hexBtn.style.display = "inline-flex";
     }
-    
+
     if (pauseBtn) {
       pauseBtn.style.display = "none";
       pauseBtn.disabled = true;
     }
-    
+
     if (resumeBtn) {
       resumeBtn.style.display = "none";
       resumeBtn.disabled = true;
     }
-    
+
     // Reset progress bars to 100% if completed
     this.videoFiles.forEach(file => {
       if (file.status === "completed") {
         file.progress = 100;
       }
     });
-    
+
     this.updateVideoFileList();
-    
+
     // Update button states
     this.updateButtonStates();
-    
+
     if (RENDERER_DEBUG) console.log("After reset - Current operation:", this.currentOperation);
     if (RENDERER_DEBUG) console.log("After reset - Current process ID:", this.currentProcessId);
     if (RENDERER_DEBUG) console.log("After reset - Is paused:", this.isPaused);
@@ -3210,70 +3234,70 @@ class TelegramUtilities {
       this.showToast("warning", "Operation in Progress", "Another operation is already running");
       return;
     }
-    
+
     // Force immediate database stats update when starting hex edit
     await this.forceUpdateDatabaseStats();
-    
+
     if (this.videoFiles.length === 0) {
       this.showToast("warning", "No Files", "Please add files first");
       return;
     }
-    
+
     if (!this.currentVideoOutput) {
       this.showToast("warning", "No Output Directory", "Please select an output directory");
       return;
     }
-    
+
     // Validate that all files are WebM
-    const nonWebmFiles = this.videoFiles.filter(file => 
+    const nonWebmFiles = this.videoFiles.filter(file =>
       !file.name.toLowerCase().endsWith(".webm")
     );
-    
+
     if (nonWebmFiles.length > 0) {
       const fileNames = nonWebmFiles.map(f => f.name).slice(0, 3).join(", ");
       const moreText = nonWebmFiles.length > 3 ? ` and ${nonWebmFiles.length - 3} more` : "";
       this.showToast(
-        "error", 
-        "Invalid Files for Hex Edit", 
+        "error",
+        "Invalid Files for Hex Edit",
         `Hex editing only supports WebM files. Found non-WebM files: ${fileNames}${moreText}`
       );
       return;
     }
-    
+
     try {
       this.currentOperation = "hexediting";
       this.isPaused = false;
-      
+
       // Update UI - Disable conversion button, enable hex edit pause, disable conversion
       const startBtn = document.getElementById("start-conversion");
       const hexBtn = document.getElementById("start-hex-edit");
       const pauseBtn = document.getElementById("pause-hex-edit");
       const resumeBtn = document.getElementById("resume-hex-edit");
-      
+
       if (startBtn) {
         startBtn.disabled = true;
         startBtn.style.opacity = "0.5";
       }
-      
+
       if (hexBtn) {
         hexBtn.disabled = true;
         hexBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Hex Editing...';
       }
-      
+
       if (pauseBtn) {
         pauseBtn.style.display = "inline-block";
         pauseBtn.disabled = false;
       }
-      
+
       if (resumeBtn) {
         resumeBtn.style.display = "none";
       }
-      
+
       this.updateButtonStates();
-      
+
       const processId = `hex_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       this.currentProcessId = processId;
-      
+
       // Reset all file statuses for hex edit
       this.videoFiles.forEach((file, index) => {
         file.status = "pending";
@@ -3281,21 +3305,21 @@ class TelegramUtilities {
         file.stage = "Waiting to process...";
         file.index = index; // Ensure index is set
       });
-      
+
       this.updateVideoFileList();
-      
+
       const response = await this.apiRequest("POST", "/api/hex-edit", {
         files: this.videoFiles.map(f => f.path),
         output_dir: this.currentVideoOutput,
         process_id: processId
       });
-      
+
       if (response.success) {
         this.showToast("success", "Hex Edit Started", "Hex editing has started");
-        
+
         // Force immediate stats refresh to show hex edit started
         await this.updateDatabaseStats();
-        
+
         // Use dedicated hex-edit progress monitor (separate from conversion)
         this.startHexProgressMonitoring(processId);
       } else {
@@ -3315,14 +3339,14 @@ class TelegramUtilities {
     const MAX_CONSECUTIVE_ERRORS = 5;
     const RETRY_DELAY = 2000; // 2 seconds
     const LONG_OPERATION_TIMEOUT = 5 * 60 * 1000; // 5 minutes
-    
+
     // CRITICAL FIX: Always clear ALL intervals before starting new ones to prevent memory leaks
     this.stopProgressMonitoring();
-    
+
     let consecutiveErrors = 0;
     let operationStartTime = Date.now();
     this.debugWarn("poll:start", { processId, type });
-    
+
     this.progressInterval = setInterval(async () => {
       // Check for long-running operation
       if (Date.now() - operationStartTime > LONG_OPERATION_TIMEOUT) {
@@ -3332,33 +3356,33 @@ class TelegramUtilities {
         this.showToast("warning", "Operation Timeout", "Operation took too long and was stopped");
         return;
       }
-      
+
       try {
         const progress = await this.getConversionProgress(processId);
         this.debugWarn("poll:data", { processId, type, progress });
-        
+
         if (!progress) {
           consecutiveErrors++;
           this.handleProgressError(new Error("No progress data"), consecutiveErrors);
           return;
         }
-        
+
         // Reset error counter on success
         consecutiveErrors = 0;
         this.logProgressDetails(progress);
-        
+
         // Existing progress handling logic
         if (RENDERER_DEBUG) console.log(`[PROGRESS] ${processId}: ${progress.progress}% - ${progress.currentStage}`);
-        
+
         // Update pause state if changed
         if (progress.paused !== this.isPaused) {
           this.isPaused = progress.paused;
           this.updateConversionButtons(this.currentOperation === "converting", this.currentOperation === "hexediting");
         }
-        
+
         // Update overall progress display if needed
         this.updateOverallProgress(progress);
-        
+
         // For hex edit, ensure the UI is refreshed after progress updates
         if (type === "hex_edit") {
           // The files have already been updated in getConversionProgress
@@ -3369,7 +3393,7 @@ class TelegramUtilities {
         // Check if operation is complete
         if (progress.status === "completed" || progress.status === "error") {
           this.debugWarn("poll:complete", { processId, type, status: progress.status });
-          
+
           // For hex edit completion, only update files that haven't been updated yet
           if (type === "hex_edit" && progress.status === "completed") {
             // Only update files that are still pending or processing
@@ -3380,11 +3404,11 @@ class TelegramUtilities {
                 file.stage = "Hex edit completed!";
               }
             });
-            
+
             // Update UI immediately
             this.updateVideoFileList();
           }
-          
+
           await this.handleConversionComplete(progress);
         }
       } catch (error) {
@@ -3402,20 +3426,20 @@ class TelegramUtilities {
     const MAX_CONSECUTIVE_ERRORS = 8;
     const RETRY_DELAY = 1200; // ms
     const LONG_OPERATION_TIMEOUT = 10 * 60 * 1000; // 10 minutes
-    
+
     // CRITICAL FIX: Always clear ALL intervals before starting new ones to prevent memory leaks
     this.stopProgressMonitoring();
-    
+
     let consecutiveErrors = 0;
     const startTs = Date.now();
     if (RENDERER_DEBUG) console.log("[HEX] monitor:start", { processId, files: this.videoFiles.length });
-    
+
     // For hex edit, check progress immediately since it's very fast
     this.checkHexProgressImmediately(processId);
-    
+
     this.progressInterval = setInterval(async () => {
       // Removed excessive database stats monitoring during hex edit
-      
+
       // Timeout guard
       if (Date.now() - startTs > LONG_OPERATION_TIMEOUT) {
         if (RENDERER_DEBUG) console.warn("[HEX] monitor:timeout - stopping polling");
@@ -3425,17 +3449,17 @@ class TelegramUtilities {
         this.showToast("warning", "Hex Edit Timeout", "Hex edit took too long and was stopped");
         return;
       }
-      
+
       try {
         const progress = await this.getHexEditProgress(processId);
         if (RENDERER_DEBUG) console.log("[HEX] monitor:data", progress);
-        
+
         // Update overall UI for hex edit
         this.updateHexOverallProgress(progress);
-        
+
         // Refresh list each tick (lightweight, uses fragment)
         this.updateVideoFileList();
-        
+
         if (progress.status === "completed" || progress.status === "error") {
           if (RENDERER_DEBUG) console.log("[HEX] monitor:complete", { status: progress.status });
           clearInterval(this.progressInterval);
@@ -3456,13 +3480,13 @@ class TelegramUtilities {
       }
     }, 250); // Faster polling for hex edit (250ms instead of 750ms)
   }
-  
+
   // Immediate progress check for hex edit since it's very fast
   async checkHexProgressImmediately(processId) {
     try {
       if (RENDERER_DEBUG) console.log("[HEX] immediate:check", { processId });
       const progress = await this.getHexEditProgress(processId);
-      
+
       // If hex edit is already completed (very fast operation)
       if (progress.status === "completed") {
         if (RENDERER_DEBUG) console.log("[HEX] immediate:completed", progress);
@@ -3471,34 +3495,34 @@ class TelegramUtilities {
         await this.handleConversionComplete(progress);
         return;
       }
-      
+
       // Update UI immediately
       this.updateHexOverallProgress(progress);
       this.updateVideoFileList();
-      
+
     } catch (err) {
       if (RENDERER_DEBUG) console.warn("[HEX] immediate:error", err?.message);
       // Continue with normal polling if immediate check fails
     }
   }
-  
+
   async getHexEditProgress(processId) {
     // Single source of truth – backend progress endpoint
     const resp = await this.apiRequest("GET", `/api/conversion-progress/${processId}`);
     if (!resp || !resp.success) throw new Error(resp?.error || "No progress response");
-    
+
     const data = resp.data || {};
     const fileStatuses = data.file_statuses || {};
     const keys = Object.keys(fileStatuses);
     if (RENDERER_DEBUG) console.log("[HEX] progress:raw", { keysCount: keys.length, keys });
-    
+
     // Apply statuses to our local videoFiles array
     keys.forEach((k) => {
       const idx = parseInt(k);
       const fs = fileStatuses[k] || {};
       const file = this.videoFiles[idx];
       if (!file) return;
-      
+
       const before = { s: file.status, p: file.progress, st: file.stage };
       file.status = fs.status || file.status || "processing";
       file.progress = typeof fs.progress === "number" ? fs.progress : (file.progress || 0);
@@ -3511,18 +3535,18 @@ class TelegramUtilities {
           file.hexEdited = true; // Mark as hex edited
         }
       }
-      
+
       if (before.s !== file.status || before.p !== file.progress || before.st !== file.stage) {
         if (RENDERER_DEBUG) console.log("[HEX] file:update", { idx, before, after: { s: file.status, p: file.progress, st: file.stage } });
       }
     });
-    
+
     // Enhanced completion detection for hex edit
     const allCompleted = keys.every(k => {
       const fs = fileStatuses[k] || {};
       return fs.status === "completed";
     });
-    
+
     // Return normalized progress shape
     return {
       status: allCompleted ? "completed" : (data.status || "running"),
@@ -3534,7 +3558,7 @@ class TelegramUtilities {
       file_statuses: fileStatuses,
     };
   }
-  
+
   updateHexOverallProgress(progress) {
     // Progress bar fill
     const bar = document.getElementById("sticker-progress-fill") || document.getElementById("conversion-progress-fill");
@@ -3542,7 +3566,7 @@ class TelegramUtilities {
       bar.style.width = `${progress.progress}%`;
       bar.setAttribute("aria-valuenow", progress.progress);
     }
-    
+
     // Text status line (reuse conversion-status element)
     const statusEl = document.getElementById("conversion-status");
     if (statusEl) {
@@ -3567,7 +3591,7 @@ class TelegramUtilities {
       stack: error.stack,
       timestamp: new Date().toISOString()
     });
-    
+
     if (consecutiveErrors >= 5) {
       this.stopProgressMonitoring();
       this.resetOperationState();
@@ -3577,36 +3601,36 @@ class TelegramUtilities {
 
   async handleConversionComplete(progress) {
     if (RENDERER_DEBUG) console.log(`[COMPLETE] Operation finished with status: ${progress.status}`);
-    
+
     this.stopProgressMonitoring();
     const wasHexEdit = this.currentOperation === "hexediting";
     this.currentOperation = null;
     this.currentProcessId = null;
-    
+
     // Re-enable buttons
     const startBtn = document.getElementById("start-conversion");
     const hexBtn = document.getElementById("start-hex-edit");
-    
+
     if (startBtn) {
       startBtn.disabled = false;
       startBtn.innerHTML = '<i class="fas fa-play"></i> Start Conversion';
     }
-    
+
     if (hexBtn) {
       hexBtn.disabled = false;
       hexBtn.innerHTML = '<i class="fas fa-edit"></i> Hex Edit';
     }
-    
+
     if (progress.status === "completed") {
       const operationType = wasHexEdit ? "Hex Edit" : "Conversion";
-      
+
       // Update stats for successful conversions
       if (!wasHexEdit) {
         this.sessionStats.totalConversions++;
         this.sessionStats.successfulConversions++;
         this.updateStats();
       }
-      
+
       this.showToast(
         "success",
         `${operationType} Complete`,
@@ -3614,21 +3638,21 @@ class TelegramUtilities {
       );
     } else if (progress.status === "error") {
       const operationType = wasHexEdit ? "Hex Edit" : "Conversion";
-      
+
       // Update stats for failed conversions
       if (!wasHexEdit) {
         this.sessionStats.totalConversions++;
         this.sessionStats.failedConversions++;
         this.updateStats();
       }
-      
+
       this.showToast(
         "error",
         `${operationType} Error`,
         progress.currentStage || `${operationType} failed`
       );
     }
-    
+
     // Update file statuses with final values
     this.debugWarn("🔥 COMPLETION DEBUG - Updating Final File Statuses", {
       wasHexEdit: wasHexEdit,
@@ -3638,7 +3662,7 @@ class TelegramUtilities {
       completedFiles: progress.completedFiles,
       totalFiles: progress.totalFiles
     });
-    
+
     if (progress.file_statuses && Object.keys(progress.file_statuses).length > 0) {
       this.debugWarn("🔥 COMPLETION DEBUG - Using file_statuses data");
       this.videoFiles.forEach((file, index) => {
@@ -3657,8 +3681,8 @@ class TelegramUtilities {
           // Fallback if no specific file status
           file.status = progress.status === "completed" ? "completed" : "error";
           file.progress = progress.status === "completed" ? 100 : file.progress || 0;
-          file.stage = progress.status === "completed" ? 
-            (wasHexEdit ? "Hex edit successful" : "Conversion successful") : 
+          file.stage = progress.status === "completed" ?
+            (wasHexEdit ? "Hex edit successful" : "Conversion successful") :
             (wasHexEdit ? "Hex edit failed" : "Conversion failed");
           this.debugWarn("🔥 COMPLETION DEBUG - Updated file with fallback", {
             index: index,
@@ -3674,8 +3698,8 @@ class TelegramUtilities {
       this.videoFiles.forEach((file, index) => {
         file.status = progress.status === "completed" ? "completed" : "error";
         file.progress = progress.status === "completed" ? 100 : file.progress || 0;
-        file.stage = progress.status === "completed" ? 
-          (wasHexEdit ? "Hex edit successful" : "Conversion successful") : 
+        file.stage = progress.status === "completed" ?
+          (wasHexEdit ? "Hex edit successful" : "Conversion successful") :
           (wasHexEdit ? "Hex edit failed" : "Conversion failed");
         this.debugWarn("🔥 COMPLETION DEBUG - Updated file with overall status", {
           index: index,
@@ -3685,7 +3709,7 @@ class TelegramUtilities {
         });
       });
     }
-    
+
     this.debugWarn("🔥 COMPLETION DEBUG - Final File States", {
       videoFiles: this.videoFiles.map((f, i) => ({
         index: i,
@@ -3695,9 +3719,9 @@ class TelegramUtilities {
         stage: f.stage
       }))
     });
-    
+
     this.updateVideoFileList();
-    
+
     // Force immediate stats refresh to show updated counters
     await this.forceUpdateDatabaseStats();
   }
@@ -3709,12 +3733,12 @@ class TelegramUtilities {
       progressElement.style.width = `${progress.progress}%`;
       progressElement.setAttribute("aria-valuenow", progress.progress);
     }
-    
+
     const statusElement = document.getElementById("conversion-status");
     if (statusElement) {
       statusElement.textContent = progress.currentStage || `Converting ${progress.completedFiles}/${progress.totalFiles}`;
     }
-    
+
     // File statuses are already updated in getConversionProgress
   }
 
@@ -3729,7 +3753,7 @@ class TelegramUtilities {
         fileStatusesKeys: Object.keys(response?.data?.file_statuses || {}),
         fullResponse: response
       });
-      
+
       if (!response.success) {
         if (RENDERER_DEBUG) console.error(`Progress check failed for ${processId}:`, response.error);
         if (response.details && response.details.active_processes) {
@@ -3737,7 +3761,7 @@ class TelegramUtilities {
         }
         return null;
       }
-      
+
       const progressData = response.data;
       this.debugWarn("🔍 DETAILED DEBUG - Progress Data Extracted", {
         progressData: progressData,
@@ -3746,15 +3770,15 @@ class TelegramUtilities {
         fileStatusesIsObject: progressData.file_statuses && typeof progressData.file_statuses === "object",
         fileStatusesKeys: Object.keys(progressData.file_statuses || {})
       });
-      
+
       // Update file statuses if available - but do this AFTER returning the data
       // so it's available for both conversion and hex edit operations
       const fileStatuses = progressData.file_statuses || {};
-      
+
       // Debug log to see what we're getting
       if (Object.keys(fileStatuses).length > 0) {
-        this.debugWarn("🔍 DETAILED DEBUG - File Statuses Processing", { 
-          operation: this.currentOperation, 
+        this.debugWarn("🔍 DETAILED DEBUG - File Statuses Processing", {
+          operation: this.currentOperation,
           count: Object.keys(fileStatuses).length,
           statuses: fileStatuses,
           videoFilesCount: this.videoFiles.length,
@@ -3768,27 +3792,27 @@ class TelegramUtilities {
           fileStatusesStringified: JSON.stringify(progressData.file_statuses)
         });
       }
-      
+
       // Update the videoFiles array immediately for both conversion and hex edit
       if ((this.currentOperation === "converting" || this.currentOperation === "hexediting") && Object.keys(fileStatuses).length > 0) {
         if (RENDERER_DEBUG) console.log(`[PROGRESS] Updating ${Object.keys(fileStatuses).length} file statuses for ${this.currentOperation}`);
-        
+
         Object.entries(fileStatuses).forEach(([idx, fs]) => {
           const file = this.videoFiles[parseInt(idx)];
           if (!file) {
             if (RENDERER_DEBUG) console.warn(`[PROGRESS] File at index ${idx} not found in videoFiles`);
             return;
           }
-          
+
           // Update file with data from backend
           const oldStatus = file.status;
           const oldProgress = file.progress;
           const oldStage = file.stage;
-          
+
           file.status = fs.status || file.status;
           file.progress = fs.progress !== undefined ? fs.progress : file.progress;
           file.stage = fs.stage || file.stage;
-          
+
           // Log if there were changes
           if (oldStatus !== file.status || oldProgress !== file.progress || oldStage !== file.stage) {
             if (RENDERER_DEBUG) console.log(`[PROGRESS] File ${idx} updated:`, {
@@ -3799,7 +3823,7 @@ class TelegramUtilities {
           }
         });
       }
-      
+
       const returnData = {
         progress: progressData.progress || 0,
         status: progressData.status || "running",
@@ -3812,13 +3836,13 @@ class TelegramUtilities {
         canPause: progressData.can_pause || false,
         file_statuses: fileStatuses  // Pass the actual file_statuses object
       };
-      
+
       this.debugWarn("🔍 DETAILED DEBUG - Returning Progress Data", {
         returnData: returnData,
         fileStatusesInReturn: returnData.file_statuses,
         fileStatusesKeysInReturn: Object.keys(returnData.file_statuses || {})
       });
-      
+
       return returnData;
     } catch (error) {
       if (RENDERER_DEBUG) console.error("Error getting conversion progress:", error);
@@ -3835,42 +3859,42 @@ class TelegramUtilities {
       });
       return;
     }
-    
+
     const fileStatusKeys = Object.keys(fileStatuses);
-    
+
     fileStatusKeys.forEach(index => {
       const fileStatus = fileStatuses[index];
       if (!fileStatus) {
         this.debugWarn("🚨 CRITICAL ERROR - Empty File Status", { index, fileStatus });
         return;
       }
-      
+
       // Our DOM uses data-index, not data-file-index
       const fileElement = document.querySelector(`[data-index="${index}"]`);
-      
+
       if (fileElement) {
         // Update file item class based on status
         const oldClassName = fileElement.className;
         fileElement.className = `file-item ${fileStatus.status || "pending"}`;
-        
+
         this.debugWarn("🎯 DETAILED DEBUG - Updated Element Class", {
           index: index,
           oldClassName: oldClassName,
           newClassName: fileElement.className
         });
-        
+
         // Update progress bar
         const progressBar = fileElement.querySelector(".file-progress-fill");
         const progressText = fileElement.querySelector(".file-progress-text");
         const statusElement = fileElement.querySelector(".file-status");
-        
+
         this.debugWarn("🎯 DETAILED DEBUG - DOM Elements Found", {
           index: index,
           hasProgressBar: !!progressBar,
           hasProgressText: !!progressText,
           hasStatusElement: !!statusElement
         });
-        
+
         if (progressBar) {
           const oldWidth = progressBar.style.width;
           progressBar.style.width = `${fileStatus.progress}%`;
@@ -3883,7 +3907,7 @@ class TelegramUtilities {
         } else {
           this.debugWarn("🚨 DETAILED DEBUG - Progress Bar Not Found", { index });
         }
-        
+
         if (progressText) {
           const oldText = progressText.textContent;
           progressText.textContent = `${fileStatus.progress === 100 ? "✔" : fileStatus.progress + "%"}`;
@@ -3896,7 +3920,7 @@ class TelegramUtilities {
         } else {
           this.debugWarn("🚨 DETAILED DEBUG - Progress Text Not Found", { index });
         }
-        
+
         if (statusElement) {
           const oldStatus = statusElement.textContent;
           statusElement.textContent = fileStatus.stage || fileStatus.status;
@@ -3934,13 +3958,13 @@ class TelegramUtilities {
   // =============================================
   async disconnectTelegram() {
     if (RENDERER_DEBUG) console.log("[DEBUG] disconnectTelegram called");
-    
+
     try {
       this.updateTelegramStatus("connecting"); // Show as connecting/processing
-      
+
       // Clean up the session
       const response = await this.apiRequest("POST", "/api/telegram/cleanup-session");
-      
+
       if (response && response.success) {
         this.showToast("success", "Disconnected", "Successfully disconnected from Telegram");
         this.updateTelegramStatus("disconnected");
@@ -3948,7 +3972,7 @@ class TelegramUtilities {
         this.showToast("warning", "Disconnect Warning", "Session may not be fully cleaned");
         this.updateTelegramStatus("disconnected"); // Still update UI
       }
-      
+
     } catch (error) {
       if (RENDERER_DEBUG) console.error("[DEBUG] Disconnect error:", error);
       this.showToast("error", "Disconnect Error", "Error during disconnect, but session should be invalid");
@@ -3961,20 +3985,20 @@ class TelegramUtilities {
     if (this.isConnecting || this.pendingCode || this.pendingPassword) {
       return;
     }
-    
+
     // Set flag to prevent duplicate requests
     this.isConnecting = true;
-    
+
     try {
       // Check if there's already a valid session first when user wants to connect
       try {
         if (RENDERER_DEBUG) console.log("[DEBUG] User wants to connect - checking for existing session...");
-        
+
         const sessionResponse = await this.apiRequest("GET", "/api/telegram/session-status");
-        
+
         if (sessionResponse && sessionResponse.success && sessionResponse.data) {
           const { session_exists, session_valid } = sessionResponse.data;
-          
+
           if (session_exists && session_valid) {
             if (RENDERER_DEBUG) console.log("[DEBUG] Found valid existing session - using it");
             this.updateTelegramStatus("connected");
@@ -3992,20 +4016,20 @@ class TelegramUtilities {
       } catch (error) {
         if (RENDERER_DEBUG) console.warn("[DEBUG] Could not check existing session, proceeding with new connection:", error);
       }
-      
+
       // ... rest of connection logic ...
-      
+
       // Updated to match the HTML IDs correctly
       const apiIdInput = document.getElementById("telegram-api-id");
       const apiHashInput = document.getElementById("telegram-api-hash");
       const phoneInput = document.getElementById("telegram-phone");
-      
+
       if (RENDERER_DEBUG) console.log("[DEBUG] connectTelegram called - checking inputs:", {
         apiIdInput: !!apiIdInput,
-        apiHashInput: !!apiHashInput, 
+        apiHashInput: !!apiHashInput,
         phoneInput: !!phoneInput
       });
-      
+
       if (!apiIdInput || !apiHashInput || !phoneInput) {
         if (RENDERER_DEBUG) console.error("[DEBUG] Missing input elements:", {
           apiIdInput: !!apiIdInput,
@@ -4015,52 +4039,52 @@ class TelegramUtilities {
         this.showToast("error", "Input Error", "Telegram connection inputs not found");
         return;
       }
-      
+
       const apiId = apiIdInput.value.trim();
       const apiHash = apiHashInput.value.trim();
       const phoneNumber = phoneInput.value.trim();
-      
+
       if (RENDERER_DEBUG) console.log("[DEBUG] Input values:", {
         apiId: apiId ? "provided" : "empty",
-        apiHash: apiHash ? "provided" : "empty", 
+        apiHash: apiHash ? "provided" : "empty",
         phoneNumber: phoneNumber ? "provided" : "empty"
       });
-      
+
       // Validate inputs
       if (!apiId || !apiHash || !phoneNumber) {
         if (RENDERER_DEBUG) console.error("[DEBUG] Validation failed - missing inputs");
-        
+
         // Show specific field errors
         const missingFields = [];
         if (!apiId) missingFields.push("API ID");
         if (!apiHash) missingFields.push("API Hash");
         if (!phoneNumber) missingFields.push("Phone Number");
-        
+
         this.showToast("error", "Invalid Input", `Please fill in: ${missingFields.join(", ")}`);
         return;
       }
-      
+
       // Save credentials securely
       this.saveCredentials();
-      
+
       // Save phone number for future use
       this.savePhoneNumber(phoneNumber);
-      
+
       // Proceed with Telegram connection
       const connectBtn = document.getElementById("connect-telegram");
       if (connectBtn) {
         connectBtn.disabled = true;
         connectBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
       }
-      
+
       this.showLoadingOverlay("Connecting to Telegram...");
-      
+
       if (RENDERER_DEBUG) console.log("[DEBUG] Sending connection request to backend");
-      
+
       let response;
       let retryCount = 0;
       const maxRetries = 3;
-      
+
       while (retryCount < maxRetries) {
         try {
           response = await this.apiRequest("POST", "/api/telegram/connect", {
@@ -4069,37 +4093,37 @@ class TelegramUtilities {
             phone_number: phoneNumber,
             process_id: "connect_" + Date.now(),
           });
-          
+
           if (RENDERER_DEBUG) console.log("[DEBUG] Connection response received:", response);
           break; // Success, exit retry loop
-          
+
         } catch (error) {
           if (RENDERER_DEBUG) console.error(`[DEBUG] Connection attempt ${retryCount + 1} failed:`, error);
-          
+
           // Check for database lock error
           if (error.message && error.message.includes("database is locked") && retryCount < maxRetries - 1) {
             await new Promise(resolve => setTimeout(resolve, (retryCount + 1) * 1000));
             retryCount++;
             continue;
           }
-          
+
           throw error; // Re-throw if not a database lock error or max retries reached
         }
       }
-      
+
       this.hideLoadingOverlay();
-      
+
       const resOk = response && typeof response === "object" && response.success === true;
       if (resOk) {
         const result = (response.data !== undefined && response.data !== null) ? response.data : response;
         const needsCode = !!(result && result.needs_code);
         const needsPassword = !!(result && result.needs_password);
-        
+
         if (needsCode) {
           this.pendingCode = true;
-            try { this.hideIconModal(); } catch (_e) {
-              // Ignore errors when hiding icon modal
-            }
+          try { this.hideIconModal(); } catch (_e) {
+            // Ignore errors when hiding icon modal
+          }
           this.showModal("code-modal");
           this.showToast(
             "info",
@@ -4112,9 +4136,9 @@ class TelegramUtilities {
           }, 500);
         } else if (needsPassword) {
           this.pendingPassword = true;
-            try { this.hideIconModal(); } catch (_e) {
-              // Ignore errors when hiding icon modal  
-            }
+          try { this.hideIconModal(); } catch (_e) {
+            // Ignore errors when hiding icon modal  
+          }
           this.showModal("password-modal");
           this.showToast(
             "info",
@@ -4128,7 +4152,7 @@ class TelegramUtilities {
         } else {
           // Successful connection
           if (RENDERER_DEBUG) console.log("[DEBUG] Connection successful - updating UI");
-          
+
           // Show session reuse information
           let successMessage = "Successfully connected to Telegram";
           if (result && result.reused_session) {
@@ -4144,37 +4168,37 @@ class TelegramUtilities {
             this.showToast("success", "Connected", successMessage);
             this.addStatusItem("✅ New session created", "success");
           }
-          
+
           this.updateTelegramStatus("connected");
         }
       } else {
         if (RENDERER_DEBUG) console.error("[DEBUG] Connection failed - response not successful:", response);
-        
+
         // Handle rate limiting specifically
         if (response && response.rate_limited) {
           const waitTime = response.wait_time_human || "some time";
           this.showToast(
-            "warning", 
-            "Rate Limited", 
+            "warning",
+            "Rate Limited",
             `${response.error}
 Too many requests. Please wait ${waitTime} before trying again.
 Tip: Next time, the app will reuse your session automatically to avoid this!`,
             12000  // Show for 12 seconds
           );
-          
+
           // Show detailed rate limit info
           this.addStatusItem(`⚠️ Telegram rate limit: Wait ${waitTime}`, "warning");
           this.addStatusItem("💡 Next connection will reuse session to avoid limits", "info");
-          
+
           // Reset UI state before returning
           this.hideLoadingOverlay();
           this.updateTelegramStatus("disconnected");
           return; // Don't proceed further
         }
-        
+
         const errorMsg = (response && response.error) || "Unknown error occurred";
         this.showToast("error", "Connection Failed", errorMsg);
-        
+
         // Reset UI state for general connection failure
         this.hideLoadingOverlay();
         this.updateTelegramStatus("disconnected");
@@ -4182,13 +4206,13 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     } catch (error) {
       if (RENDERER_DEBUG) console.error("[DEBUG] Connection error caught:", error);
       this.hideLoadingOverlay();
-      
+
       let errorMsg = error.message || "Failed to connect";
-      
+
       // Handle specific error types
       if (errorMsg.includes("rate limit") || errorMsg.includes("wait") || errorMsg.includes("FloodWaitError")) {
         this.showToast(
-          "warning", 
+          "warning",
           "Rate Limited",
           "Too many requests to Telegram. Please wait before trying again.",
           8000
@@ -4202,10 +4226,10 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       } else {
         this.showToast("error", "Connection Error", errorMsg);
       }
-      
+
       // Reset UI state after error
       this.updateTelegramStatus("disconnected");
-      
+
     } finally {
       // Reset connection flag
       this.isConnecting = false;
@@ -4227,11 +4251,11 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     if (this._submitCodePromise) {
       return this._submitCodePromise;
     }
-    
+
     this._submitCodePromise = (async () => {
       const codeInput = document.getElementById("verification-code");
       if (!codeInput) return;
-      
+
       const code = codeInput.value.trim();
       if (!code) {
         this.showToast(
@@ -4242,7 +4266,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         codeInput.focus();
         return;
       }
-      
+
       if (!/^\d{5}$/.test(code)) {
         this.showToast(
           "warning",
@@ -4252,61 +4276,61 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         codeInput.select();
         return;
       }
-      
+
       try {
-      
-      const submitBtn = document.getElementById("submit-code");
-      if (submitBtn) {
-        submitBtn.disabled = true;
-        submitBtn.innerHTML =
-          '<i class="fas fa-spinner fa-spin"></i> Verifying...';
-      }
-      
-      const response = await this.apiRequest("POST", "/api/sticker/verify-code", { code });
-      
-      const resOk = response && typeof response === "object" && response.success === true;
-      if (resOk) {
-        const result = (response.data !== undefined && response.data !== null) ? response.data : response;
-        // Check if 2FA password is needed
-        const needsPassword = !!(result && result.needs_password);
-        if (RENDERER_DEBUG) console.debug("[verify-code] response:", response, "computed needsPassword=", needsPassword);
-        if (RENDERER_DEBUG) console.debug("[verify-code] result object:", result);
-        if (RENDERER_DEBUG) console.debug("[verify-code] needs_password field:", result?.needs_password);
-        if (needsPassword) {
-          this.pendingCode = false;
-          this.pendingPassword = true;
-          this.hideModal();
-          this.showModal("password-modal");
-          this.showToast(
-            "info",
-            "2FA Required",
-            "Please enter your 2FA password"
-          );
-          setTimeout(() => {
-            const passwordInput = document.getElementById(
-              "two-factor-password"
-            );
-            if (passwordInput) passwordInput.focus();
-          }, 500);
-        } else {
-          this.pendingCode = false;
-          this.hideModal();
-          this.updateTelegramStatus("connected");
-          this.saveSettings();
-          this.showToast(
-            "success",
-            "Connected",
-            "Successfully connected to Telegram"
-          );
+
+        const submitBtn = document.getElementById("submit-code");
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.innerHTML =
+            '<i class="fas fa-spinner fa-spin"></i> Verifying...';
         }
-      } else {
-        this.showToast(
-          "error",
-          "Verification Failed",
-          (response && response.error) || "Invalid verification code"
-        );
-        codeInput.select();
-      }
+
+        const response = await this.apiRequest("POST", "/api/sticker/verify-code", { code });
+
+        const resOk = response && typeof response === "object" && response.success === true;
+        if (resOk) {
+          const result = (response.data !== undefined && response.data !== null) ? response.data : response;
+          // Check if 2FA password is needed
+          const needsPassword = !!(result && result.needs_password);
+          if (RENDERER_DEBUG) console.debug("[verify-code] response:", response, "computed needsPassword=", needsPassword);
+          if (RENDERER_DEBUG) console.debug("[verify-code] result object:", result);
+          if (RENDERER_DEBUG) console.debug("[verify-code] needs_password field:", result?.needs_password);
+          if (needsPassword) {
+            this.pendingCode = false;
+            this.pendingPassword = true;
+            this.hideModal();
+            this.showModal("password-modal");
+            this.showToast(
+              "info",
+              "2FA Required",
+              "Please enter your 2FA password"
+            );
+            setTimeout(() => {
+              const passwordInput = document.getElementById(
+                "two-factor-password"
+              );
+              if (passwordInput) passwordInput.focus();
+            }, 500);
+          } else {
+            this.pendingCode = false;
+            this.hideModal();
+            this.updateTelegramStatus("connected");
+            this.saveSettings();
+            this.showToast(
+              "success",
+              "Connected",
+              "Successfully connected to Telegram"
+            );
+          }
+        } else {
+          this.showToast(
+            "error",
+            "Verification Failed",
+            (response && response.error) || "Invalid verification code"
+          );
+          codeInput.select();
+        }
       } catch (error) {
         if (RENDERER_DEBUG) console.error("Error verifying code:", error);
         this.showToast(
@@ -4322,12 +4346,12 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         }
       }
     })();
-    
+
     // Always clear the promise lock after completion
     this._submitCodePromise.finally(() => {
       this._submitCodePromise = null;
     });
-    
+
     return this._submitCodePromise;
   }
 
@@ -4336,11 +4360,11 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     if (this._submitPasswordPromise) {
       return this._submitPasswordPromise;
     }
-    
+
     this._submitPasswordPromise = (async () => {
       const passwordInput = document.getElementById("two-factor-password");
       if (!passwordInput) return;
-      
+
       const password = passwordInput.value.trim();
       if (!password) {
         this.showToast(
@@ -4351,38 +4375,38 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         passwordInput.focus();
         return;
       }
-      
+
       try {
-      
-      const submitBtn = document.getElementById("submit-password");
-      if (submitBtn) {
-        submitBtn.disabled = true;
-        submitBtn.innerHTML =
-          '<i class="fas fa-spinner fa-spin"></i> Authenticating...';
-      }
-      
-      const response = await this.apiRequest("POST", "/api/sticker/verify-password", { password });
-      
-      const resOk = response && typeof response === "object" && response.success === true;
-      if (resOk) {
-        const result = (response.data !== undefined && response.data !== null) ? response.data : response;
-        this.pendingPassword = false;
-        this.hideModal();
-        this.updateTelegramStatus("connected");
-        this.saveSettings();
-        this.showToast(
-          "success",
-          "Connected",
-          "Successfully connected to Telegram"
-        );
-      } else {
-        this.showToast(
-          "error",
-          "Authentication Failed",
-          (response && response.error) || "Invalid password"
-        );
-        passwordInput.select();
-      }
+
+        const submitBtn = document.getElementById("submit-password");
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.innerHTML =
+            '<i class="fas fa-spinner fa-spin"></i> Authenticating...';
+        }
+
+        const response = await this.apiRequest("POST", "/api/sticker/verify-password", { password });
+
+        const resOk = response && typeof response === "object" && response.success === true;
+        if (resOk) {
+          const result = (response.data !== undefined && response.data !== null) ? response.data : response;
+          this.pendingPassword = false;
+          this.hideModal();
+          this.updateTelegramStatus("connected");
+          this.saveSettings();
+          this.showToast(
+            "success",
+            "Connected",
+            "Successfully connected to Telegram"
+          );
+        } else {
+          this.showToast(
+            "error",
+            "Authentication Failed",
+            (response && response.error) || "Invalid password"
+          );
+          passwordInput.select();
+        }
       } catch (error) {
         if (RENDERER_DEBUG) console.error("Error verifying password:", error);
         this.showToast(
@@ -4398,12 +4422,12 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         }
       }
     })();
-    
+
     // Always clear the promise lock after completion
     this._submitPasswordPromise.finally(() => {
       this._submitPasswordPromise = null;
     });
-    
+
     return this._submitPasswordPromise;
   }
 
@@ -4413,7 +4437,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       this.showToast("error", "Type Mismatch", "Cannot add images to a video sticker pack. Clear media or switch to image type.");
       return;
     }
-    
+
     try {
       const files = await window.electronAPI.selectFiles({
         filters: [
@@ -4421,12 +4445,12 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           { name: "All Files", extensions: ["*"] },
         ],
       });
-      
+
       // selectFiles returns an array directly
       if (!Array.isArray(files) || files.length === 0) {
         return;
       }
-      
+
       // Validate files before processing
       const validFiles = files.filter(file => {
         if (!file || typeof file !== "string") {
@@ -4435,25 +4459,25 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         }
         return true;
       });
-      
+
       if (validFiles.length === 0) {
         this.showToast("warning", "No Valid Files", "No valid image files were selected");
         return;
       }
-      
+
       let addedCount = 0;
       let skippedCount = 0;
-      
+
       files.forEach((file) => {
         if (this.mediaFiles.length >= 120) {
           skippedCount++;
           return;
         }
-        
+
         if (!this.mediaFiles.some((f) => f.file_path === file)) {
           // Sanitize default emoji while preserving variation selectors (Windows color fix)
           const cleanDefaultEmoji = this.normalizeEmoji(this.defaultEmoji || "❤️");
-          
+
           this.mediaFiles.push({
             file_path: file,
             name: file.split(/[\\/]/).pop(),
@@ -4467,9 +4491,9 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           skippedCount++;
         }
       });
-      
+
       this.updateMediaFileList();
-      
+
       if (addedCount > 0) {
         this.showToast(
           "success",
@@ -4477,7 +4501,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           `Added ${addedCount} image files`
         );
       }
-      
+
       if (skippedCount > 0) {
         this.showToast(
           "warning",
@@ -4487,7 +4511,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       }
     } catch (error) {
       if (RENDERER_DEBUG) console.error("Error adding images:", error);
-      
+
       // Handle specific Windows file system errors
       if (error.message && error.message.includes("Errno 22")) {
         this.showToast(
@@ -4511,7 +4535,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       this.showToast("error", "Type Mismatch", "Cannot add videos to an image sticker pack. Clear media or switch to video type.");
       return;
     }
-    
+
     try {
       const files = await window.electronAPI.selectFiles({
         filters: [
@@ -4519,12 +4543,12 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           { name: "All Files", extensions: ["*"] },
         ],
       });
-      
+
       // selectFiles returns an array directly
       if (!Array.isArray(files) || files.length === 0) {
         return;
       }
-      
+
       // Validate files before processing
       const validFiles = files.filter(file => {
         if (!file || typeof file !== "string") {
@@ -4533,25 +4557,25 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         }
         return true;
       });
-      
+
       if (validFiles.length === 0) {
         this.showToast("warning", "No Valid Files", "No valid video files were selected");
         return;
       }
-      
+
       let addedCount = 0;
       let skippedCount = 0;
-      
+
       files.forEach((file) => {
         if (this.mediaFiles.length >= 120) {
           skippedCount++;
           return;
         }
-        
+
         if (!this.mediaFiles.some((f) => f.file_path === file)) {
           // Sanitize default emoji while preserving variation selectors (Windows color fix)
           const cleanDefaultEmoji = this.normalizeEmoji(this.defaultEmoji || "❤️");
-          
+
           this.mediaFiles.push({
             file_path: file,
             name: file.split(/[\\/]/).pop(),
@@ -4565,9 +4589,9 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           skippedCount++;
         }
       });
-      
+
       this.updateMediaFileList();
-      
+
       if (addedCount > 0) {
         this.showToast(
           "success",
@@ -4575,7 +4599,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           `Added ${addedCount} video files`
         );
       }
-      
+
       if (skippedCount > 0) {
         this.showToast(
           "warning",
@@ -4585,7 +4609,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       }
     } catch (error) {
       if (RENDERER_DEBUG) console.error("Error adding videos:", error);
-      
+
       // Handle specific Windows file system errors
       if (error.message && error.message.includes("Errno 22")) {
         this.showToast(
@@ -4608,7 +4632,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       this.showToast("info", "Already Empty", "No media files to clear");
       return;
     }
-    
+
     const count = this.mediaFiles.length;
     this.mediaFiles = [];
     this.updateMediaFileList();
@@ -4628,7 +4652,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       }, 100);
       return;
     }
-    
+
     if (this.mediaFiles.length === 0) {
       container.innerHTML = `
         <div class="empty-state">
@@ -4639,7 +4663,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       `;
       return;
     }
-    
+
     container.innerHTML = this.mediaFiles
       .map((file, index) => {
         const statusClass = file.status || "pending";
@@ -4653,7 +4677,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
                <video class="media-preview-video" src="${fileUrl}" muted preload="metadata"></video>
                <i class="fas fa-play-circle media-preview-video-icon"></i>
              </div>`;
-        
+
         return `
           <div class="media-item ${statusClass} new-item" data-index="${index}">
             <div class="media-info">
@@ -4662,9 +4686,9 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
                 <div class="media-name" title="${file.file_path}">${file.name}</div>
                 <div class="media-meta">
                   ${file.status && file.status !== "pending"
-                    ? `<span class="media-status"><i class="${statusIcon}"></i> ${this.getStatusText(file.status)}</span>`
-                    : ""
-                  }
+            ? `<span class="media-status"><i class="${statusIcon}"></i> ${this.getStatusText(file.status)}</span>`
+            : ""
+          }
                 </div>
               </div>
             </div>
@@ -4685,13 +4709,13 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         `;
       })
       .join("");
-    
+
     // Update media counter
     const counter = document.getElementById("media-counter");
     if (counter) {
       counter.textContent = this.mediaFiles.length;
     }
-    
+
     // Update progress if in progress
     this.updateStickerProgress();
   }
@@ -4786,43 +4810,43 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   }
 
   closeVideoViewer(overlay, video) {
-    try { if (video) { video.pause(); video.src = ""; } } catch (_) {}
+    try { if (video) { video.pause(); video.src = ""; } } catch (_) { }
     if (!overlay) overlay = document.querySelector(".video-viewer-overlay");
     if (overlay) overlay.parentNode.removeChild(overlay);
   }
-  
+
   // Enhanced media status update with real-time sync
   updateMediaFileStatus(fileIndex, status, progress = null, stage = null) {
     if (fileIndex >= 0 && fileIndex < this.mediaFiles.length) {
       const file = this.mediaFiles[fileIndex];
       const oldStatus = file.status;
-      
+
       // Update file properties
       file.status = status;
       if (progress !== null) file.progress = progress;
       if (stage !== null) file.stage = stage;
-      
+
       // Log status change for debugging
       if (oldStatus !== status) {
         console.log(`🔄 [MEDIA_STATUS] File ${fileIndex} (${file.name}): ${oldStatus} → ${status}`);
       }
-      
+
       // Update the specific media item in the DOM without full refresh
       this.updateSingleMediaItem(fileIndex);
-      
+
       // Update overall progress indicators
       this.updateMediaProgress();
     }
   }
-  
+
   updateSingleMediaItem(index) {
     const mediaItem = document.querySelector(`[data-index="${index}"]`);
     if (!mediaItem || !this.mediaFiles[index]) return;
-    
+
     const file = this.mediaFiles[index];
     const statusIcon = this.getMediaStatusIcon(file.status);
     const statusText = this.getStatusText(file.status);
-    
+
     // Update status display
     const statusElement = mediaItem.querySelector(".media-status");
     if (statusElement) {
@@ -4834,10 +4858,10 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         metaElement.innerHTML += `<span class="media-status"><i class="${statusIcon}"></i> ${statusText}</span>`;
       }
     }
-    
+
     // Update item class for styling
     mediaItem.className = `media-item ${file.status || "pending"} new-item`;
-    
+
     // Add progress indicator for processing status
     if (file.status === "processing" && file.progress !== undefined) {
       let progressBar = mediaItem.querySelector(".progress-indicator");
@@ -4860,18 +4884,18 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       }
     }
   }
-  
+
   updateMediaProgress() {
     const totalFiles = this.mediaFiles.length;
     if (totalFiles === 0) return;
-    
-      const statusCounts = {
+
+    const statusCounts = {
       completed: 0,
       processing: 0,
       error: 0,
       pending: 0
     };
-    
+
     // Count statuses
     this.mediaFiles.forEach(file => {
       const status = file.status || "pending";
@@ -4879,33 +4903,33 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         statusCounts[status]++;
       }
     });
-    
+
     // Update progress indicators
     const progressPercent = Math.round((statusCounts.completed / totalFiles) * 100);
-    
+
     // Update any progress displays
     const progressElements = document.querySelectorAll(".sticker-progress-percentage");
     progressElements.forEach(el => {
       if (el) el.textContent = `${progressPercent}%`;
     });
-    
+
     const statusElements = document.querySelectorAll(".sticker-progress-stats");
     statusElements.forEach(el => {
       if (el) el.textContent = `${statusCounts.completed} / ${totalFiles} stickers processed`;
     });
   }
-  
+
   // Update media file statuses based on backend progress data
   updateMediaStatusFromProgress(progress) {
     if (!progress || !this.mediaFiles) return;
-    
+
     // If progress contains file-specific status information
     if (progress.file_statuses) {
       Object.entries(progress.file_statuses).forEach(([fileIndex, fileStatus]) => {
         const index = parseInt(fileIndex);
         if (index >= 0 && index < this.mediaFiles.length) {
           this.updateMediaFileStatus(
-            index, 
+            index,
             fileStatus.status || "processing",
             fileStatus.progress,
             fileStatus.stage
@@ -4922,7 +4946,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       });
     }
   }
-  
+
   getStatusFromProgress(progress) {
     if (progress.status === "completed") return "completed";
     if (progress.status === "error" || progress.status === "failed") return "error";
@@ -4933,7 +4957,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   async showMediaInfo(index) {
     const file = this.mediaFiles[index];
     if (!file) return;
-    
+
     // Get detailed file metadata from backend
     let fileInfo = {
       name: file.name,
@@ -4943,12 +4967,12 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       dimensions: "Unknown",
       dateModified: "Unknown"
     };
-    
+
     try {
-      const result = await this.apiRequest("POST", "/api/get-file-info", { 
-        path: file.file_path 
+      const result = await this.apiRequest("POST", "/api/get-file-info", {
+        path: file.file_path
       });
-      
+
       if (result && result.success && result.data) {
         fileInfo = {
           name: result.data.name || file.name,
@@ -4965,7 +4989,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     } catch (error) {
       if (RENDERER_DEBUG) console.error("Failed to get file info:", error);
     }
-    
+
     // Format additional technical info
     let technicalInfo = "";
     if (fileInfo.codec) {
@@ -4980,11 +5004,11 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         <span style="color: #ccc;">${fileInfo.fps.toFixed(1)} fps</span>
       </div>`;
     }
-    
+
     // Get file type icon
     const typeIcon = fileInfo.type === "video" ? "🎥" : fileInfo.type === "image" ? "🖼️" : "📄";
     const typeLabel = fileInfo.type === "video" ? "Video" : fileInfo.type === "image" ? "Image" : "File";
-    
+
     const info = `
       <div style="font-size: 0.9rem; line-height: 1.8; max-width: 400px;">
         <div style="margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.1);">
@@ -5040,14 +5064,14 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         </div>
       </div>
     `;
-    
+
     this.showDetailedMessage("Media File Details", info);
   }
-  
+
 
   removeMediaFile(index) {
     if (index < 0 || index >= this.mediaFiles.length) return;
-    
+
     const file = this.mediaFiles[index];
     this.mediaFiles.splice(index, 1);
     this.updateMediaFileList();
@@ -5056,29 +5080,29 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
 
   editEmoji(index) {
     if (index < 0 || index >= this.mediaFiles.length) {
-        return;
+      return;
     }
-    
+
     // Ensure we're not in a locked state
     if (this.modalState.isEmojiLocked) {
-        return;
+      return;
     }
-    
+
     // Prevent immediate closure
     this.modalState.preventEmojiClosure = true;
     setTimeout(() => {
       this.modalState.preventEmojiClosure = false;
     }, 300);
-    
+
     this.currentEmojiIndex = index;
     const currentEmoji = this.mediaFiles[index].emoji;
     const fileName = this.mediaFiles[index].name;
     const emojiInput = document.getElementById("emoji-input");
     const filenameDisplay = document.getElementById("emoji-filename");
-    
+
     if (emojiInput) emojiInput.value = currentEmoji;
     if (filenameDisplay) filenameDisplay.textContent = fileName;
-    
+
     // Ensure the modal is properly reset before showing
     const modal = document.getElementById("emoji-modal");
     if (modal) {
@@ -5087,9 +5111,9 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       // Ensure proper z-index for emoji modal
       modal.style.zIndex = "9000";
     }
-    
+
     this.showModal("emoji-modal");
-    
+
     // Add a small delay to ensure focus works
     setTimeout(() => {
       if (emojiInput) {
@@ -5102,24 +5126,24 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   saveEmoji() {
     const emojiInput = document.getElementById("emoji-input");
     if (!emojiInput) return;
-    
+
     const newEmoji = this.normalizeEmoji(emojiInput.value.trim());
     this.saveEmojiDirect(newEmoji);
   }
-  
+
   saveEmojiDirect(emoji) {
     // Check if we have a valid emoji index
     if (this.currentEmojiIndex === null || this.currentEmojiIndex < 0) {
       return;
     }
-    
+
     const newEmoji = this.normalizeEmoji(emoji);
-    
+
     if (!newEmoji) {
       this.showToast("warning", "Empty Emoji", "Please select an emoji");
       return;
     }
-    
+
     // Update emoji
     if (this.currentEmojiIndex < this.mediaFiles.length) {
       this.mediaFiles[this.currentEmojiIndex].emoji = newEmoji;
@@ -5132,9 +5156,9 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         `Emoji set to ${newEmoji}`
       );
     }
-    
+
     this.hideModal();
-    
+
     // Reset for next use
     this.currentEmojiIndex = null;
   }
@@ -5152,7 +5176,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     if (!this.telegramConnected) {
       this.showToast("error", "Telegram Not Connected", "Please connect to Telegram first before creating sticker packs");
       this.addStatusItem("❌ Error: Telegram not connected - Please connect to Telegram first", "error");
-      
+
       // Switch to Telegram tab to help user
       const telegramTab = document.querySelector('[data-tab="sticker-bot"]');
       if (telegramTab) {
@@ -5160,11 +5184,11 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       }
       return;
     }
-    
+
     // Secondary check: Verify backend session (non-blocking)
     try {
       const sessionResponse = await this.apiRequest("GET", "/api/telegram/session-status");
-      
+
       // If backend says no connection but frontend thinks connected, try to reconnect silently
       if (!sessionResponse.success || !sessionResponse.data || !sessionResponse.data.session_valid) {
         // Try a quick health check to refresh connection
@@ -5214,16 +5238,16 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
 
     // Clear logged file statuses for new pack creation
     this.loggedFileStatuses.clear();
-    
+
     // Add initial status
     this.addStatusItem(`🚀 Starting sticker pack creation: "${packName}"`, "info");
-    
+
     const incompatibleFiles = this.mediaFiles.filter((f) => {
       if (stickerType === "video" && f.type !== "video") return true;
       if (stickerType === "image" && f.type !== "image") return true;
       return false;
     });
-    
+
     if (incompatibleFiles.length > 0) {
       this.addStatusItem(`⚠️ Warning: ${incompatibleFiles.length} files don't match sticker type`, "warning");
       const proceed = confirm(
@@ -5236,7 +5260,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     }
 
     this.addStatusItem(`🔍 Validating ${this.mediaFiles.length} media files...`, "info");
-    
+
     try {
       // Sanitize process id for safe server-side handling
       // ENHANCED: Better sanitization to prevent [Errno 22] Invalid argument
@@ -5246,27 +5270,27 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       if (!processId || processId.length === 0) {
         processId = "sticker_" + Date.now();
       }
-      
+
       // Get auto-skip setting
       const autoSkipIconEl = document.getElementById("auto-skip-icon");
       const autoSkipIcon = autoSkipIconEl ? autoSkipIconEl.checked : true;
-      
+
       // Disable the create button to prevent double-clicking
       const createBtn = document.getElementById("create-sticker-pack");
       if (createBtn) {
         createBtn.disabled = true;
         createBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting...';
       }
-      
+
       this.showLoadingOverlay("Starting sticker pack creation...");
-      
+
       // Build a minimal, backend-friendly payload
       // ENHANCED: Better sanitization to prevent [Errno 22] Invalid argument
       const filteredMedia = this.mediaFiles
         .filter((f) => (stickerType === "video" ? f.type === "video" : f.type === "image"))
         .map((f) => ({
           file_path: String(f.file_path || "").replace(/[\x00-\x1f\x7f-\x9f]/g, "").trim(),
-          emoji: typeof f.emoji === "string" && f.emoji.replace(/[\x00-\x1f\x7f-\x9f]/g, "").length > 0 
+          emoji: typeof f.emoji === "string" && f.emoji.replace(/[\x00-\x1f\x7f-\x9f]/g, "").length > 0
             ? this.normalizeEmoji(f.emoji)
             : this.normalizeEmoji(this.defaultEmoji),
           type: f.type === "video" ? "video" : "image",
@@ -5284,7 +5308,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
             throw new Error("Invalid file path");
           }
         }
-        
+
         // Ensure emoji is a single valid character
         if (typeof media.emoji === "string" && media.emoji.length > 0) {
           media.emoji = this.normalizeEmoji(media.emoji);
@@ -5298,20 +5322,20 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       const sanitizedPackName = String(packName || "").replace(/[\x00-\x1f\x7f-\x9f]/g, "").trim().substring(0, 64);
       const sanitizedPackUrlName = String(packUrlName || "").replace(/[\x00-\x1f\x7f-\x9f]/g, "").trim().substring(0, 32);
       const sanitizedProcessId = String(processId || "").replace(/[\x00-\x1f\x7f-\x9f]/g, "").replace(/[^a-zA-Z0-9_-]/g, "_").substring(0, 50);
-      
+
       // Validate that we have valid data after sanitization
       if (!sanitizedPackName || sanitizedPackName.length === 0) {
         throw new Error("Invalid pack name");
       }
-      
+
       if (!sanitizedPackUrlName || sanitizedPackUrlName.length === 0) {
         throw new Error("Invalid URL name");
       }
-      
+
       if (!sanitizedProcessId || sanitizedProcessId.length === 0) {
         throw new Error("Invalid process ID");
       }
-      
+
       const requestData = {
         pack_name: sanitizedPackName,
         pack_url_name: sanitizedPackUrlName,
@@ -5320,31 +5344,31 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         process_id: sanitizedProcessId,
         auto_skip_icon: autoSkipIcon,
       };
-      
+
       const response = await this.apiRequest("POST", "/api/sticker/create-pack", requestData);
-      
+
       this.hideLoadingOverlay();
-      
+
       if (response.success) {
         this.showToast(
           "info",
           "Creation Started",
           "Sticker pack creation started in background"
         );
-        
+
         this.addStatusItem("🚀 Starting sticker pack creation: \"" + packName + "\"", "processing");
-        
+
         if (createBtn) {
           createBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating Pack...';
         }
-        
+
         // Start monitoring progress
         const finalProcessId = response.process_id || processId;
-        
+
         // CRITICAL: Track the sticker process ID for URL name retry functionality
         this.currentStickerProcessId = finalProcessId;
         this.currentUrlNameProcessId = finalProcessId; // Also set this as backup
-        
+
         this.startStickerProgressMonitoring(finalProcessId);
       } else {
         this.addStatusItem(`❌ Error: ${response.error || "Failed to start creation"}`, "error");
@@ -5353,7 +5377,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           "Creation Failed",
           response.error || "Failed to start creation"
         );
-        
+
         // Re-enable the button on failure
         if (createBtn) {
           createBtn.disabled = false;
@@ -5363,20 +5387,20 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     } catch (error) {
       this.hideLoadingOverlay();
       console.error("Error creating sticker pack:", error);
-      
+
       // ENHANCED: Better error handling for [Errno 22] Invalid argument
       let errorMessage = error.message;
       if (error.message && (error.message.includes("Invalid argument") || error.message.includes("Errno 22"))) {
         errorMessage = "Invalid request data - contains invalid characters. Please check your inputs and try again.";
       }
-      
+
       this.addStatusItem(`❌ Error: Failed to create sticker pack - ${errorMessage}`, "error");
       this.showToast(
         "error",
         "Creation Error",
         "Failed to create sticker pack: " + errorMessage
       );
-      
+
       // Re-enable the button on error
       const createBtn = document.getElementById("create-sticker-pack");
       if (createBtn) {
@@ -5388,61 +5412,61 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   startStickerProgressMonitoring(processId) {
     // CRITICAL FIX: Always clear previous interval to prevent memory leaks
     this.stopStickerProgressMonitoring();
-    
+
     // Reset auto-skip flag for this process
     // Removed autoSkipAttempted flag - auto-skip is handled entirely by backend
     this.lastStage = null;
-    
+
     // CRITICAL: Track the process ID for URL name retry functionality
     this.currentStickerProcessId = processId;
     if (!this.currentUrlNameProcessId) {
       this.currentUrlNameProcessId = processId; // Backup in case it wasn't set
     }
-    
+
     // Store last known progress for completion detection
     this.lastKnownProgress = null;
-    
+
     let consecutiveErrors = 0;
     let initialChecks = 0; // Track initial checks to avoid premature "Process not found" errors
-    
+
     // Monitoring function
     const checkProgress = async () => {
       if (!this.currentStickerProcessId) {
         clearInterval(this.stickerProgressInterval);
         return;
       }
-      
+
       try {
         const response = await this.apiRequest("GET", `/api/process-status/${this.currentStickerProcessId}`);
-        
+
         if (response.success && response.data) {
           const progress = response.data;
           this.lastKnownProgress = progress; // Store for error handling
-          
+
           // PRIORITY CHECK 1: Check for URL name retry attempts exhausted
           if (progress.url_name_attempts && progress.url_name_attempts > progress.max_url_attempts) {
             const currentAttempt = progress.url_name_attempts || 1;
             const maxAttempts = progress.max_url_attempts || 3;
-            
+
             this.addStatusItem(`❌ All ${maxAttempts} URL name attempts exhausted. Please add sticker pack manually in Telegram bot.`, "error");
             this.showToast("warning", "Manual Setup Required", "Please complete the sticker pack creation manually in the Telegram bot (@Stickers)");
-            
+
             this.stopStickerProgressMonitoring();
-            
+
             this.onStickerProcessCompleted(true, {
               manual_completion_required: true,
               message: "Please complete sticker pack creation manually in Telegram bot"
             });
             return;
           }
-          
+
           // PRIORITY CHECK 2: Check for URL name retry - BUT ONLY if it's NOT an icon request
           // We need to distinguish between:
           // 1. Icon request (waiting_for_user + icon_request_message) = Show icon modal
           // 2. URL conflict (waiting_for_user + url_name_taken) = Show URL retry modal
           const isIconRequest = progress.waiting_for_user && !!(progress.icon_request_message || progress.icon_request);
           let isUrlConflict = (progress.waiting_for_user || progress.status === "waiting_for_url_name") && !!progress.url_name_taken;
-          
+
           // CRITICAL FIX: Handle backend bug where both icon_request and url_name_taken are set
           // Priority: Icon request comes FIRST, then URL conflict
           if (isIconRequest && isUrlConflict) {
@@ -5450,94 +5474,94 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
             // Force isUrlConflict to false to handle icon first
             isUrlConflict = false;
           }
-          
+
           // Handle URL conflict ONLY if it's not an icon request (for manual mode)
           if (isUrlConflict && !isIconRequest && !this.urlPromptHandledProcesses.has(processId)) {
             // Mark as handled to prevent duplicate processing
             this.urlPromptHandledProcesses.add(processId);
-            
+
             // Stop monitoring while user provides new URL name
             this.stopStickerProgressMonitoring();
-            
+
             // Show URL name modal with the original taken name
             const takenName = progress.original_url_name || progress.pack_url_name || "retry";
             const currentAttempt = progress.url_name_attempts || 1;
             const maxAttempts = progress.max_url_attempts || 3;
-            
+
             this.addStatusItem(`URL name '${takenName}' is taken. Showing retry options (${currentAttempt}/${maxAttempts})`, "warning");
-            
+
             this.showUrlNameModal(takenName, currentAttempt, maxAttempts, processId);
-            
+
             return; // Exit early after handling URL name retry
           }
-          
+
           // PRIORITY CHECK 3: Check for icon selection
           if (progress.waiting_for_user && (progress.icon_request_message || progress.icon_request) && !this.iconHandledProcesses.has(processId)) {
             // Check if auto-skip was enabled for this process (from backend)
             const processAutoSkip = progress.auto_skip_icon !== undefined ? progress.auto_skip_icon : true; // Default to true
             // Check if auto-skip has already been handled by the backend
             const autoSkipHandled = progress.auto_skip_handled !== undefined ? progress.auto_skip_handled : false;
-            
+
             // REMOVED: Don't check for completion here - it's a backend bug setting status=completed while waiting_for_user=true
             // The completion check should happen AFTER user input, not during icon request
-            
+
             // If backend has already handled auto-skip, don't show icon modal
             // BUT CRITICAL: Continue monitoring instead of returning - don't exit early!
             // We MUST check for URL name conflicts and completion even when auto-skip is handled
             if (processAutoSkip && autoSkipHandled) {
               // Backend is handling auto-skip, mark as handled but continue monitoring
               this.iconHandledProcesses.add(processId);
-              
+
               // CRITICAL: Now check if there's a URL conflict to handle
               // Check the ORIGINAL url_name_taken flag, not isUrlConflict (which we may have modified)
               const hasUrlConflict = !!progress.url_name_taken;
-              
+
               if (hasUrlConflict && !this.urlPromptHandledProcesses.has(processId)) {
-                
+
                 // Mark as handled to prevent duplicate processing
                 this.urlPromptHandledProcesses.add(processId);
-                
+
                 // Stop monitoring while user provides new URL name
                 this.stopStickerProgressMonitoring();
-                
+
                 // Show URL name modal with the original taken name
                 const takenName = progress.original_url_name || progress.pack_url_name || "retry";
                 const currentAttempt = progress.url_name_attempts || 1;
                 const maxAttempts = progress.max_url_attempts || 3;
-                
+
                 this.addStatusItem(`URL name '${takenName}' is taken. Showing retry options (${currentAttempt}/${maxAttempts})`, "warning");
-                
+
                 this.showUrlNameModal(takenName, currentAttempt, maxAttempts, processId);
-                
+
                 return; // Exit after showing URL retry modal
               }
-              
+
               // No URL conflict - continue monitoring
               // DON'T return here - fall through to remaining checks
             } else {
               // Manual mode: show icon selection modal and STOP monitoring
               // Process will wait indefinitely for user action - no timeout
               this.stopStickerProgressMonitoring(); // Stop monitoring - user controls when to continue
-              
+
               // CRITICAL FIX: Store the process ID so we can restart monitoring after icon is sent
               this.currentIconProcessId = processId;
-              
+
               // CRITICAL FIX: Also store in urlPromptHandledProcesses to prevent duplicate handling
               this.urlPromptHandledProcesses.add(processId);
-              
+
               // If Telegram is already asking for short name, bypass icon modal and proceed to URL
               const urlPrompt = (progress.icon_request_message && /short name|create a link|addstickers/i.test(progress.icon_request_message))
-                                || progress.waiting_for_url_name
-                                || false;
+                || progress.waiting_for_url_name
+                || false;
               if (urlPrompt) {
                 try { this.hideIconModal(); } catch (_e) {
                   // Ignore errors when hiding icon modal
                 }
-                
+
                 // Check if auto-skip is enabled - if so, automatically submit the URL name
                 const autoSkipIcon = document.getElementById("auto-skip-icon");
                 const shouldAutoSkip = autoSkipIcon && autoSkipIcon.checked;
-                
+
                 // Even if auto-skip is enabled, the backend should handle it, not the frontend
                 // But if for some reason we're here, we can still submit the URL name
                 if (shouldAutoSkip) {
@@ -5571,7 +5595,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
                     this.addStatusItem(`Auto-submit failed: ${e.message}. Continuing with manual process.`, "warning");
                   }
                 }
-                
+
                 const urlInput = document.getElementById("pack-url-name");
                 const urlName = (urlInput && typeof urlInput.value === "string") ? urlInput.value.trim() : "";
                 if (urlName) {
@@ -5603,7 +5627,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
                 this.showUrlNameModal(progress.pack_url_name || "retry", 1, 3, processId);
                 return;
               }
-              
+
               // If verification is pending, do not show icon modal
               if (this.pendingCode || this.pendingPassword) {
                 return;
@@ -5620,16 +5644,16 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
               } catch (_e) {
                 // Ignore DOM check errors
               }
-              
+
               this.showIconModal(processId, progress.icon_request_message);
               this.iconHandledProcesses.add(processId);
-              
+
               // CRITICAL FIX: Don't add to urlPromptHandledProcesses here - only when URL prompt is actually handled
               // this.urlPromptHandledProcesses.add(processId);
               return; // CRITICAL: Exit early after handling icon selection
             }
           }
-          
+
           // PRIORITY CHECK 4: Check completion status
           if (progress.status === "completed") {
             // CRITICAL FIX: Don't treat as completed if still waiting for user input
@@ -5639,7 +5663,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
               // CRITICAL FIX: Check if we have a shareable_link, which means the process is ACTUALLY completed
               // In auto-skip flow without URL conflicts, backend completes successfully and provides shareable_link
               const hasShareableLink = !!(progress.shareable_link || progress.pack_link || progress.link);
-              
+
               // ENHANCED: For auto-skip scenario without URL conflicts, backend completes successfully
               // Check for shareable_link OR auto_skip_handled OR normal workflow completion
               if (hasShareableLink || this.workflowState.packCompleted || (this.workflowState.iconUploaded && this.workflowState.urlNameSubmitted) || progress.auto_skip_handled) {
@@ -5659,16 +5683,16 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
             this.onStickerProcessCompleted(false, progress);
             return;
           }
-          
+
           // Normal progress updates and media status tracking
           consecutiveErrors = 0;
-          
+
           this.updateStickerProgressDisplay(progress);
-          
+
           // OPTIMIZED: Prevent duplicate stage notifications with better tracking
           if (progress.current_stage && progress.current_stage !== this.lastStage) {
             // Filter out excessive logging - only show essential messages
-            const isEssentialMessage = 
+            const isEssentialMessage =
               progress.current_stage.includes("START") ||
               progress.current_stage.includes("COMPLETE") ||
               progress.current_stage.includes("ERROR") ||
@@ -5677,18 +5701,18 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
               progress.current_stage.includes("created successfully") ||
               progress.current_stage.includes("URL name") ||
               progress.current_stage.includes("icon");
-              
+
             // Show queue messages only once
             const isQueueMessage = progress.current_stage.includes("waiting in queue");
             const shouldShow = isEssentialMessage || (!isQueueMessage || !this.lastStageWasQueue);
-            
+
             if (shouldShow) {
               this.addStatusItem(progress.current_stage, "info");
               this.lastStage = progress.current_stage;
               this.lastStageWasQueue = isQueueMessage;
             }
           }
-          
+
           // Update individual media file statuses
           if (progress.current_file) {
             const fileIndex = this.mediaFiles.findIndex(
@@ -5701,16 +5725,16 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
                 progress.status || "processing";
             }
           }
-          
+
           // Show essential file status updates only
           if (progress.file_statuses) {
             const failedFiles = Object.values(progress.file_statuses).filter(status => status.status === "failed").length;
             const completedFiles = Object.values(progress.file_statuses).filter(status => status.status === "completed").length;
-            
+
             if (failedFiles > 0) {
               this.addStatusItem(`⚠️ ${failedFiles} files failed during processing. Check logs for details.`, "warning");
             }
-            
+
             // Show completed files less frequently to avoid spam (every 25 files instead of 10)
             if (completedFiles > 0 && completedFiles % 25 === 0) {
               this.addStatusItem(`✅ ${completedFiles} files completed successfully`, "info");
@@ -5718,19 +5742,19 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           }
         } else {
           consecutiveErrors++;
-          
+
           // SMART ERROR HANDLING: Check if this is a "Process not found" after a recent skip
           // Note: autoSkipAttempted flag removed - auto-skip is handled entirely by backend
           if (response.error && response.error.includes("Process not found")) {
             this.addStatusItem("✅ Sticker pack created successfully (process completed)", "completed");
             this.stopStickerProgressMonitoring();
-            
+
             // Try to construct a reasonable shareable link from stored data
-            const packUrlName = this.lastKnownProgress?.pack_url_name || 
-                               this.lastKnownProgress?.url_name || 
-                               "unknown";
+            const packUrlName = this.lastKnownProgress?.pack_url_name ||
+              this.lastKnownProgress?.url_name ||
+              "unknown";
             const shareableLink = `https://t.me/addstickers/${packUrlName}`;
-            
+
             this.onStickerProcessCompleted(true, {
               shareable_link: shareableLink,
               pack_url_name: packUrlName,
@@ -5738,10 +5762,10 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
             });
             return;
           }
-          
+
           // Show detailed error information
           this.addStatusItem(`⚠️ Monitoring error ${consecutiveErrors}/3: ${response.error || "Unknown error"}`, "warning");
-          
+
           // OPTIMIZED: Reduced from 5 to 3 for faster failure detection
           if (consecutiveErrors >= 3) {
             this.stopStickerProgressMonitoring();
@@ -5757,23 +5781,23 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         }
       } catch (error) {
         consecutiveErrors++;
-        
+
         // Show detailed error information
         this.addStatusItem(`⚠️ Monitoring error ${consecutiveErrors}/3: ${error.message}`, "warning");
-        
+
         if (consecutiveErrors >= 3) {
           this.stopStickerProgressMonitoring();
           this.addStatusItem("❌ Process monitoring failed - sticker creation may have stopped", "error");
           this.addStatusItem(`🔧 Technical details: ${error.message}`, "info");
           this.addStatusItem("📋 Please check the application logs for more detailed information about what caused the process to stop", "info");
-          
+
           // Show last known progress for debugging
           if (this.lastKnownProgress) {
             const completed = this.lastKnownProgress.completed_files || 0;
             const total = this.lastKnownProgress.total_files || 0;
             const failed = this.lastKnownProgress.failed_files || 0;
             this.addStatusItem(`📊 Last known status: ${completed}/${total} completed, ${failed} failed`, "info");
-            
+
             // Show information about the last file being processed
             if (this.lastKnownProgress.current_file) {
               this.addStatusItem(`📂 Last file processed: ${this.lastKnownProgress.current_file}`, "info");
@@ -5781,13 +5805,13 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           }
         }
       }
-      
+
       initialChecks++;
     };
-    
+
     // Call immediately for first check
     checkProgress();
-    
+
     // Then set up interval for subsequent checks
     this.stickerProgressInterval = setInterval(checkProgress, 2000); // Check every 2 seconds for faster response
   }
@@ -5798,7 +5822,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       clearInterval(this.stickerProgressInterval);
       this.stickerProgressInterval = null;
     }
-    
+
     // Reset the create button
     const createBtn = document.getElementById("create-sticker-pack");
     if (createBtn) {
@@ -5811,11 +5835,11 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     // OPTIMIZED: Don't add redundant status updates - only for progress bar
     const progressBar = document.getElementById("sticker-progress-bar");
     const progressText = document.getElementById("sticker-progress-text");
-    
+
     if (progressBar && progress.progress !== undefined) {
       progressBar.style.width = `${progress.progress}%`;
     }
-    
+
     if (
       progressText &&
       progress.completed_files !== undefined &&
@@ -5828,51 +5852,51 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         progressText.textContent = `${progress.completed_files}/${progress.total_files} files processed`;
       }
     }
-    
+
     // Update individual file statuses if available
     if (progress.file_statuses) {
       this.updateFileStatuses(progress.file_statuses);
     }
   }
-  
+
   // Method removed - duplicate definition exists earlier in the file
 
   // OPTIMIZED status list functionality with rate limiting
   addStatusItem(message, type = "info", timestamp = null) {
     const statusList = document.getElementById("sticker-status-list");
     if (!statusList) return;
-    
+
     // Enhanced duplicate detection to prevent similar messages
     if (this.isDuplicateMessage(message, type)) {
       return; // Skip duplicate or similar messages
     }
-    
+
     this.lastStatusMessage = message;
     this.lastStatusType = type;
 
     const time = timestamp || new Date();
     const timeString = time.toLocaleTimeString();
-    
+
     const statusItem = document.createElement("div");
     statusItem.className = `status-item ${type}`;
-    
+
     const iconClass = this.getStatusIconClass(type);
-    
+
     statusItem.innerHTML = `
       <div class="status-time">${timeString}</div>
       <div class="status-message">${message}</div>
       <div class="status-icon"><i class="${iconClass}"></i></div>
     `;
-    
+
     // Add to the bottom of the list (chronological order)
     statusList.appendChild(statusItem);
-    
+
     // OPTIMIZED: Limit to 100 items to show more progress history
     const items = statusList.querySelectorAll(".status-item");
     if (items.length > 100) {
       statusList.removeChild(items[0]); // Remove the oldest item (first child)
     }
-    
+
     // Auto-scroll to show latest message if enabled and user is at the bottom
     if (this.autoScrollEnabled) {
       // Check if user is near the bottom (within 50px)
@@ -5888,40 +5912,40 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     if (this.lastStatusMessage === message && this.lastStatusType === type) {
       return true;
     }
-    
+
     // Similar message check (for progress updates)
     if (type === "info" && this.lastStatusType === "info") {
       // Check if both messages are progress updates
       const isProgressUpdate1 = message.includes("PROGRESS") || message.includes("Completed") || message.includes("files processed");
       const isProgressUpdate2 = this.lastStatusMessage.includes("PROGRESS") || this.lastStatusMessage.includes("Completed") || this.lastStatusMessage.includes("files processed");
-      
+
       if (isProgressUpdate1 && isProgressUpdate2) {
         // Extract file numbers to compare
         const fileRegex = /(\d+)\/\d+\s*files/;
         const match1 = message.match(fileRegex);
         const match2 = this.lastStatusMessage.match(fileRegex);
-        
+
         if (match1 && match2) {
           const currentFile1 = parseInt(match1[1]);
           const currentFile2 = parseInt(match2[1]);
-          
+
           // Only show every 5th progress update to reduce spam
           if (Math.abs(currentFile1 - currentFile2) < 5) {
             return true;
           }
         }
       }
-      
+
       // Check for repetitive "waiting" messages
       const waitingRegex = /waiting|pending|queued/i;
       if (waitingRegex.test(message) && waitingRegex.test(this.lastStatusMessage)) {
         return true;
       }
     }
-    
+
     return false;
   }
-  
+
   getStatusIconClass(type) {
     const iconMap = {
       "ready": "fas fa-check-circle",
@@ -5937,7 +5961,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   clearStatusHistory() {
     const statusList = document.getElementById("sticker-status-list");
     if (!statusList) return;
-    
+
     statusList.innerHTML = `
       <div class="status-item ready">
         <div class="status-time">Ready</div>
@@ -5950,37 +5974,37 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   copyStatusLog() {
     const statusList = document.getElementById("sticker-status-list");
     if (!statusList) return;
-    
+
     // Get all status items
     const items = statusList.querySelectorAll(".status-item");
     let logText = "";
-    
+
     // Extract text from each status item in chronological order
     items.forEach(item => {
       const timeElement = item.querySelector(".status-time");
       const messageElement = item.querySelector(".status-message");
-      
+
       if (timeElement && messageElement) {
         const time = timeElement.textContent;
         const message = messageElement.textContent;
         logText += `[${time}] ${message}\n`;
       }
     });
-    
+
     // Copy to clipboard
     navigator.clipboard.writeText(logText).catch(err => {
       console.error("Failed to copy log to clipboard:", err);
       this.showToast("error", "Copy Failed", "Failed to copy log to clipboard");
     });
   }
-  
+
   toggleAutoScroll() {
     this.autoScrollEnabled = !this.autoScrollEnabled;
     const button = document.getElementById("toggle-auto-scroll");
     if (button) {
       button.classList.toggle("active", this.autoScrollEnabled);
-      button.innerHTML = this.autoScrollEnabled 
-        ? '<i class="fas fa-arrow-down"></i>' 
+      button.innerHTML = this.autoScrollEnabled
+        ? '<i class="fas fa-arrow-down"></i>'
         : '<i class="fas fa-pause"></i>';
     }
   }
@@ -5991,15 +6015,15 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       (f) => f.status === "completed"
     ).length;
     const total = this.mediaFiles.length;
-    
+
     const progressBar = document.getElementById("sticker-progress-bar");
     const progressText = document.getElementById("sticker-progress-text");
-    
+
     if (progressBar && total > 0) {
       const percentage = (completed / total) * 100;
       progressBar.style.width = `${percentage}%`;
     }
-    
+
     if (progressText) {
       progressText.textContent = `${completed}/${total} files processed`;
     }
@@ -6007,28 +6031,28 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
 
   onStickerProcessCompleted(success, progressData) {
     const createBtn = document.getElementById("create-sticker-pack");
-    
+
     // CRITICAL FIX: Only show completion if workflow is actually finished
     if (success && !this.workflowState.packCompleted) {
       // Update workflow state to mark as completed
       this.workflowState.packCompleted = true;
       this.workflowState.currentStep = "completed";
-      
+
       this.sessionStats.totalStickers += this.mediaFiles.length;
-      
+
       // Check if manual completion is required
       if (progressData?.manual_completion_required) {
         this.addStatusItem("Sticker pack processing completed - manual completion required in Telegram bot", "warning");
         this.showToast("warning", "Manual Setup Required", "Please complete sticker pack creation manually in the Telegram bot (@Stickers)");
-        
+
         // Show special modal for manual completion
         this.showManualCompletionModal();
       } else {
         this.addStatusItem("Sticker pack created successfully!", "completed");
-        
+
         // ENHANCED: Check for multiple possible property names for shareable link with detailed logging
         const shareableLink = progressData?.shareable_link || progressData?.pack_link || progressData?.link;
-        
+
         if (shareableLink) {
           this.showSuccessModal(shareableLink);
         } else {
@@ -6043,22 +6067,22 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       console.log("Workflow already completed, skipping duplicate completion message");
     }
     this.updateStats();
-    
+
     // Reset button
     if (createBtn) {
       createBtn.disabled = false;
       createBtn.innerHTML = '<i class="fas fa-magic"></i> Create Sticker Pack';
     }
-    
+
     // Mark all files as completed or error
     this.mediaFiles.forEach((file) => {
       if (file.status !== "completed") {
         file.status = success ? "completed" : "error";
       }
     });
-    
+
     this.updateMediaFileList();
-    
+
     // Show completion notification
     if (success) {
       if (!progressData?.manual_completion_required) {
@@ -6073,10 +6097,10 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           "Your sticker pack has been published successfully!"
         );
       }
-      
+
       // FIXED: Update backend database stats for successful sticker creation
       this.updateStickerCreationStats(this.mediaFiles.length);
-      
+
     } else {
       this.showToast(
         "error",
@@ -6084,7 +6108,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         `Sticker pack creation failed: ${progressData?.error || "Unknown error"}`
       );
     }
-    
+
     // Clear progress
     const statusElement = document.getElementById("sticker-status");
     if (statusElement) {
@@ -6100,7 +6124,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       const response = await this.apiRequest("POST", "/api/stats/increment-stickers", {
         count: stickerCount
       });
-      
+
       if (response.success) {
         console.log("✅ [STATS] Successfully updated sticker stats");
         // Force refresh database stats display
@@ -6138,7 +6162,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         </button>
       </div>
     `;
-    
+
     const modal = document.getElementById("info-modal");
     if (modal) {
       modal.innerHTML = modalHtml;
@@ -6162,7 +6186,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   showManualCompletionModal() {
     const modal = document.getElementById("info-modal");
     if (!modal) return;
-    
+
     const modalHtml = `
       <div class="modal-header">
         <h3><i class="fas fa-hand-paper text-warning"></i> Manual Completion Required</h3>
@@ -6197,7 +6221,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         </button>
       </div>
     `;
-    
+
     modal.innerHTML = modalHtml;
     this.showModal("info-modal");
   }
@@ -6210,30 +6234,30 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     requestAnimationFrame(() => {
       const overlay = document.getElementById("modal-overlay");
       const modal = document.getElementById(modalId);
-      
+
       if (overlay && modal) {
         // Use GPU-accelerated transforms for better performance
         overlay.style.willChange = "opacity";
         modal.style.willChange = "transform, opacity";
-        
+
         // Use the CSS class-based approach for proper centering
         overlay.classList.add("active");
         // Remove any explicit display style that might override the CSS
         overlay.style.display = "";
         overlay.style.visibility = "";
-        
+
         // CRITICAL FIX: Ensure proper modal positioning
         // Use flex for emoji modal to enable column layout
         modal.style.display = (modalId === "emoji-modal") ? "flex" : "block";
         modal.style.opacity = "1"; // Reset opacity to 1 when showing modal
-        
+
         // Ensure modal is properly centered
         modal.style.position = "fixed";
         modal.style.top = "50%";
         modal.style.left = "50%";
         modal.style.transform = "translate(-50%, -50%)";
         modal.style.margin = "0";
-        
+
         // Ensure proper z-index stacking
         if (modalId === "success-modal") {
           modal.style.zIndex = "10000";
@@ -6242,30 +6266,30 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         } else {
           modal.style.zIndex = "8000";
         }
-        
+
         // Special handling for emoji modal
         if (modalId === "emoji-modal") {
-            // Ensure emoji modal is not locked
-            this.isEmojiModalLocked = false;
-            this.isSavingEmoji = false;
-            
-            // Add a small delay to ensure overlay stays visible
-            setTimeout(() => {
-              if (overlay) {
-                overlay.classList.add("active");
-              }
-            }, 10);
+          // Ensure emoji modal is not locked
+          this.isEmojiModalLocked = false;
+          this.isSavingEmoji = false;
+
+          // Add a small delay to ensure overlay stays visible
+          setTimeout(() => {
+            if (overlay) {
+              overlay.classList.add("active");
+            }
+          }, 10);
         }
-        
+
         // Focus management with shorter delay
         const firstInput = modal.querySelector("input, textarea, select");
-        
+
         if (firstInput) {
           setTimeout(() => {
-              firstInput.focus();
+            firstInput.focus();
           }, 50);  // Reduced from 100ms
         }
-        
+
         // Clean up GPU acceleration hints after animation
         setTimeout(() => {
           overlay.style.willChange = "auto";
@@ -6285,7 +6309,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         overlay.style.setProperty("display", "none", "important");
         overlay.style.visibility = "hidden";
       }
-      
+
       // Batch all modal hiding operations
       const modals = document.querySelectorAll(".modal");
       modals.forEach((modal) => {
@@ -6294,13 +6318,13 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         // Reset z-index when hiding
         modal.style.zIndex = "";
       });
-      
+
       // Clear modal inputs
       this.clearModalInputs();
-      
+
       // Reset current emoji index to allow reopening emoji modal
       this.currentEmojiIndex = null;
-      
+
       // Reset emoji modal flags
       this.isSavingEmoji = false;
       this.isEmojiModalLocked = false;
@@ -6326,11 +6350,11 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         console.warn("[ICON_MODAL] Skipped due to verification modal visible (DOM)");
         return;
       }
-    } catch {}
-    
+    } catch { }
+
     // Hide any existing loading overlay
     this.hideLoadingOverlay();
-    
+
     // Reset file info display
     const fileInfo = document.getElementById("icon-file-info");
     const fileName = document.getElementById("icon-file-name");
@@ -6338,11 +6362,11 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     if (fileInfo) fileInfo.style.display = "none";
     if (fileName) fileName.textContent = "No file selected";
     if (confirmBtn) confirmBtn.disabled = true;
-    
+
     // Optimized modal display without unnecessary GPU acceleration
     const modal = document.getElementById("icon-modal");
     const overlay = document.getElementById("modal-overlay");
-    
+
     if (modal && overlay) {
       // Use consistent approach with other modals
       modal.style.display = "flex"; // Direct display style for immediate showing
@@ -6350,16 +6374,16 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       // Ensure proper z-index for icon modal
       modal.style.zIndex = "9000";
       overlay.classList.add("active");
-      
+
       // Update the modal content with the actual message from Telegram
       const iconInfo = modal.querySelector(".info-details");
       if (iconInfo && iconRequestMessage) {
         iconInfo.textContent = iconRequestMessage;
       }
-      
+
       // Reset file selection
       this.resetIconFileSelection();
-      
+
       // Focus management for accessibility
       setTimeout(() => {
         const uploadBtn = document.getElementById("upload-icon-btn");
@@ -6372,39 +6396,39 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
 
   showUrlNameModal(takenUrlName, attemptNumber, maxAttempts, processId = null) {
     console.log(`🔗 [URL_MODAL] Showing URL name modal - taken: ${takenUrlName}, attempt: ${attemptNumber}/${maxAttempts}`);
-    
+
     // Store process ID for later use
     if (processId) {
       this.currentUrlNameProcessId = processId;
     }
-    
+
     // Hide any existing loading overlay
     this.hideLoadingOverlay();
-    
+
     const modal = document.getElementById("url-name-modal");
     const overlay = document.getElementById("modal-overlay");
     const takenNameElement = document.getElementById("taken-url-name");
     const attemptCounter = document.getElementById("attempt-counter");
     const newUrlInput = document.getElementById("new-url-name");
-    
+
     if (!modal || !overlay) {
       console.error(`🔗 [URL_MODAL] Modal or overlay not found - modal: ${!!modal}, overlay: ${!!overlay}`);
       return;
     }
-    
+
     // Set modal content
     if (takenNameElement) takenNameElement.textContent = takenUrlName;
     if (attemptCounter) attemptCounter.textContent = `Attempt ${attemptNumber} of ${maxAttempts}`;
-    
+
     // Generate URL suggestions
     const suggestionsContainer = document.getElementById("url-suggestions");
     if (suggestionsContainer) {
       this.generateUrlSuggestions(takenUrlName, suggestionsContainer);
     }
-    
+
     // Clear any previous input
     if (newUrlInput) newUrlInput.value = "";
-    
+
     // CRITICAL FIX: Reset submit button state from previous submission
     const submitBtn = document.getElementById("submit-new-url");
     if (submitBtn) {
@@ -6412,13 +6436,13 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       submitBtn.classList.remove("loading");
       submitBtn.innerHTML = '<i class="fas fa-check"></i> Try This Name';
     }
-    
+
     // Ensure proper z-index for URL name modal
     modal.style.zIndex = "9000";
-    
+
     // Show modal using the standard method
     this.showModal("url-name-modal");
-    
+
     // Focus on the input field
     setTimeout(() => {
       if (newUrlInput) {
@@ -6429,13 +6453,13 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
 
   generateUrlSuggestions(baseName, container) {
     if (!container) return;
-    
+
     const cleanBase = baseName.replace(/[^a-zA-Z0-9]/g, "").toLowerCase().substring(0, 15);
     const random = () => Math.floor(Math.random() * 999) + 100;
     const currentYear = new Date().getFullYear();
     const month = String(new Date().getMonth() + 1).padStart(2, "0");
     const day = String(new Date().getDate()).padStart(2, "0");
-    
+
     // Advanced smart suggestion categories
     const creativeCategories = {
       professional: [`${cleanBase}_official`, `${cleanBase}_studio`, `${cleanBase}_premium`, `${cleanBase}_pro`],
@@ -6444,26 +6468,26 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       temporal: [`${cleanBase}_${month}${day}`, `${cleanBase}_${currentYear.toString().slice(-2)}`, `${cleanBase}_new`],
       exclusive: [`${cleanBase}_exclusive`, `${cleanBase}_limited`, `${cleanBase}_special`, `${cleanBase}_ultimate`]
     };
-    
+
     // Smart selection algorithm - pick diverse suggestions from different categories
     const smartSuggestions = [];
     const categories = Object.keys(creativeCategories);
     const usedPrefixes = new Set();
-    
+
     // Select one from each category, avoiding repetitive patterns
     categories.forEach(category => {
       const options = creativeCategories[category].filter(suggestion => {
         const prefix = suggestion.split("_")[1];
         return !usedPrefixes.has(prefix) && suggestion.length >= 5 && suggestion.length <= 32;
       });
-      
+
       if (options.length > 0) {
         const selected = options[Math.floor(Math.random() * options.length)];
         smartSuggestions.push(selected);
         usedPrefixes.add(selected.split("_")[1]);
       }
     });
-    
+
     // Add fallback unique suggestions if needed
     while (smartSuggestions.length < 5) {
       const uniqueId = Date.now().toString().slice(-4) + Math.floor(Math.random() * 99);
@@ -6472,15 +6496,15 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         smartSuggestions.push(fallback);
       }
     }
-    
+
     // Take exactly 5 diverse suggestions
     const finalSuggestions = smartSuggestions.slice(0, 5);
-    
-    container.innerHTML = finalSuggestions.map(suggestion => 
+
+    container.innerHTML = finalSuggestions.map(suggestion =>
       `<button class="suggestion-btn" onclick="window.app?.applySuggestion('${suggestion}')">${suggestion}</button>`
     ).join("");
   }
-  
+
   applySuggestion(suggestion) {
     const input = document.getElementById("new-url-name");
     if (input) {
@@ -6493,14 +6517,14 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   hideUrlNameModal(clearProcessInfo = true) {
     const modal = document.getElementById("url-name-modal");
     const overlay = document.getElementById("modal-overlay");
-    
+
     if (modal) {
       modal.style.display = "none";
     }
     if (overlay) {
       overlay.classList.remove("active");
     }
-    
+
     // Only clear retry information if explicitly requested (default: true for backward compatibility)
     // This allows temporary modal hiding without losing process tracking
     if (clearProcessInfo) {
@@ -6515,13 +6539,13 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     let processId = this.currentUrlNameProcessId;
     const currentAttempt = this.currentUrlAttempt;
     const maxAttempts = this.maxUrlAttempts;
-    
+
     const newUrlNameInput = document.getElementById("new-url-name");
     if (!newUrlNameInput) {
       console.error("new-url-name input not found");
       return;
     }
-    
+
     if (!processId) {
       // ENHANCED FIX: Check multiple sources for the process ID
       if (window.app?.stickerBot?.currentUrlNameProcessId) {
@@ -6539,21 +6563,21 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         processId = window.app.stickerBot.currentStickerProcessId;
         this.currentUrlNameProcessId = processId;
       }
-      
+
       if (!processId) {
         this.showToast("error", "Process Error", "No active sticker creation process found");
         return;
       }
     }
-    
+
     const newUrlName = newUrlNameInput.value.trim();
-    
+
     if (!newUrlName) {
       this.showToast("error", "Missing URL Name", "Please enter a new URL name");
       newUrlNameInput.focus();
       return;
     }
-    
+
     // Validate the new URL name
     const validation = this.validateUrlName(newUrlName);
     if (!validation.valid) {
@@ -6561,7 +6585,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       newUrlNameInput.select();
       return;
     }
-    
+
     try {
       const submitBtn = document.getElementById("submit-new-url");
       if (submitBtn) {
@@ -6569,32 +6593,32 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         submitBtn.classList.add("loading");
         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
       }
-      
+
       const response = await this.apiRequest("POST", "/api/sticker/submit-url-name", {
         process_id: processId,
         new_url_name: newUrlName,
         current_attempt: currentAttempt || 1,
         max_attempts: maxAttempts || 3
       });
-      
+
       if (response.success) {
         // CRITICAL FIX: Update workflow state when URL name is submitted
         this.workflowState.urlNameSubmitted = true;
         this.workflowState.currentStep = "url_name";
-        
+
         // DON'T clear process info when hiding modal on success - we may need it for monitoring
         this.hideUrlNameModal(false); // Preserve process info
-        
+
         if (response.completed) {
           // Sticker pack creation completed successfully - now we can clear process info
           this.addStatusItem(`✅ Sticker pack created successfully with URL name: ${newUrlName}`, "completed");
           this.showToast("success", "Pack Created", `Sticker pack created: ${newUrlName}`);
-          
+
           // Stop monitoring and show success
           this.stopStickerProgressMonitoring();
-          this.onStickerProcessCompleted(true, { 
+          this.onStickerProcessCompleted(true, {
             shareable_link: response.shareable_link || `https://t.me/addstickers/${newUrlName}`,
-            pack_url_name: newUrlName 
+            pack_url_name: newUrlName
           });
           // NOW clear process info since we're done
           this.currentUrlNameProcessId = null;
@@ -6604,7 +6628,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           // URL name updated, continue monitoring
           this.addStatusItem(`✅ New URL name submitted: ${newUrlName}`, "completed");
           this.showToast("success", "URL Name Updated", `Using new URL name: ${newUrlName}`);
-          
+
           // Restart progress monitoring with the same process ID
           this.startStickerProgressMonitoring(processId);
         }
@@ -6612,7 +6636,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         // Check if this was a URL name taken error and we have retries left
         if (response.error && response.error.includes("already taken") && response.url_name_taken) {
           const nextAttempt = (currentAttempt || 1) + 1;
-          
+
           if (nextAttempt <= (maxAttempts || 3)) {
             // Show retry modal with updated attempt count
             this.addStatusItem(`❌ URL name '${newUrlName}' is taken. Retry ${nextAttempt}/${maxAttempts}`, "warning");
@@ -6621,8 +6645,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           } else {
             // Exhausted all retries - mark as completed with manual instruction
             this.addStatusItem(`❌ All ${maxAttempts} retry attempts exhausted. Please add sticker pack manually in Telegram bot.`, "error");
-            this.showToast("warning", "Manual Setup Required", "Please complete the sticker pack creation manually in the Telegram bot (@Stickers)"); 
-            
+            this.showToast("warning", "Manual Setup Required", "Please complete the sticker pack creation manually in the Telegram bot (@Stickers)");
+
             // Mark process as completed (user needs to complete manually)
             this.stopStickerProgressMonitoring();
             this.onStickerProcessCompleted(true, {
@@ -6632,10 +6656,10 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
             return;
           }
         }
-        
+
         this.addStatusItem(`❌ Error submitting URL name: ${response.error}`, "error");
         this.showToast("error", "Submission Failed", response.error);
-        
+
         if (submitBtn) {
           submitBtn.disabled = false;
           submitBtn.classList.remove("loading");
@@ -6646,7 +6670,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       console.error("Error submitting new URL name:", error);
       this.addStatusItem(`❌ Error submitting URL name: ${error.message}`, "error");
       this.showToast("error", "Submission Error", error.message);
-      
+
       const submitBtn = document.getElementById("submit-new-url");
       if (submitBtn) {
         submitBtn.disabled = false;
@@ -6659,21 +6683,21 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   hideIconModal() {
     const modal = document.getElementById("icon-modal");
     const overlay = document.getElementById("modal-overlay");
-    
+
     if (modal && overlay) {
       // Use consistent approach with other modals - remove inline styles and use CSS classes
       modal.style.display = "none"; // Set to none immediately
       modal.style.opacity = "0"; // Set opacity to 0
       overlay.classList.remove("active");
     }
-    
+
     // CRITICAL FIX: Remove timeout cleanup since we removed the timeout
     // User requested: "we dont need timeout here cause it is auto sending we want user to give order if they dont we wait no matter what"
     // if (this.iconModalTimeout) {
     //   clearTimeout(this.iconModalTimeout);
     //   this.iconModalTimeout = null;
     // }
-    
+
     // Preserve currentIconProcessId to allow progress monitoring to continue
     // Only clear transient UI selection state
     this.currentIconRequestMessage = null;
@@ -6684,7 +6708,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     this.selectedIconFile = null;
     const fileInfo = document.getElementById("icon-file-info");
     const fileName = document.getElementById("icon-file-name");
-    
+
     if (fileInfo) fileInfo.style.display = "none";
     if (fileName) fileName.textContent = "No file selected";
   }
@@ -6698,22 +6722,22 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           { name: "All Files", extensions: ["*"] }
         ]
       });
-      
+
       if (Array.isArray(paths) && paths.length > 0) {
         const filePath = paths[0];
         const fileName = filePath.split(/[\\/]/).pop();
-        
+
         this.selectedIconFile = filePath;
-        
+
         // Show file info and enable confirm
         const fileInfo = document.getElementById("icon-file-info");
         const fileNameElement = document.getElementById("icon-file-name");
         const confirmBtn = document.getElementById("confirm-icon-upload");
-        
+
         if (fileInfo) fileInfo.style.display = "block";
         if (fileNameElement) fileNameElement.textContent = fileName;
         if (confirmBtn) confirmBtn.disabled = false;
-        
+
         this.addStatusItem(`Selected icon file: ${fileName}`, "info");
       }
     } catch (error) {
@@ -6727,7 +6751,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       this.addStatusItem("No active process found", "error");
       return;
     }
-    
+
     try {
       // Disable skip button to prevent double-clicks
       const skipBtn = document.getElementById("skip-icon-btn");
@@ -6735,18 +6759,18 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         skipBtn.disabled = true;
         skipBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Skipping...';
       }
-      
+
       this.addStatusItem("Sending skip command...", "info");
-      
+
       const response = await this.apiRequest("POST", "/api/sticker/skip-icon", {
         process_id: this.currentIconProcessId
       });
-      
+
       if (response.success) {
         this.addStatusItem("✅ Icon step skipped successfully", "completed");
         this.showToast("success", "Icon Skipped", "Using first sticker as pack icon");
         this.hideIconModal();
-        
+
         // Check if pack creation is complete
         if (response.completed) {
           // Pack creation completed after skipping icon
@@ -6781,7 +6805,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           this.addStatusItem(`Error skipping icon: ${response.error}`, "error");
           this.showToast("error", "Skip Failed", response.error);
         }
-        
+
         // Re-enable skip button on error
         if (skipBtn) {
           skipBtn.disabled = false;
@@ -6790,7 +6814,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       }
     } catch (error) {
       console.error("Error skipping icon:", error);
-      
+
       // Handle timeout or server overload errors
       if (error.message && error.message.includes("timeout")) {
         this.addStatusItem("Skip request timeout - assuming success", "warning");
@@ -6804,7 +6828,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         this.addStatusItem(`Error skipping icon: ${error.message}`, "error");
         this.showToast("error", "Skip Error", error.message);
       }
-      
+
       // Re-enable skip button
       const skipBtn = document.getElementById("skip-icon-btn");
       if (skipBtn) {
@@ -6815,17 +6839,17 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   }
   async confirmIconUpload(retryCount = 0) {
     const maxRetries = 3;
-    
+
     if (!this.currentIconProcessId) {
       this.addStatusItem("No active process found", "error");
       return;
     }
-    
+
     if (!this.selectedIconFile) {
       this.addStatusItem("No icon file selected", "error");
       return;
     }
-    
+
     try {
       this.addStatusItem(`Uploading icon file${retryCount > 0 ? ` (attempt ${retryCount + 1}/${maxRetries + 1})` : ""}...`, "info");
       const confirmBtn = document.getElementById("confirm-icon-upload");
@@ -6833,13 +6857,13 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         confirmBtn.disabled = true;
         confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
       }
-      
+
       // Increase timeout for icon upload to match backend
       const response = await this.apiRequest("POST", "/api/sticker/upload-icon", {
         process_id: this.currentIconProcessId,
         icon_file_path: this.selectedIconFile
       });
-      
+
       if (response.success) {
         // Handle timeout case where icon was sent but response is pending
         if (response.timeout) {
@@ -6848,22 +6872,22 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         } else {
           this.addStatusItem("Icon file uploaded successfully", "completed");
           this.showToast("success", "Icon Uploaded", "Icon uploaded successfully. Waiting for URL name request...");
-          
+
           // CRITICAL FIX: Update workflow state to prevent premature completion
           this.workflowState.iconUploaded = true;
           this.workflowState.currentStep = "url_name";
         }
-        
+
         if (confirmBtn) {
           confirmBtn.disabled = true;
           confirmBtn.innerHTML = '<i class="fas fa-check"></i> Sent';
         }
         // Mark icon handled for this process to avoid duplicate icon flow in polling
         this.iconHandledProcesses.add(this.currentIconProcessId);
-        
+
         // CRITICAL FIX: Close modal immediately after successful upload
         this.hideIconModal();
-        
+
         // CRITICAL FIX: Apply the same logic as skip button - check if pack creation is complete
         if (response.completed) {
           // Pack creation completed after icon upload
@@ -6888,18 +6912,18 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       } else {
         // Detect Telegram size error and mark as manual continuation allowed
         const errorText = String(response.error || "").toLowerCase();
-        if (errorText.includes("too big") || errorText.includes("maximum file size") || 
-            errorText.includes("invalid file") || errorText.includes("file type") || 
-            response.manual_completion_required) {
+        if (errorText.includes("too big") || errorText.includes("maximum file size") ||
+          errorText.includes("invalid file") || errorText.includes("file type") ||
+          response.manual_completion_required) {
           // CRITICAL FIX: Handle both size and format errors with appropriate messages
           const isSizeError = errorText.includes("too big") || errorText.includes("maximum file size");
-          const errorMessage = isSizeError ? 
-            "Icon rejected: file too big (max 32 KB). You can continue manually in Telegram." : 
+          const errorMessage = isSizeError ?
+            "Icon rejected: file too big (max 32 KB). You can continue manually in Telegram." :
             "Icon rejected: invalid file format. You can continue manually in Telegram.";
-          const toastMessage = isSizeError ? 
-            "Telegram rejected the icon due to size. Continue manually in @Stickers." : 
+          const toastMessage = isSizeError ?
+            "Telegram rejected the icon due to size. Continue manually in @Stickers." :
             "Telegram rejected the icon due to format. Continue manually in @Stickers.";
-          
+
           this.addStatusItem(errorMessage, "warning");
           this.showToast("warning", "Icon Rejected", toastMessage);
           setTimeout(() => this.hideIconModal(), 200);
@@ -6910,25 +6934,25 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           });
           return;
         }
-        
+
         // Handle timeout errors specifically
         if (response.error && (response.error.includes("timeout") || response.error.includes("Request timeout"))) {
           if (retryCount < maxRetries) {
             this.addStatusItem(`Icon upload timed out. Retrying in 3 seconds... (attempt ${retryCount + 1}/${maxRetries})`, "warning");
             this.showToast("warning", "Upload Timeout", `Icon upload timed out. Retrying... (attempt ${retryCount + 1}/${maxRetries})`);
-            
+
             // Wait 3 seconds before retry (increased from 2)
             await new Promise(resolve => setTimeout(resolve, 3000));
-            
+
             // Retry the upload
             return await this.confirmIconUpload(retryCount + 1);
           } else {
             this.addStatusItem(`Icon upload timed out after ${maxRetries + 1} attempts. The icon may have been sent to Telegram. Please wait for the response or try skipping the icon.`, "warning");
             this.showToast("warning", "Upload May Be Sent", `Icon upload timed out after ${maxRetries + 1} attempts. The icon may have been sent to Telegram. Please wait for the response or try skipping the icon.`);
-            
+
             // Even after timeout, mark as handled since it might have been sent
             this.iconHandledProcesses.add(this.currentIconProcessId);
-            
+
             // Close modal and continue monitoring
             setTimeout(() => this.hideIconModal(), 200);
             // CRITICAL FIX: Ensure monitoring is restarted after icon is sent
@@ -6946,7 +6970,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
             : response.error;
           this.addStatusItem(`Error uploading icon: ${friendly}`, "error");
         }
-        
+
         // Re-enable the button for retry
         if (confirmBtn) {
           confirmBtn.disabled = false;
@@ -6956,26 +6980,26 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       }
     } catch (error) {
       console.error("Error uploading icon:", error);
-      
+
       // Handle timeout or server overload errors
       if (error.message && (error.message.includes("timeout") || error.message.includes("Request timeout"))) {
         const maxRetries = 3;
         if (retryCount < maxRetries) {
           this.addStatusItem(`Icon upload timed out. Retrying in 3 seconds... (attempt ${retryCount + 1}/${maxRetries})`, "warning");
           this.showToast("warning", "Upload Timeout", `Icon upload timed out. Retrying... (attempt ${retryCount + 1}/${maxRetries})`);
-          
+
           // Wait 3 seconds before retry
           await new Promise(resolve => setTimeout(resolve, 3000));
-          
+
           // Retry the upload
           return await this.confirmIconUpload(retryCount + 1);
         } else {
           this.addStatusItem(`Icon upload timed out after ${maxRetries + 1} attempts. The icon may have been sent to Telegram. Please wait for the response or try skipping the icon.`, "warning");
           this.showToast("warning", "Upload May Be Sent", `Icon upload timed out after ${maxRetries + 1} attempts. The icon may have been sent to Telegram. Please wait for the response or try skipping the icon.`);
-          
+
           // Even after timeout, mark as handled since it might have been sent
           this.iconHandledProcesses.add(this.currentIconProcessId);
-          
+
           // Close modal and continue monitoring with proper delay
           setTimeout(() => {
             this.hideIconModal();
@@ -6990,7 +7014,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         }
       } else {
         this.addStatusItem(`Error uploading icon: ${error.message}`, "error");
-        
+
         // CRITICAL FIX: Better error handling for network issues
         if (error.message && (error.message.includes("timeout") || error.message.includes("network") || error.message.includes("fetch"))) {
           this.showToast("warning", "Network Issue", "Network connection issue during icon upload. Please check your connection and try again.");
@@ -6999,7 +7023,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           this.showToast("error", "Upload Failed", `Icon upload failed: ${error.message}`);
         }
       }
-      
+
       const confirmBtn = document.getElementById("confirm-icon-upload");
       if (confirmBtn) {
         confirmBtn.disabled = false;
@@ -7015,7 +7039,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       if (input) input.value = "";
     });
     this.currentEmojiIndex = null;
-    
+
     // Reset emoji modal flags
     this.isSavingEmoji = false;
     this.isEmojiModalLocked = false;
@@ -7035,7 +7059,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         </button>
       </div>
     `;
-    
+
     const modal = document.getElementById("info-modal");
     if (modal) {
       modal.innerHTML = modalHtml;
@@ -7046,11 +7070,11 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   showLoadingOverlay(message) {
     const overlay = document.getElementById("loading-overlay");
     const messageElement = document.getElementById("loading-message");
-    
+
     if (overlay) {
       overlay.classList.add("active");
     }
-    
+
     if (messageElement) {
       messageElement.textContent = message || "Loading...";
     }
@@ -7073,22 +7097,22 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       alert(`${type.toUpperCase()}: ${title} - ${message}`);
       return;
     }
-    
+
     // DEBOUNCE: Prevent showing same toast multiple times in quick succession
     const now = Date.now();
-    const isSameToast = this._lastToast.type === type && 
-                        this._lastToast.title === title && 
-                        this._lastToast.message === message;
+    const isSameToast = this._lastToast.type === type &&
+      this._lastToast.title === title &&
+      this._lastToast.message === message;
     const isWithinDebounceTime = (now - this._lastToast.time) < this._toastDebounceTime;
-    
+
     if (isSameToast && isWithinDebounceTime) {
       // Skip duplicate toast
       return;
     }
-    
+
     // Update last toast tracker
     this._lastToast = { type, title, message, time: now };
-    
+
     // PREVENT DUPLICATE TOASTS: Check if same toast already exists
     const toastId = `${type}-${title}-${message}`.replace(/[^a-zA-Z0-9]/g, "");
     const existingToast = toastContainer.querySelector(`[data-toast-id="${toastId}"]`);
@@ -7100,25 +7124,25 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       }, 10);
       return;
     }
-    
+
     // Limit max toasts to prevent overflow
     const existingToasts = toastContainer.querySelectorAll(".toast");
     if (existingToasts.length >= 5) {
       // Remove oldest toast
       this.removeToast(existingToasts[0]);
     }
-    
+
     // Increase duration for longer messages
     if (message.length > 50) {
       duration = Math.max(duration, 8000);
     }
-    
+
     const toast = document.createElement("div");
     toast.className = `toast ${type}`;
     toast.setAttribute("data-toast-id", toastId);
     toast.style.cursor = "pointer"; // Show it's clickable
     toast.title = "Click to dismiss"; // Tooltip
-    
+
     toast.innerHTML = `
       <div class="toast-content">
         <h4>${title}</h4>
@@ -7128,25 +7152,25 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         <i class="fas fa-times"></i>
       </button>
     `;
-    
+
     // Append to container - CSS will handle stacking with gap
     toastContainer.appendChild(toast);
-    
+
     // Ensure any slide-out animation actually removes the node
     toast.addEventListener("animationend", (evt) => {
       if (evt.animationName === "slideOut" && toast.parentNode) {
-        try { toast.remove(); } catch (_) {}
+        try { toast.remove(); } catch (_) { }
       }
     });
-    
+
     // Track removal state
     let isRemoving = false;
-    
+
     // Auto-remove with slide-out animation
     const autoRemoveTimer = setTimeout(() => {
       this.removeToast(toast);
     }, duration);
-    
+
     // Close button handler
     const closeBtn = toast.querySelector(".toast-close");
     if (closeBtn) {
@@ -7159,7 +7183,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         this.removeToast(toast);
       };
     }
-    
+
     // Click anywhere to dismiss
     toast.onclick = (e) => {
       e.stopPropagation();
@@ -7170,40 +7194,40 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       this.removeToast(toast);
     };
   }
-  
+
   removeToast(toast) {
     if (!toast) return;
-    
+
     // Check if already removed or being removed
     if (toast.dataset.removing === "true") return;
     if (!toast.parentNode) return;
-    
+
     // Mark as being removed
     toast.dataset.removing = "true";
-    
+
     // Remove event listeners to prevent further clicks
     toast.onclick = null;
     const closeBtn = toast.querySelector(".toast-close");
     if (closeBtn) closeBtn.onclick = null;
-    
+
     // Add slide-out animation
     toast.style.animation = "slideOut 0.3s ease";
-    
+
     // Robust removal: prefer animationend, fallback to timeout
     const onAnimEnd = (evt) => {
       if (evt.animationName === "slideOut") {
         toast.removeEventListener("animationend", onAnimEnd);
         if (toast && toast.parentNode) {
-          try { toast.remove(); } catch (_) {}
+          try { toast.remove(); } catch (_) { }
         }
       }
     };
     toast.addEventListener("animationend", onAnimEnd);
-    
+
     // Fallback in case animationend doesn't fire
     setTimeout(() => {
       if (toast && toast.parentNode) {
-        try { toast.remove(); } catch (_) {}
+        try { toast.remove(); } catch (_) { }
       }
     }, 400);
   }
@@ -7212,7 +7236,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     // Move remaining toasts up to fill gaps
     const toastContainer = document.getElementById("toast-container");
     if (!toastContainer) return;
-    
+
     const toasts = toastContainer.querySelectorAll(".toast");
     toasts.forEach((toast, index) => {
       // Ensure proper stacking order
@@ -7227,7 +7251,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSyD0/PEfCwEKHnN8+OVSA0Oarrj58VdEw1Gne54fFkYkGo5UgkRuBsHJwFZ"
         );
         audio.volume = 0.3;
-        audio.play().catch(() => {}); // Ignore errors
+        audio.play().catch(() => { }); // Ignore errors
       } catch (error) {
         // Ignore audio errors
       }
@@ -7277,7 +7301,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       z-index: 9999; /* Lower than toast notifications */
       animation: fadeIn 0.2s ease;
     `;
-    
+
     const modal = document.createElement("div");
     modal.style.cssText = `
       background: #2a2a2a;
@@ -7291,7 +7315,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       border: 1px solid #444;
       animation: slideIn 0.3s ease;
     `;
-    
+
     modal.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #444; padding-bottom: 10px;">
         <h3 style="margin: 0; color: #fff; font-size: 18px;">
@@ -7330,7 +7354,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         " onmouseover="this.style.background='#0056b3'" onmouseout="this.style.background='#007bff'" onclick="this.closest('div').parentElement.parentElement.remove()">OK</button>
       </div>
     `;
-    
+
     // Add animations if not already present
     if (!document.getElementById("modal-animations")) {
       const style = document.createElement("style");
@@ -7347,17 +7371,17 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       `;
       document.head.appendChild(style);
     }
-    
+
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
-    
+
     // Close on overlay click
     overlay.addEventListener("click", (e) => {
       if (e.target === overlay) {
         overlay.remove();
       }
     });
-    
+
     // Close on Escape key
     const escHandler = (e) => {
       if (e.key === "Escape") {
@@ -7379,25 +7403,25 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     }
   }
 
-    async updateSystemInfo() {
+  async updateSystemInfo() {
     try {
       const health = await this.apiRequest("GET", "/api/health");
-      
+
       // Update Backend Status - just show Connected/Disconnected
       const backendStatusEl = document.getElementById("backend-status-text");
       const backendStatusContainer = document.getElementById("backend-status");
-      
+
       // More robust backend status detection
-      const isBackendHealthy = health && 
-        (health.success === true || 
-         (health.status && health.status.toLowerCase().includes("connected")));
-      
-      
+      const isBackendHealthy = health &&
+        (health.success === true ||
+          (health.status && health.status.toLowerCase().includes("connected")));
+
+
       if (backendStatusEl && backendStatusContainer) {
         if (isBackendHealthy) {
           backendStatusEl.textContent = "Connected";
           backendStatusContainer.className = "status-item connected";
-          
+
           // Also update the settings page backend status
           const settingsBackendStatus = document.getElementById("settings-backend-status");
           if (settingsBackendStatus) {
@@ -7406,7 +7430,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         } else {
           backendStatusEl.textContent = "Disconnected";
           backendStatusContainer.className = "status-item disconnected";
-          
+
           // Also update the settings page backend status
           const settingsBackendStatus = document.getElementById("settings-backend-status");
           if (settingsBackendStatus) {
@@ -7427,7 +7451,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       }
     } catch (error) {
       console.error("updateSystemInfo failed:", error);
-      
+
       // If backend is not available, show disconnected state
       const backendStatusEl = document.getElementById("backend-status-text");
       const backendStatusContainer = document.getElementById("backend-status");
@@ -7435,20 +7459,20 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         backendStatusEl.textContent = "Disconnected";
         backendStatusContainer.className = "status-item disconnected";
       }
-      
+
       // Also update settings panel backend status
       const settingsBackendStatus = document.getElementById("settings-backend-status");
       if (settingsBackendStatus) {
         settingsBackendStatus.textContent = "Disconnected";
       }
-      
+
       const ffmpegStatusEl = document.getElementById("ffmpeg-status");
       if (ffmpegStatusEl) {
         ffmpegStatusEl.textContent = "Unknown";
         ffmpegStatusEl.style.color = "#6c757d";
       }
     }
-    
+
     // Update Platform Info
     const platformEl = document.getElementById("platform-info");
     if (platformEl) {
@@ -7463,18 +7487,18 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         platformEl.textContent = platform;
       }
     }
-    
+
     // Update Architecture
     const archEl = document.getElementById("arch-info");
     if (archEl) {
-      const is64bit = navigator.userAgent.includes("x64") || 
-                     navigator.userAgent.includes("x86_64") || 
-                     navigator.userAgent.includes("Win64");
+      const is64bit = navigator.userAgent.includes("x64") ||
+        navigator.userAgent.includes("x86_64") ||
+        navigator.userAgent.includes("Win64");
       archEl.textContent = is64bit ? "64-bit" : "32-bit";
     }
-    
 
-    
+
+
     // Update Uptime
     const uptimeEl = document.getElementById("app-uptime");
     if (uptimeEl && this.startTime) {
@@ -7483,7 +7507,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       const hours = Math.floor(diff / 3600000);
       const minutes = Math.floor((diff % 3600000) / 60000);
       const seconds = Math.floor((diff % 60000) / 1000);
-      
+
       if (hours > 0) {
         uptimeEl.textContent = `${hours}h ${minutes}m ${seconds}s`;
       } else if (minutes > 0) {
@@ -7492,19 +7516,19 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         uptimeEl.textContent = `${seconds}s`;
       }
     }
-    
+
     // Update stats
     this.updateStats();
-    
+
     // Update file counts
     const videoCountElement = document.getElementById("video-file-count");
     const mediaCountElement = document.getElementById("media-file-count");
-    
+
     if (videoCountElement)
       videoCountElement.textContent = this.videoFiles.length;
     if (mediaCountElement)
       mediaCountElement.textContent = this.mediaFiles.length;
-    
+
     // Database stats are updated by separate interval
   }
 
@@ -7589,7 +7613,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   formatTimeAgo(date) {
     const now = new Date();
     const diffInSeconds = Math.floor((now - date) / 1000);
-    
+
     if (diffInSeconds < 60) {
       return `${diffInSeconds}s ago`;
     } else if (diffInSeconds < 3600) {
@@ -7602,7 +7626,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       return date.toLocaleDateString();
     }
   }
-
   async exportSettings() {
     try {
       const settings = {
@@ -7618,10 +7641,10 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         app_theme: localStorage.getItem("app_theme") || "dark",
         export_date: new Date().toISOString(),
       };
-      
+
       const dataStr = JSON.stringify(settings, null, 2);
       const dataBlob = new Blob([dataStr], { type: "application/json" });
-      
+
       // Create download link
       const link = document.createElement("a");
       link.href = URL.createObjectURL(dataBlob);
@@ -7631,7 +7654,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
+
       this.showToast(
         "success",
         "Settings Exported",
@@ -7652,15 +7675,15 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       const input = document.createElement("input");
       input.type = "file";
       input.accept = ".json";
-      
+
       input.onchange = async (event) => {
         const file = event.target.files[0];
         if (!file) return;
-        
+
         try {
           const text = await file.text();
           const settings = JSON.parse(text);
-          
+
           // Validate settings structure
           const requiredFields = [
             "telegram_api_id",
@@ -7670,27 +7693,27 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           const hasRequiredFields = requiredFields.some(
             (field) => settings[field]
           );
-          
+
           if (!hasRequiredFields) {
             throw new Error("Invalid settings file format");
           }
-          
+
           // Import settings
           Object.keys(settings).forEach((key) => {
             if (key !== "export_date" && settings[key] !== undefined) {
               localStorage.setItem(key, settings[key]);
             }
           });
-          
+
           // Reload settings
           this.loadSettings();
           this.loadAdvancedSettings();
-          
+
           // Apply theme
           if (settings.app_theme) {
             this.applyTheme(settings.app_theme);
           }
-          
+
           this.showToast(
             "success",
             "Settings Imported",
@@ -7705,7 +7728,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           );
         }
       };
-      
+
       input.click();
     } catch (error) {
       if (RENDERER_DEBUG) console.error("Error importing settings:", error);
@@ -7725,7 +7748,7 @@ This will permanently delete:
 • File lists and progress data
 This action cannot be undone. Are you sure?
         `;
-    
+
     if (confirm(confirmMessage.trim())) {
       try {
         // Clear localStorage
@@ -7733,7 +7756,7 @@ This action cannot be undone. Are you sure?
         const theme = localStorage.getItem("app_theme");
         localStorage.clear();
         if (theme) localStorage.setItem("app_theme", theme);
-        
+
         // Reset application state
         this.videoFiles = [];
         this.mediaFiles = [];
@@ -7741,7 +7764,7 @@ This action cannot be undone. Are you sure?
         this.telegramConnected = false;
         this.pendingCode = false;
         this.pendingPassword = false;
-        
+
         // Clear form values
         const formInputs = [
           "api-id",
@@ -7754,20 +7777,20 @@ This action cannot be undone. Are you sure?
           const input = document.getElementById(id);
           if (input) input.value = "";
         });
-        
+
         // Reset UI
         this.updateVideoFileList();
         this.updateMediaFileList();
         this.updateTelegramStatus("disconnected");
-        
+
         // Clear any active processes
         this.stopProgressMonitoring();
-        
+
         if (this.stickerProgressInterval) {
           clearInterval(this.stickerProgressInterval);
           this.stickerProgressInterval = null;
         }
-        
+
         // Clear backend session
         this.apiRequest("POST", "/api/clear-session")
           .then(() => {
@@ -7776,7 +7799,7 @@ This action cannot be undone. Are you sure?
           .catch(err => {
             if (RENDERER_DEBUG) console.log("Failed to clear backend session:", err);
           });
-        
+
         this.showToast(
           "success",
           "Data Cleared",
@@ -7800,13 +7823,13 @@ This action cannot be undone. Are you sure?
     const startHexEditBtn = document.getElementById("start-hex-edit");
     const pauseHexEditBtn = document.getElementById("pause-hex-edit");
     const resumeHexEditBtn = document.getElementById("resume-hex-edit");
-    
+
     // Reset all buttons first
-    [startConversionBtn, pauseConversionBtn, resumeConversionBtn, 
-     startHexEditBtn, pauseHexEditBtn, resumeHexEditBtn].forEach(btn => {
-      if (btn) btn.style.display = "none";
-    });
-    
+    [startConversionBtn, pauseConversionBtn, resumeConversionBtn,
+      startHexEditBtn, pauseHexEditBtn, resumeHexEditBtn].forEach(btn => {
+        if (btn) btn.style.display = "none";
+      });
+
     if (!this.currentOperation) {
       // No operation running
       if (startConversionBtn) {
@@ -7814,7 +7837,7 @@ This action cannot be undone. Are you sure?
         startConversionBtn.disabled = false;
         startConversionBtn.innerHTML = '<i class="fas fa-play"></i> Start Conversion';
       }
-      
+
       if (startHexEditBtn) {
         startHexEditBtn.style.display = "inline-flex";
         startHexEditBtn.disabled = false;
@@ -7827,7 +7850,7 @@ This action cannot be undone. Are you sure?
         startHexEditBtn.style.display = "inline-flex";
         startHexEditBtn.disabled = true;
       }
-      
+
       if (this.isPaused) {
         if (resumeConversionBtn) resumeConversionBtn.style.display = "inline-flex";
       } else {
@@ -7839,7 +7862,7 @@ This action cannot be undone. Are you sure?
         startConversionBtn.style.display = "inline-flex";
         startConversionBtn.disabled = true;
       }
-      
+
       if (this.isPaused) {
         if (resumeHexEditBtn) resumeHexEditBtn.style.display = "inline-flex";
       } else {
@@ -7850,28 +7873,28 @@ This action cannot be undone. Are you sure?
 
   async pauseOperation() {
     if (!this.currentProcessId || this.isPaused) return;
-    
+
     try {
       const response = await this.apiRequest("POST", "/api/pause-operation", {
         process_id: this.currentProcessId
       });
-      
+
       if (response.success) {
         this.isPaused = true;
-        
+
         // Update UI for pause state
         const pauseBtn = document.getElementById("pause-conversion");
         const resumeBtn = document.getElementById("resume-conversion");
-        
+
         if (pauseBtn) {
           pauseBtn.style.display = "none";
         }
-        
+
         if (resumeBtn) {
           resumeBtn.style.display = "inline-block";
           resumeBtn.disabled = false;
         }
-        
+
         this.updateButtonStates();
         this.showToast("info", "Operation Paused", "The current operation has been paused");
       }
@@ -7883,28 +7906,28 @@ This action cannot be undone. Are you sure?
 
   async resumeOperation() {
     if (!this.currentProcessId || !this.isPaused) return;
-    
+
     try {
       const response = await this.apiRequest("POST", "/api/resume-operation", {
         process_id: this.currentProcessId
       });
-      
+
       if (response.success) {
         this.isPaused = false;
-        
+
         // Update UI for resume state
         const pauseBtn = document.getElementById("pause-conversion");
         const resumeBtn = document.getElementById("resume-conversion");
-        
+
         if (pauseBtn) {
           pauseBtn.style.display = "inline-block";
           pauseBtn.disabled = false;
         }
-        
+
         if (resumeBtn) {
           resumeBtn.style.display = "none";
         }
-        
+
         this.updateButtonStates();
         this.showToast("info", "Operation Resumed", "The operation has been resumed");
       }
@@ -7919,18 +7942,18 @@ This action cannot be undone. Are you sure?
     const hexBtn = document.getElementById("start-hex-edit");
     const pauseBtn = document.getElementById("pause-conversion");
     const resumeBtn = document.getElementById("resume-conversion");
-    
+
     if (isConverting) {
       if (startBtn) {
         startBtn.disabled = true;
         startBtn.innerHTML = '<i class="fas fa-cog fa-spin"></i> Converting...';
       }
-      
+
       if (hexBtn) {
         hexBtn.disabled = true;
         hexBtn.style.opacity = "0.5";
       }
-      
+
       if (this.isPaused) {
         if (pauseBtn) pauseBtn.style.display = "none";
         if (resumeBtn) resumeBtn.style.display = "inline-block";
@@ -7943,12 +7966,12 @@ This action cannot be undone. Are you sure?
         startBtn.disabled = true;
         startBtn.style.opacity = "0.5";
       }
-      
+
       if (hexBtn) {
         hexBtn.disabled = true;
         hexBtn.innerHTML = '<i class="fas fa-cog fa-spin"></i> Hex Editing...';
       }
-      
+
       if (this.isPaused) {
         if (pauseBtn) pauseBtn.style.display = "none";
         if (resumeBtn) resumeBtn.style.display = "inline-block";
@@ -7970,7 +7993,7 @@ This action cannot be undone. Are you sure?
           localStorage.removeItem(key);
         }
       });
-      
+
       // Update display
       document.getElementById("cache-size").textContent = "0 MB";
       this.showToast("Cache cleared successfully", "success");
@@ -7979,13 +8002,13 @@ This action cannot be undone. Are you sure?
       this.showToast("Failed to clear cache", "error");
     }
   }
-  
+
 
   async restartBackend() {
     try {
       this.showToast("Restarting backend...", "info");
       const response = await this.apiRequest("POST", "/api/restart");
-      
+
       // Wait a bit for backend to restart
       setTimeout(() => {
         this.checkBackendStatus();
@@ -7999,7 +8022,7 @@ This action cannot be undone. Are you sure?
       }, 5000);
     }
   }
-  
+
   async resetStats() {
     if (confirm("Are you sure you want to reset all statistics?")) {
       try {
@@ -8054,7 +8077,7 @@ This action cannot be undone. Are you sure?
       }
     }
   }
-  
+
   async killPythonProcesses() {
     this.showKillProcessesModal();
   }
@@ -8127,7 +8150,7 @@ This action cannot be undone. Are you sure?
 
     // Add modal to body
     document.body.insertAdjacentHTML("beforeend", modalHtml);
-    
+
     // Add escape key handler
     const handleEscape = (e) => {
       if (e.key === "Escape") {
@@ -8147,18 +8170,18 @@ This action cannot be undone. Are you sure?
 
   async confirmKillProcesses() {
     this.hideKillProcessesModal();
-    
+
     try {
       const response = await this.apiRequest("POST", "/api/kill-python-processes");
-      
+
       if (response.success) {
         this.showToast("success", "Python Processes Killed", response.message);
-        
+
         // Show backend termination notice after kill
         setTimeout(() => {
           this.showToast("info", "Backend Killed", "The backend has been terminated. Please restart the app.");
         }, 2000);
-        
+
       } else {
         this.showToast("error", "Kill Failed", response.error || "Failed to kill Python processes");
       }
@@ -8166,7 +8189,7 @@ This action cannot be undone. Are you sure?
       this.showToast("error", "Kill Failed", "Failed to kill Python processes: " + error.message);
     }
   }
-  
+
   // Enhanced emoji modal functions with lazy loading
   setupEmojiModal() {
     // Initialize lazy loading cache properties
@@ -8176,14 +8199,14 @@ This action cannot be undone. Are you sure?
     if (!this._emojiLoadPromise) {
       this._emojiLoadPromise = null;
     }
-    
+
     // Defer emoji loading until needed
     const modal = document.getElementById("emoji-modal");
     if (!modal) return;
-    
+
     // Setup drag scrolling for emoji tabs
     this.setupEmojiScrollNavigation();
-    
+
     // Single click - just preview
     modal.addEventListener("click", (e) => {
       const tab = e.target.closest(".emoji-tab");
@@ -8191,14 +8214,14 @@ This action cannot be undone. Are you sure?
         this.handleEmojiTabClick(tab);
         return;
       }
-      
+
       const emojiBtn = e.target.closest(".emoji-btn");
       if (emojiBtn) {
         const emoji = emojiBtn.getAttribute("data-emoji");
         this.selectQuickEmoji(emoji, false); // false = don't save
       }
     });
-    
+
     // Double click - save and close
     modal.addEventListener("dblclick", (e) => {
       const emojiBtn = e.target.closest(".emoji-btn");
@@ -8208,15 +8231,15 @@ This action cannot be undone. Are you sure?
       }
     });
   }
-  
+
   // Method to select a quick emoji from the emoji picker
   selectQuickEmoji(emoji, shouldSave = false) {
     // Update emoji input
     const emojiInput = document.getElementById("emoji-input");
-    
+
     if (emojiInput) {
       emojiInput.value = emoji;
-      
+
       // If shouldSave is true (double-click), save immediately
       if (shouldSave) {
         // Direct save without delay
@@ -8224,16 +8247,16 @@ This action cannot be undone. Are you sure?
       }
     }
   }
-  
+
   handleEmojiTabClick(tab) {
     const category = tab.getAttribute("data-category");
-    
+
     // Batch DOM updates
     requestAnimationFrame(() => {
       // Update tabs
       document.querySelectorAll(".emoji-tab").forEach(t => t.classList.remove("active"));
       tab.classList.add("active");
-      
+
       // Update categories
       document.querySelectorAll(".emoji-category").forEach(cat => cat.classList.remove("active"));
       const targetCategory = document.getElementById(`category-${category}`);
@@ -8242,22 +8265,22 @@ This action cannot be undone. Are you sure?
       }
     });
   }
-  
+
   async lazyLoadEmojiOptions() {
     // Return cached data if available
     if (this._emojiDataCache) return this._emojiDataCache;
-    
+
     // Return existing promise if loading is in progress
     if (this._emojiLoadPromise) return this._emojiLoadPromise;
-    
+
     // Start loading emoji data
     this._emojiLoadPromise = this.loadEmojiData();
     this._emojiDataCache = await this._emojiLoadPromise;
     this._emojiLoadPromise = null;
-    
+
     return this._emojiDataCache;
   }
-  
+
   async loadEmojiData() {
     // Simulate loading emoji data (in real app, might load from file)
     return new Promise(resolve => {
@@ -8269,15 +8292,15 @@ This action cannot be undone. Are you sure?
       }, 10);
     });
   }
-  
+
   setupEmojiScrollNavigation() {
     const tabsContainer = document.querySelector(".emoji-tabs");
-    
+
     if (!tabsContainer) {
       console.log("Emoji tabs container not found");
       return;
     }
-    
+
     // Enable mouse wheel scrolling
     tabsContainer.addEventListener("wheel", (e) => {
       if (e.deltaY !== 0) {
@@ -8288,13 +8311,13 @@ This action cannot be undone. Are you sure?
         });
       }
     });
-    
+
     // Enable drag scrolling with click prevention
     let isDown = false;
     let startX;
     let scrollLeft;
     let hasMoved = false; // Track if mouse moved during drag
-    
+
     tabsContainer.addEventListener("mousedown", (e) => {
       // Only start drag if not clicking on a tab button directly
       isDown = true;
@@ -8304,33 +8327,33 @@ This action cannot be undone. Are you sure?
       tabsContainer.style.cursor = "grabbing";
       tabsContainer.style.userSelect = "none";
     });
-    
+
     tabsContainer.addEventListener("mouseleave", () => {
       isDown = false;
       tabsContainer.style.cursor = "grab";
       tabsContainer.style.userSelect = "";
     });
-    
+
     tabsContainer.addEventListener("mouseup", () => {
       isDown = false;
       tabsContainer.style.cursor = "grab";
       tabsContainer.style.userSelect = "";
     });
-    
+
     tabsContainer.addEventListener("mousemove", (e) => {
       if (!isDown) return;
       e.preventDefault();
       const x = e.pageX - tabsContainer.offsetLeft;
       const walk = (x - startX) * 2.5; // Scroll speed multiplier
-      
+
       // If moved more than 5px, consider it a drag
       if (Math.abs(walk) > 5) {
         hasMoved = true;
       }
-      
+
       tabsContainer.scrollLeft = scrollLeft - walk;
     });
-    
+
     // Handle tab clicks - only if not dragging
     tabsContainer.addEventListener("click", (e) => {
       // If we just dragged, prevent the click from changing category
@@ -8339,29 +8362,29 @@ This action cannot be undone. Are you sure?
         e.stopPropagation();
         return;
       }
-      
+
       const tab = e.target.closest(".emoji-tab");
       if (tab) {
         this.handleEmojiTabClick(tab);
       }
     }, true); // Use capture phase to intercept before other handlers
-    
+
     // Single delegated event for all emoji buttons
     const emojiContainer = document.querySelector(".emoji-picker-enhanced");
     if (emojiContainer) {
       emojiContainer.addEventListener("click", (e) => {
         const btn = e.target.closest(".emoji-btn");
         if (!btn) return;
-        
+
         const emoji = btn.getAttribute("data-emoji");
         const input = document.getElementById("emoji-input");
         const preview = document.getElementById("emoji-preview-icon");
-        
+
         if (input) input.value = emoji;
         if (preview) preview.textContent = emoji;
       });
     }
-    
+
     // Live emoji preview
     const emojiInput = document.getElementById("emoji-input");
     if (emojiInput) {
@@ -8380,17 +8403,16 @@ This action cannot be undone. Are you sure?
 
   applyEmojiToAll() {
     const currentEmoji = document.getElementById("emoji-input")?.value || "😀";
-    
+
     this.mediaFiles.forEach(file => {
       file.emoji = currentEmoji;
     });
-    
+
     this.updateMediaFileList();
     // Keep the emoji modal input in sync with the item being edited
     this.syncEmojiModalWithCurrent();
     this.showToast("success", "Emoji Applied", `Applied ${currentEmoji} to all files`);
   }
-
   applyRandomEmojis() {
     const allEmojis = [
       // Smileys
@@ -8407,11 +8429,11 @@ This action cannot be undone. Are you sure?
       "✨", "⭐", "🌟", "💫", "⚡", "🔥", "💥", "☀️", "🌈", "❄️",
       "💧", "💯", "✅", "🎯", "🎉", "🎊", "🎈", "🎁", "🎀", "💎"
     ];
-    
+
     this.mediaFiles.forEach(file => {
       file.emoji = allEmojis[Math.floor(Math.random() * allEmojis.length)];
     });
-    
+
     this.updateMediaFileList();
     // Keep modal in sync if it's open
     this.syncEmojiModalWithCurrent();
@@ -8421,7 +8443,7 @@ This action cannot be undone. Are you sure?
   applySequentialEmojis() {
     const numberEmojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
     const alternativeEmojis = ["🅰️", "🅱️", "🆎", "🅾️", "🆑", "🆒", "🆓", "🆔", "🆕", "🆖"];
-    
+
     this.mediaFiles.forEach((file, index) => {
       if (index < numberEmojis.length) {
         file.emoji = numberEmojis[index];
@@ -8432,7 +8454,7 @@ This action cannot be undone. Are you sure?
         file.emoji = "➡️";
       }
     });
-    
+
     this.updateMediaFileList();
     // Keep modal in sync if it's open
     this.syncEmojiModalWithCurrent();
@@ -8453,7 +8475,7 @@ This action cannot be undone. Are you sure?
           preview.textContent = current;
         }
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 
   applyThemeEmojis() {
@@ -8465,26 +8487,26 @@ This action cannot be undone. Are you sure?
       food: ["🍕", "🍔", "🍟", "🌭", "🍿", "🥓", "🍳", "🧇", "🥞", "🧈"],
       sports: ["⚽", "🏀", "🏈", "⚾", "🎾", "🏐", "🏉", "🎱", "🏓", "🏸"]
     };
-    
+
     // Randomly select a theme
     const themeNames = Object.keys(themes);
     const selectedTheme = themeNames[Math.floor(Math.random() * themeNames.length)];
     const themeEmojis = themes[selectedTheme];
-    
+
     this.mediaFiles.forEach((file, index) => {
       file.emoji = themeEmojis[index % themeEmojis.length];
     });
-    
+
     this.updateMediaFileList();
     // Keep modal in sync if it's open
     this.syncEmojiModalWithCurrent();
     this.showToast("success", "Theme Emojis", `Applied ${selectedTheme} theme emojis to all files`);
   }
-  
+
   sortMedia(sortType) {
     if (!this.mediaFiles || this.mediaFiles.length === 0) return;
-    
-    switch(sortType) {
+
+    switch (sortType) {
       case "name-asc":
         this.mediaFiles.sort((a, b) => a.name.localeCompare(b.name));
         break;
@@ -8504,66 +8526,66 @@ This action cannot be undone. Are you sure?
         this.mediaFiles.sort((a, b) => (a.size || 0) - (b.size || 0));
         break;
     }
-    
+
     this.updateMediaFileList();
     this.showToast("success", "Sorted", `Files sorted by ${sortType.replace("-", " ")}`);
   }
-  
+
   // Removed profile card functionality - will add new content later
-  
+
   // About Me Section Functionality
   initializeAboutSection() {
     this.setupSupportButtons();
     this.setupProjectLinks();
     this.setupChannelPromotion();
   }
-  
+
   setupSupportButtons() {
     // Coffee button
     const coffeeBtn = document.querySelector(".coffee-btn");
     if (coffeeBtn) {
       coffeeBtn.addEventListener("click", () => {
-        this.showSupportModal("coffee", "Buy Me a Coffee", 
+        this.showSupportModal("coffee", "Buy Me a Coffee",
           "Support my open source work with a coffee! ☕\n\n" +
           "This will open your default browser to a coffee donation page.\n" +
           "You can replace this with your actual coffee.me or similar link later.");
       });
     }
-    
+
     // PayPal button
     const paypalBtn = document.querySelector(".paypal-btn");
     if (paypalBtn) {
       paypalBtn.addEventListener("click", () => {
-        this.showSupportModal("paypal", "PayPal Donation", 
+        this.showSupportModal("paypal", "PayPal Donation",
           "Support my work via PayPal! 💰\n\n" +
           "This will open your default browser to PayPal.\n" +
           "You can replace this with your actual PayPal.me link later.");
       });
     }
-    
+
     // GitHub Sponsors button
     const githubBtn = document.querySelector(".github-btn");
     if (githubBtn) {
       githubBtn.addEventListener("click", () => {
-        this.showSupportModal("github", "GitHub Sponsors", 
+        this.showSupportModal("github", "GitHub Sponsors",
           "Become a GitHub Sponsor! 🌟\n\n" +
           "This will open your GitHub profile for sponsorship.\n" +
           "You can replace this with your actual GitHub Sponsors link later.");
       });
     }
-    
+
     // Star Projects button
     const starBtn = document.querySelector(".star-btn");
     if (starBtn) {
       starBtn.addEventListener("click", () => {
-        this.showSupportModal("star", "Star Projects", 
+        this.showSupportModal("star", "Star Projects",
           "Show your appreciation by starring my projects! ⭐\n\n" +
           "This will open your GitHub repositories.\n" +
           "You can replace this with your actual project links later.");
       });
     }
   }
-  
+
   setupProjectLinks() {
     // Add click tracking for project links
     const projectLinks = document.querySelectorAll(".project-link");
@@ -8575,7 +8597,7 @@ This action cannot be undone. Are you sure?
       });
     });
   }
-  
+
   setupChannelPromotion() {
     const channelBtn = document.querySelector(".channel-join-btn");
     if (channelBtn) {
@@ -8604,7 +8626,7 @@ This action cannot be undone. Are you sure?
         </div>
       </div>
     `;
-    
+
     // Add modal styles
     const style = document.createElement("style");
     style.textContent = `
@@ -8690,30 +8712,30 @@ This action cannot be undone. Are you sure?
         to { transform: translateY(0); opacity: 1; }
       }
     `;
-    
+
     document.head.appendChild(style);
     document.body.appendChild(modal);
-    
+
     // Handle close button
     const closeBtn = modal.querySelector(".support-modal-close");
     const cancelBtn = modal.querySelector(".support-modal-cancel");
     const proceedBtn = modal.querySelector(".support-modal-proceed");
-    
+
     const closeModal = () => {
       modal.remove();
       style.remove();
     };
-    
+
     closeBtn.addEventListener("click", closeModal);
     cancelBtn.addEventListener("click", closeModal);
-    
+
     // Handle proceed button
     proceedBtn.addEventListener("click", () => {
       closeModal();
-      
+
       // Open appropriate link based on type
       let url = "";
-      switch(type) {
+      switch (type) {
         case "coffee":
           url = "https://buymeacoffee.com/joonjelly"; // Updated with actual link
           break;
@@ -8727,7 +8749,7 @@ This action cannot be undone. Are you sure?
           url = "https://github.com/RohitPoul/Telegram-Sticker-Maker-And-Auto-Uploader"; // Updated with your actual repositories
           break;
       }
-      
+
       if (url) {
         // Use Electron's shell API to open external URLs
         if (window.electronAPI && window.electronAPI.shell && window.electronAPI.shell.openExternal) {
@@ -8754,13 +8776,13 @@ This action cannot be undone. Are you sure?
       item.addEventListener("click", () => {
         // Remove active class from all nav items
         navItems.forEach((navItem) => navItem.classList.remove("active"));
-        
+
         // Add active class to clicked nav item
         item.classList.add("active");
-        
+
         const tabId = item.getAttribute("data-tab");
         if (RENDERER_DEBUG) console.log("Clicked tab:", tabId);
-        
+
         this.handleTabSwitch(tabId);
       });
     });
@@ -8848,9 +8870,9 @@ This action cannot be undone. Are you sure?
   initializeVirtualLists() {
     // Virtual scrolling for video file list
     this.videoFileList = this.createVirtualList(
-      "#video-file-list", 
-      ".file-item", 
-      this.videoFiles, 
+      "#video-file-list",
+      ".file-item",
+      this.videoFiles,
       (element, file, index) => {
         element.innerHTML = `
           <div class="file-info">
@@ -8869,9 +8891,9 @@ This action cannot be undone. Are you sure?
 
     // Similar implementation for sticker media list
     this.stickerMediaList = this.createVirtualList(
-      "#sticker-media-list", 
-      ".media-item", 
-      this.stickerFiles, 
+      "#sticker-media-list",
+      ".media-item",
+      this.stickerFiles,
       (element, file, index) => {
         element.innerHTML = `
           <div class="media-info">
@@ -8894,7 +8916,7 @@ This action cannot be undone. Are you sure?
       const response = await this.apiRequest("POST", "/api/get-file-info", {
         path: filePath
       });
-      
+
       if (response.success && response.data) {
         const data = response.data;
         return {
@@ -8907,13 +8929,13 @@ This action cannot be undone. Are you sure?
     } catch (error) {
       if (RENDERER_DEBUG) console.warn(`Failed to get metadata for ${filePath}:`, error);
     }
-    
+
     // Fallback: try to get basic file size
     try {
       const response = await this.apiRequest("POST", "/api/analyze-video", {
         file_path: filePath
       });
-      
+
       if (response.success && response.data) {
         const data = response.data;
         return {
@@ -8926,7 +8948,7 @@ This action cannot be undone. Are you sure?
     } catch (error) {
       if (RENDERER_DEBUG) console.warn(`Failed to analyze video ${filePath}:`, error);
     }
-    
+
     return {
       size: "Unknown",
       duration: "Unknown",
@@ -8937,27 +8959,27 @@ This action cannot be undone. Are you sure?
 
   formatFileSize(bytes) {
     if (bytes === "Unknown" || !bytes) return "Unknown";
-    
+
     const sizes = ["B", "KB", "MB", "GB"];
     if (bytes === 0) return "0 B";
-    
+
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + " " + sizes[i];
   }
 
   formatDuration(seconds) {
     if (seconds === "Unknown" || !seconds) return "Unknown";
-    
+
     if (typeof seconds === "string" && seconds.includes("s")) {
       return seconds; // Already formatted
     }
-    
+
     const secs = parseFloat(seconds);
     if (isNaN(secs)) return "Unknown";
-    
+
     const minutes = Math.floor(secs / 60);
     const remainingSeconds = Math.floor(secs % 60);
-    
+
     if (minutes > 0) {
       return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
     } else {
@@ -8982,7 +9004,7 @@ This action cannot be undone. Are you sure?
     try {
       const encryptedValue = localStorage.getItem(key);
       if (!encryptedValue) return null;
-      
+
       const decryptedValue = this.decryptData(encryptedValue);
       return decryptedValue;
     } catch (error) {
@@ -8996,7 +9018,7 @@ This action cannot be undone. Are you sure?
   encryptData(data) {
     if (!data) return "";
     const key = "TELEGRAM_SECURE_KEY";
-    return btoa(data.split("").map((char, index) => 
+    return btoa(data.split("").map((char, index) =>
       String.fromCharCode(char.charCodeAt(0) ^ key.charCodeAt(index % key.length))
     ).join(""));
   }
@@ -9004,7 +9026,7 @@ This action cannot be undone. Are you sure?
   decryptData(encryptedData) {
     if (!encryptedData) return "";
     const key = "TELEGRAM_SECURE_KEY";
-    return atob(encryptedData).split("").map((char, index) => 
+    return atob(encryptedData).split("").map((char, index) =>
       String.fromCharCode(char.charCodeAt(0) ^ key.charCodeAt(index % key.length))
     ).join("");
   }
@@ -9014,7 +9036,7 @@ This action cannot be undone. Are you sure?
     const apiIdInput = document.getElementById("telegram-api-id");
     const apiHashInput = document.getElementById("telegram-api-hash");
     const phoneInput = document.getElementById("telegram-phone");
-    
+
     if (apiIdInput && apiHashInput && phoneInput) {
       const credentials = {
         apiId: apiIdInput.value.trim(),
@@ -9036,12 +9058,12 @@ This action cannot be undone. Are you sure?
       const savedCredentials = localStorage.getItem("telegramCredentials");
       if (savedCredentials) {
         const { apiId, apiHash, phoneNumber } = JSON.parse(savedCredentials);
-        
-    const apiIdInput = document.getElementById("telegram-api-id");
-    const apiHashInput = document.getElementById("telegram-api-hash");
-    const phoneInput = document.getElementById("telegram-phone");
-    
-    if (apiIdInput && apiHashInput && phoneInput) {
+
+        const apiIdInput = document.getElementById("telegram-api-id");
+        const apiHashInput = document.getElementById("telegram-api-hash");
+        const phoneInput = document.getElementById("telegram-phone");
+
+        if (apiIdInput && apiHashInput && phoneInput) {
           apiIdInput.value = apiId || "";
           apiHashInput.value = apiHash || "";
           phoneInput.value = phoneNumber || "";
@@ -9056,7 +9078,7 @@ This action cannot be undone. Are you sure?
   initializeTelegramForm() {
     this.loadCredentials();
     this.setupInputActionListeners(); // Add this line
-    
+
     // Add event listeners to save credentials when changed
     const apiIdInput = document.getElementById("telegram-api-id");
     const apiHashInput = document.getElementById("telegram-api-hash");
@@ -9079,16 +9101,16 @@ This action cannot be undone. Are you sure?
       localStorage.removeItem("telegram_api_id");
       localStorage.removeItem("telegram_api_hash");
       localStorage.removeItem("telegram_phone");
-      
+
       // Clear input fields
       const apiIdInput = document.getElementById("telegram-api-id");
       const apiHashInput = document.getElementById("telegram-api-hash");
       const phoneInput = document.getElementById("telegram-phone");
-      
+
       if (apiIdInput) apiIdInput.value = "";
       if (apiHashInput) apiHashInput.value = "";
       if (phoneInput) phoneInput.value = "";
-      
+
       this.showToast("success", "Credentials Cleared", "Telegram credentials have been removed");
     } catch (error) {
       if (RENDERER_DEBUG) console.error("[SECURE] Error clearing credentials:", error);
@@ -9101,7 +9123,7 @@ This action cannot be undone. Are you sure?
     try {
       // Securely store phone number
       this.secureStoreCredentials("telegram_last_phone", phoneNumber);
-      
+
       // Optional: Store recent phone numbers (up to 5)
       const recentPhones = this.getRecentPhoneNumbers();
       if (!recentPhones.includes(phoneNumber)) {
@@ -9110,7 +9132,7 @@ This action cannot be undone. Are you sure?
         const uniqueRecentPhones = [...new Set(recentPhones)].slice(0, 5);
         localStorage.setItem("telegram_recent_phones", JSON.stringify(uniqueRecentPhones));
       }
-      
+
       if (RENDERER_DEBUG) console.log("[PHONE] Phone number saved successfully");
     } catch (error) {
       if (RENDERER_DEBUG) console.error("[PHONE] Error saving phone number:", error);
@@ -9130,14 +9152,14 @@ This action cannot be undone. Are you sure?
   populatePhoneInputWithRecent() {
     const phoneInput = document.getElementById("telegram-phone");
     const recentPhonesContainer = document.getElementById("recent-phones-container");
-    
+
     if (!phoneInput || !recentPhonesContainer) return;
 
     // Clear existing recent phones
     recentPhonesContainer.innerHTML = "";
 
     const recentPhones = this.getRecentPhoneNumbers();
-    
+
     // Populate recent phones dropdown
     if (recentPhones.length > 0) {
       recentPhones.forEach(phone => {
@@ -9151,12 +9173,11 @@ This action cannot be undone. Are you sure?
         });
         recentPhonesContainer.appendChild(phoneOption);
       });
-      
+
       // Show dropdown if there are recent phones
       recentPhonesContainer.style.display = recentPhones.length > 0 ? "flex" : "none";
     }
   }
-
   // Input handling methods
   setupInputHandlers() {
     // Clipboard paste functionality
@@ -9165,7 +9186,7 @@ This action cannot be undone. Are you sure?
       button.addEventListener("click", async () => {
         const targetId = button.getAttribute("data-target");
         const targetInput = document.getElementById(targetId);
-        
+
         try {
           const clipboardText = await navigator.clipboard.readText();
           if (clipboardText) {
@@ -9186,7 +9207,7 @@ This action cannot be undone. Are you sure?
         const targetId = button.getAttribute("data-target");
         const targetInput = document.getElementById(targetId);
         const icon = button.querySelector("i");
-        
+
         if (targetInput.type === "tel" || targetInput.type === "password") {
           targetInput.type = "text";
           icon.classList.remove("fa-eye-slash");
@@ -9204,23 +9225,23 @@ This action cannot be undone. Are you sure?
   async checkExistingConnection() {
     try {
       if (RENDERER_DEBUG) console.log("[DEBUG] Checking for existing Telegram session...");
-      
+
       const response = await this.apiRequest("GET", "/api/telegram/session-status");
-      
+
       if (response && response.success && response.data) {
         const { session_exists, session_valid } = response.data;
-        
+
         if (session_exists && session_valid) {
           if (RENDERER_DEBUG) console.log("[DEBUG] Found valid existing session - setting connected status");
           this.updateTelegramStatus("connected");
           return true;
         }
       }
-      
+
       if (RENDERER_DEBUG) console.log("[DEBUG] No valid session found - setting disconnected status");
       this.updateTelegramStatus("disconnected");
       return false;
-      
+
     } catch (error) {
       if (RENDERER_DEBUG) console.error("[DEBUG] Error checking session status:", error);
       // Default to disconnected if we can't check
@@ -9228,11 +9249,11 @@ This action cannot be undone. Are you sure?
       return false;
     }
   }
-  
+
   async refreshConnectionStatus() {
     return await this.checkExistingConnection();
   }
-  
+
   async cleanupTelegramSession() {
     try {
       const response = await this.apiRequest("POST", "/api/telegram/cleanup-session");
@@ -9251,9 +9272,9 @@ This action cannot be undone. Are you sure?
   // Modify initialization to include input handlers
   async initializeTelegramConnection() {
     this.logDebug("initializeTelegramConnection() - CLEAN WORKFLOW");
-    
+
     // CLEAN WORKFLOW: Always start disconnected and force cleanup
-    
+
     try {
       // STEP 1: Force backend cleanup on frontend startup (with retry)
       // Retry the force reset with backoff in case backend is still starting
@@ -9270,18 +9291,18 @@ This action cannot be undone. Are you sure?
           }
         }
       }
-      
+
       // STEP 2: Always set disconnected state 
       this.updateTelegramStatus("disconnected");
       this.telegramConnected = false;
-      
+
       // STEP 3: Check actual connection status from backend (with retry)
       try {
         const statusResponse = await this.apiRequest("GET", "/api/telegram/connection-status");
-        
+
         if (statusResponse.success && statusResponse.data) {
           const status = statusResponse.data;
-          
+
           // For clean workflow, we expect clean_state: true and connected: false
           if (status.clean_state && !status.connected) {
             this.addStatusItem("🔄 Clean startup completed - ready for fresh connection", "info");
@@ -9292,7 +9313,7 @@ This action cannot be undone. Are you sure?
       } catch (error) {
         // Assume clean state on error
       }
-      
+
     } catch (error) {
       console.error("❌ [CLEAN_INIT] Error during clean initialization:", error);
       // Even on error, ensure we're in disconnected state
@@ -9300,37 +9321,37 @@ This action cannot be undone. Are you sure?
       this.telegramConnected = false;
       this.addStatusItem("⚠️ Clean startup completed with warnings", "warning");
     }
-    
+
     // Continue with standard initialization...
     // Verify all required elements exist
     const apiIdInput = document.getElementById("telegram-api-id");
     const apiHashInput = document.getElementById("telegram-api-hash");
     const phoneInput = document.getElementById("telegram-phone");
     const connectBtn = document.getElementById("connect-telegram");
-    
+
     if (RENDERER_DEBUG) console.log("[DEBUG] Telegram form elements check:", {
       apiIdInput: !!apiIdInput,
       apiHashInput: !!apiHashInput,
       phoneInput: !!phoneInput,
       connectBtn: !!connectBtn
     });
-    
+
     if (!connectBtn) {
       if (RENDERER_DEBUG) console.error("[DEBUG] Critical: Connect button not found!");
       return;
     }
-    
+
     // Setup improved input handlers
     this.setupInputActionListeners?.();
-    
+
     // Load saved credentials if available
     if (typeof this.loadCredentials === "function") {
-      try { this.loadCredentials(); } catch (_) {}
+      try { this.loadCredentials(); } catch (_) { }
     }
-    
+
     // Sync visibility icons
     this.syncVisibilityIcons?.();
-    
+
     if (RENDERER_DEBUG) console.log("[DEBUG] Telegram connection initialization complete");
   }
 
@@ -9363,7 +9384,7 @@ This action cannot be undone. Are you sure?
         const targetId = button.getAttribute("data-target");
         const targetInput = document.getElementById(targetId);
         const visibilityIcon = button.querySelector("i");
-        
+
         if (!targetInput || !visibilityIcon) return;
 
         // Explicitly set focus to input before toggling
@@ -9371,10 +9392,10 @@ This action cannot be undone. Are you sure?
 
         // Comprehensive toggle logic
         const isCurrentlyPassword = targetInput.type === "password";
-        
+
         // Toggle input type
         targetInput.type = isCurrentlyPassword ? "text" : "password";
-        
+
         // Toggle icon classes
         if (isCurrentlyPassword) {
           visibilityIcon.classList.remove("fa-eye-slash");
@@ -9402,18 +9423,18 @@ This action cannot be undone. Are you sure?
       button.addEventListener("click", async (e) => {
         const targetId = button.getAttribute("data-target");
         const targetInput = document.getElementById(targetId);
-        
+
         if (!targetInput) return;
 
         try {
           const clipboardText = await navigator.clipboard.readText();
           targetInput.value = clipboardText.trim();
-          
+
           // Trigger change event for saving
           targetInput.dispatchEvent(new Event("change"));
-          
+
           this.showToast("success", "Pasted", "Text copied from clipboard");
-          
+
           // Highlight input briefly
           targetInput.classList.add("paste-highlight");
           setTimeout(() => {
