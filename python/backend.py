@@ -9,7 +9,6 @@ import atexit
 import tempfile
 import signal
 import re
-import os
 from pathlib import Path
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -19,6 +18,19 @@ import platform
 import shutil
 import uuid
 from logging_config import setup_sticker_logging
+
+# Load .env file if it exists
+def load_env_file():
+    env_path = Path(__file__).parent.parent / '.env'
+    if env_path.exists():
+        with open(env_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    os.environ[key.strip()] = value.strip()
+
+load_env_file()
 
 # Stats functions will be defined after logger is initialized
 
@@ -30,7 +42,17 @@ sys.path.insert(0, current_dir)
 sticker_logger = setup_sticker_logging()
 
 # Import statistics tracker from separate module
-from stats_tracker import stats_tracker
+from stats_tracker import stats_tracker, set_supabase_sync
+
+# Import machine ID manager and Supabase sync
+from machine_id import machine_id_manager
+from supabase_sync import SupabaseSync
+
+# Initialize Supabase sync
+supabase_sync = SupabaseSync(machine_id_manager)
+set_supabase_sync(supabase_sync)
+logger.info(f"Machine ID: {machine_id_manager.get_machine_id()}")
+logger.info(f"System Info: {machine_id_manager.get_system_info()}")
 
 # Setup logging (quiet by default: no stdout)
 log_level_name = os.getenv('BACKEND_LOG_LEVEL', 'ERROR').upper()
@@ -1464,14 +1486,64 @@ def get_database_stats():
 
 @app.route('/api/reset-stats', methods=['POST', 'OPTIONS'], strict_slashes=False)
 def reset_stats():
-    """Reset all statistics"""
+    """Reset local statistics (cumulative stats in Supabase remain unchanged)"""
     if request.method == 'OPTIONS':
         return '', 200
     try:
+        # Reset only local stats, cumulative stats continue counting
         stats_tracker.reset_stats()
-        return jsonify({"success": True, "message": "Statistics reset successfully"})
+        logger.info("[STATS] Local stats reset - cumulative stats preserved in Supabase")
+        return jsonify({
+            "success": True, 
+            "message": "Local statistics reset successfully. Cloud stats preserved."
+        })
     except Exception as e:
         logger.error(f"Error resetting stats: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/machine-info', methods=['GET', 'OPTIONS'], strict_slashes=False)
+def get_machine_info():
+    """Get machine ID and system information"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    try:
+        info = machine_id_manager.get_full_info()
+        return jsonify({
+            "success": True,
+            "data": info
+        })
+    except Exception as e:
+        logger.error(f"Error getting machine info: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/cumulative-stats', methods=['GET', 'OPTIONS'], strict_slashes=False)
+def get_cumulative_stats():
+    """Get cumulative statistics (never reset)"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    try:
+        cumulative = supabase_sync.get_cumulative_stats()
+        return jsonify({
+            "success": True,
+            "data": cumulative
+        })
+    except Exception as e:
+        logger.error(f"Error getting cumulative stats: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/sync-stats', methods=['POST', 'OPTIONS'], strict_slashes=False)
+def force_sync_stats():
+    """Force immediate sync of stats to Supabase"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    try:
+        supabase_sync.force_sync()
+        return jsonify({
+            "success": True,
+            "message": "Stats synced to Supabase successfully"
+        })
+    except Exception as e:
+        logger.error(f"Error syncing stats: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/stats/increment-stickers', methods=['POST', 'OPTIONS'], strict_slashes=False)
