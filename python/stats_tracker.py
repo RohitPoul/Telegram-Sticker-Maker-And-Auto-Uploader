@@ -7,6 +7,15 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+# Supabase sync will be injected after initialization
+_supabase_sync = None
+
+def set_supabase_sync(sync_instance):
+    """Set the Supabase sync instance"""
+    global _supabase_sync
+    _supabase_sync = sync_instance
+    logger.info("Supabase sync instance set in stats_tracker")
+
 class StatisticsTracker:
     def __init__(self):
         base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -104,6 +113,10 @@ class StatisticsTracker:
             f"total={stats['total_conversions']} ok={stats['successful_conversions']} fail={stats['failed_conversions']} "
             f"(@ {self.stats_file})"
         )
+        
+        # Sync to Supabase (cumulative stats)
+        if _supabase_sync:
+            _supabase_sync.increment_stat('conversion', success)
 
     def increment_hexedit(self, success=True):
         """Increment hex edit stats."""
@@ -122,6 +135,10 @@ class StatisticsTracker:
             f"total={stats['total_hexedits']} ok={stats['successful_hexedits']} fail={stats['failed_hexedits']} "
             f"(@ {self.stats_file})"
         )
+        
+        # Sync to Supabase (cumulative stats)
+        if _supabase_sync:
+            _supabase_sync.increment_stat('hexedit', success)
 
     def increment_image_conversion(self, success=True):
         """Increment image conversion stats."""
@@ -140,16 +157,25 @@ class StatisticsTracker:
             f"total={stats['total_images_converted']} ok={stats['successful_images']} fail={stats['failed_images']} "
             f"(@ {self.stats_file})"
         )
+        
+        # Sync to Supabase (cumulative stats)
+        if _supabase_sync:
+            _supabase_sync.increment_stat('image', success)
 
     def increment_stickers(self, count=1):
         """Increment sticker creation stats."""
         stats = self.load_stats()
         before = stats.get("total_stickers_created", 0)
-        stats["total_stickers_created"] = before + max(int(count), 0)
+        count_val = max(int(count), 0)
+        stats["total_stickers_created"] = before + count_val
         self.save_stats(stats)
         logger.info(
-            f"[STATS] stickers +{max(int(count), 0)} → total_stickers_created={stats['total_stickers_created']} (@ {self.stats_file})"
+            f"[STATS] stickers +{count_val} → total_stickers_created={stats['total_stickers_created']} (@ {self.stats_file})"
         )
+        
+        # Sync to Supabase (cumulative stats)
+        if _supabase_sync:
+            _supabase_sync.increment_stat('sticker', count_val)
 
     def get_stats(self):
         """Get current stats without session/uptime fields; strip legacy keys if present."""
