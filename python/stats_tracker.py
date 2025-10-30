@@ -14,6 +14,8 @@ def set_supabase_sync(sync_instance):
     """Set the Supabase sync instance"""
     global _supabase_sync
     _supabase_sync = sync_instance
+    print(f"[SUPABASE] Sync instance set: {sync_instance}")
+    print(f"[SUPABASE] Enabled: {sync_instance.enabled if sync_instance else 'None'}")
     logger.info("Supabase sync instance set in stats_tracker")
 
 class StatisticsTracker:
@@ -115,8 +117,17 @@ class StatisticsTracker:
         )
         
         # Sync to Supabase (cumulative stats)
-        if _supabase_sync:
-            _supabase_sync.increment_stat('conversion', success)
+        try:
+            print(f"[DEBUG] _supabase_sync is: {_supabase_sync}")
+            if _supabase_sync:
+                print(f"[DEBUG] Calling increment_stat for conversion")
+                _supabase_sync.increment_stat('conversion', success)
+                print(f"[DEBUG] increment_stat called successfully")
+            else:
+                print(f"[DEBUG] _supabase_sync is None!")
+        except Exception as e:
+            print(f"[DEBUG] Exception: {e}")
+            logger.error(f"[STATS] Failed to sync conversion to Supabase: {e}")
 
     def increment_hexedit(self, success=True):
         """Increment hex edit stats."""

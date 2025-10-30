@@ -782,7 +782,9 @@ class ImageHandler {
         process_id: processId
       };
 
+      console.log("[IMAGE] Sending batch request:", payload);
       const response = await this.app.apiRequest("POST", "/api/image/process-batch", payload);
+      console.log("[IMAGE] Batch response:", response);
 
       if (response && response.success) {
         this.currentProcessId = processId;
@@ -868,6 +870,8 @@ class ImageHandler {
           }
 
           // Check if completed or failed
+          console.log("[MONITOR] Current status:", proc.status, "Progress:", proc.progress);
+          
           if (proc.status === "completed") {
             console.log("[MONITOR] Conversion completed", proc);
             this.handleConversionComplete(proc);
@@ -961,6 +965,7 @@ class ImageHandler {
   }
 
   handleConversionComplete(proc) {
+    console.log("[IMAGE] handleConversionComplete called", proc);
     const statusEl = document.getElementById("image-conversion-status");
     const startBtn = document.getElementById("start-image-conversion");
 
@@ -975,9 +980,13 @@ class ImageHandler {
     }
 
     // Reset the convert button
+    console.log("[IMAGE] Resetting button, startBtn:", startBtn);
     if (startBtn) {
       startBtn.disabled = false;
       startBtn.innerHTML = '<i class="fas fa-magic"></i> Convert';
+      console.log("[IMAGE] Button reset complete");
+    } else {
+      console.error("[IMAGE] startBtn not found!");
     }
 
     this.app.showToast("success", "Conversion Complete",

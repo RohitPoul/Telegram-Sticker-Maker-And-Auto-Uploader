@@ -22,6 +22,8 @@ from logging_config import setup_sticker_logging
 # Load .env file if it exists
 def load_env_file():
     env_path = Path(__file__).parent.parent / '.env'
+    print(f"[ENV] Looking for .env at: {env_path}")
+    print(f"[ENV] .env exists: {env_path.exists()}")
     if env_path.exists():
         with open(env_path, 'r') as f:
             for line in f:
@@ -29,8 +31,11 @@ def load_env_file():
                 if line and not line.startswith('#') and '=' in line:
                     key, value = line.split('=', 1)
                     os.environ[key.strip()] = value.strip()
+                    print(f"[ENV] Loaded: {key.strip()} = {value.strip()[:30]}...")
 
 load_env_file()
+print(f"[ENV] After load - SUPABASE_URL: {os.getenv('SUPABASE_URL', 'NOT SET')}")
+print(f"[ENV] After load - SUPABASE_KEY: {os.getenv('SUPABASE_KEY', 'NOT SET')[:30]}...")
 
 # Stats functions will be defined after logger is initialized
 
@@ -47,12 +52,6 @@ from stats_tracker import stats_tracker, set_supabase_sync
 # Import machine ID manager and Supabase sync
 from machine_id import machine_id_manager
 from supabase_sync import SupabaseSync
-
-# Initialize Supabase sync
-supabase_sync = SupabaseSync(machine_id_manager)
-set_supabase_sync(supabase_sync)
-logger.info(f"Machine ID: {machine_id_manager.get_machine_id()}")
-logger.info(f"System Info: {machine_id_manager.get_system_info()}")
 
 # Setup logging (quiet by default: no stdout)
 log_level_name = os.getenv('BACKEND_LOG_LEVEL', 'ERROR').upper()
@@ -79,6 +78,10 @@ if sys.platform == 'win32':
         # Best-effort; keep running even if reconfigure is not available
         pass
 logger = logging.getLogger(__name__)
+
+# Initialize Supabase sync (after logger is defined)
+supabase_sync = SupabaseSync(machine_id_manager)
+set_supabase_sync(supabase_sync)
 
 # Statistics are now handled by the centralized StatisticsTracker class
 # All stats operations should use stats_tracker.increment_conversion(), 
@@ -2406,10 +2409,14 @@ def process_batch_images():
         logger.info(f"[IMAGE_BATCH] Format: {output_format}, Quality: {quality}")
 
         def _run_image_batch(process_id_local: str, files: list, out_dir: str, fmt: str, qual: int):
+            print(f"[THREAD_DEBUG] Thread function called! {process_id_local}")
             try:
                 # Import here to avoid any circular import at module load time
+                print(f"[THREAD_DEBUG] Importing image_processor...")
                 from image_processor import image_processor
+                print(f"[THREAD_DEBUG] Creating output dir...")
                 os.makedirs(out_dir, exist_ok=True)
+                print(f"[THREAD_DEBUG] Ready to process files...")
 
                 results_local = []
                 total_files_local = len(files)
@@ -2482,12 +2489,15 @@ def process_batch_images():
                         })
 
         import threading
+        print(f"[DEBUG] About to start thread for {process_id}")
         th = threading.Thread(
             target=_run_image_batch,
             args=(process_id, input_files, output_dir, output_format, quality),
             daemon=True
         )
+        print(f"[DEBUG] Thread created, starting...")
         th.start()
+        print(f"[DEBUG] Thread started!")
 
         return jsonify({
             "success": True,
@@ -2511,10 +2521,14 @@ def get_image_process_status(process_id):
     try:
         proc = get_process(process_id)
         if not proc:
+            logger.warning(f"[IMAGE_STATUS] Process {process_id} not found")
             return jsonify({
                 "success": False,
                 "error": "Process not found"
             }), 404
+        
+        # Log the status being returned
+        logger.info(f"[IMAGE_STATUS] {process_id}: status={proc.get('status')}, progress={proc.get('progress')}%, completed={proc.get('completed_files')}/{proc.get('total_files')}")
         
         return jsonify({
             "success": True,

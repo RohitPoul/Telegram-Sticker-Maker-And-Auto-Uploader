@@ -1,12 +1,9 @@
 import os
 import json
-import logging
 import threading
 import time
 from datetime import datetime
 from pathlib import Path
-
-logger = logging.getLogger(__name__)
 
 class SupabaseSync:
     """Sync user statistics to Supabase for analytics"""
@@ -23,6 +20,7 @@ class SupabaseSync:
         self.config_dir = os.path.join(project_root, '.config')
         os.makedirs(self.config_dir, exist_ok=True)
         self.cumulative_stats_file = os.path.join(self.config_dir, 'cumulative_stats.json')
+        self.pending_queue_file = os.path.join(self.config_dir, 'pending_sync.json')
         
         # Lock for thread safety
         self.lock = threading.Lock()
@@ -30,29 +28,29 @@ class SupabaseSync:
         # Load cumulative stats
         self.cumulative_stats = self._load_cumulative_stats()
         
-        # Sync queue for batching updates
-        self.sync_queue = []
+        # Load pending queue from disk (for offline mode)
+        self.pending_queue = self._load_pending_queue()
+        
         self.last_sync_time = 0
         self.sync_interval = 30  # Sync every 30 seconds
+        self.is_online = True
         
         if self.enabled:
-            logger.info("Supabase sync enabled")
-            # Start background sync thread
+            # Start background sync thread silently
             self.sync_thread = threading.Thread(target=self._background_sync, daemon=True)
             self.sync_thread.start()
         else:
-            logger.warning("Supabase sync disabled - missing SUPABASE_URL or SUPABASE_KEY")
+            # Still track stats locally even without Supabase
+            pass
     
     def _load_cumulative_stats(self):
         """Load cumulative stats from file"""
         try:
             if os.path.exists(self.cumulative_stats_file):
                 with open(self.cumulative_stats_file, 'r') as f:
-                    stats = json.load(f)
-                    logger.info(f"Loaded cumulative stats: {stats}")
-                    return stats
-        except Exception as e:
-            logger.warning(f"Could not load cumulative stats: {e}")
+                    return json.load(f)
+        except Exception:
+            pass
         
         # Return default stats
         return self._get_default_stats()
@@ -80,9 +78,27 @@ class SupabaseSync:
                 self.cumulative_stats['last_updated'] = datetime.utcnow().isoformat()
                 with open(self.cumulative_stats_file, 'w') as f:
                     json.dump(self.cumulative_stats, f, indent=2)
-                logger.debug(f"Saved cumulative stats to {self.cumulative_stats_file}")
-        except Exception as e:
-            logger.error(f"Failed to save cumulative stats: {e}")
+        except Exception:
+            pass  # Silent fail
+    
+    def _load_pending_queue(self):
+        """Load pending sync queue from disk"""
+        try:
+            if os.path.exists(self.pending_queue_file):
+                with open(self.pending_queue_file, 'r') as f:
+                    return json.load(f)
+        except Exception:
+            pass
+        return []
+    
+    def _save_pending_queue(self):
+        """Save pending sync queue to disk"""
+        try:
+            with self.lock:
+                with open(self.pending_queue_file, 'w') as f:
+                    json.dump(self.pending_queue, f, indent=2)
+        except Exception:
+            pass  # Silent fail
     
     def increment_stat(self, stat_type, success=True):
         """
@@ -118,13 +134,14 @@ class SupabaseSync:
             # Save to file
             self._save_cumulative_stats()
             
-            # Queue for sync
+            # Queue for sync (even if offline, we'll sync later)
             if self.enabled:
-                self.sync_queue.append({
+                self.pending_queue.append({
                     'type': stat_type,
                     'success': success,
                     'timestamp': datetime.utcnow().isoformat()
                 })
+                self._save_pending_queue()
     
     def _background_sync(self):
         """Background thread to sync stats to Supabase"""
@@ -133,14 +150,14 @@ class SupabaseSync:
                 time.sleep(self.sync_interval)
                 
                 # Check if there are updates to sync
-                if len(self.sync_queue) > 0 or (time.time() - self.last_sync_time) > 300:
+                if len(self.pending_queue) > 0 or (time.time() - self.last_sync_time) > 300:
                     self._sync_to_supabase()
                     
-            except Exception as e:
-                logger.error(f"Error in background sync: {e}")
+            except Exception:
+                pass  # Silent fail, will retry next interval
     
     def _sync_to_supabase(self):
-        """Sync cumulative stats to Supabase"""
+        """Sync cumulative stats to Supabase (silent, handles offline gracefully)"""
         if not self.enabled:
             return
         
@@ -155,12 +172,10 @@ class SupabaseSync:
                 'machine_id': machine_id,
                 'os_name': system_info.get('os_name', 'Unknown'),
                 'architecture': system_info.get('architecture', 'Unknown'),
-                'os_version': system_info.get('os_version', ''),
-                'platform': system_info.get('platform', ''),
                 **self.cumulative_stats
             }
             
-            # Remove last_updated from the data sent to Supabase (it has its own timestamp)
+            # Remove last_updated from the data sent to Supabase
             data.pop('last_updated', None)
             
             # Upsert to Supabase (insert or update)
@@ -173,19 +188,22 @@ class SupabaseSync:
             
             url = f"{self.supabase_url}/rest/v1/user_stats"
             
-            response = requests.post(url, json=data, headers=headers, timeout=10)
+            response = requests.post(url, json=data, headers=headers, timeout=5)
             
             if response.status_code in [200, 201]:
-                logger.info(f"Successfully synced stats to Supabase for machine {machine_id}")
+                # Success - clear pending queue
                 self.last_sync_time = time.time()
-                # Clear sync queue
+                self.is_online = True
                 with self.lock:
-                    self.sync_queue.clear()
+                    self.pending_queue.clear()
+                    self._save_pending_queue()
             else:
-                logger.error(f"Failed to sync to Supabase: {response.status_code} - {response.text}")
+                # Failed but don't log error - just keep in queue
+                self.is_online = False
                 
-        except Exception as e:
-            logger.error(f"Error syncing to Supabase: {e}")
+        except Exception:
+            # Network error or timeout - silently keep data in queue
+            self.is_online = False
     
     def force_sync(self):
         """Force immediate sync to Supabase"""

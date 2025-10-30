@@ -1,12 +1,12 @@
 {
-  "total_conversions": 0,
-  "successful_conversions": 0,
+  "total_conversions": 4,
+  "successful_conversions": 4,
   "failed_conversions": 0,
   "total_hexedits": 0,
   "successful_hexedits": 0,
   "failed_hexedits": 0,
-  "total_images_converted": 0,
-  "successful_images": 0,
+  "total_images_converted": 16,
+  "successful_images": 16,
   "failed_images": 0,
   "total_stickers_created": 0
 }
