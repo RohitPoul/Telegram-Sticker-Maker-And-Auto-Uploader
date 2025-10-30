@@ -60,6 +60,11 @@ keys/
 *.p12
 *.pfx
 
+# Analytics and machine ID (local config)
+.config/
+machine_id.json
+cumulative_stats.json
+
 test_*.html
 ffmpeg2pass*.log
 *.2pass
