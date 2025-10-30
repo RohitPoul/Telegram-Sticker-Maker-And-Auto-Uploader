@@ -262,6 +262,9 @@ class TelegramUtilities {
       this.updateSystemInfo();
       this.updateDatabaseStats();
 
+      // Fetch real-time GitHub stars
+      this.fetchGitHubStars();
+
       // Add manual refresh function for testing
       window.forceRefreshStats = () => {
         this.updateSystemInfo();
@@ -343,6 +346,34 @@ class TelegramUtilities {
     }
   }
 
+  async fetchGitHubStars() {
+    try {
+      const username = "RohitPoul"; // Your GitHub username
+      const response = await fetch(`https://api.github.com/users/${username}/repos?per_page=100`);
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch GitHub data");
+      }
+
+      const repos = await response.json();
+
+      // Calculate total stars across all repos
+      const totalStars = repos.reduce((sum, repo) => sum + (repo.stargazers_count || 0), 0);
+
+      // Update the UI
+      const starsElement = document.getElementById("github-stars-count");
+      if (starsElement) {
+        starsElement.innerHTML = totalStars;
+      }
+
+    } catch (error) {
+      // Show fallback value
+      const starsElement = document.getElementById("github-stars-count");
+      if (starsElement) {
+        starsElement.innerHTML = "2+";
+      }
+    }
+  }
 
   // ---- Lightweight debug logger for Telegram flows ----
   logDebug(label, payload = undefined) {
@@ -2398,11 +2429,8 @@ class TelegramUtilities {
   _updateVideoFileListInternal() {
     const container = document.getElementById("video-file-list");
     if (!container) {
-      console.error("❌ video-file-list container not found!");
       return;
     }
-
-    console.log(`📋 Updating video list: ${this.videoFiles.length} files`);
 
     if (this.videoFiles.length === 0) {
       container.innerHTML = `
@@ -2419,14 +2447,11 @@ class TelegramUtilities {
     container.style.display = "block";
 
     // Always use regular rendering for consistent appearance
-    console.log("🔄 Using regular rendering");
     this.updateVideoFileListRegular(container);
   }
 
   // Regular list update for smaller datasets
   updateVideoFileListRegular(container) {
-    console.log(`📝 Rendering ${this.videoFiles.length} video files (regular mode)`);
-
     // Use DocumentFragment for better performance
     const fragment = document.createDocumentFragment();
 
@@ -2438,8 +2463,6 @@ class TelegramUtilities {
     // Clear and append in one operation for better performance
     container.innerHTML = "";
     container.appendChild(fragment);
-
-    console.log(`✅ Rendered ${container.children.length} elements in container`);
   }
 
   // Virtual scrolling implementation for video files
@@ -3551,8 +3574,17 @@ class TelegramUtilities {
     // Text status line (reuse conversion-status element)
     const statusEl = document.getElementById("conversion-status");
     if (statusEl) {
+      const statusText = statusEl.querySelector(".status-text");
+      const progressText = statusEl.querySelector(".progress-text");
       const total = progress.totalFiles || this.videoFiles.length;
-      statusEl.textContent = progress.currentStage || `Hex editing ${progress.completedFiles}/${total}`;
+      
+      if (statusText) {
+        statusText.textContent = progress.currentStage || `Hex editing ${progress.completedFiles}/${total}`;
+      }
+      
+      if (progressText && progress.completedFiles !== undefined) {
+        progressText.textContent = `${progress.completedFiles}/${total}`;
+      }
     }
   }
 
@@ -3718,6 +3750,20 @@ class TelegramUtilities {
 
     // Reset button states to show Start/Hex Edit buttons
     this.updateButtonStates();
+    
+    // Reset status text to Ready
+    const statusEl = document.getElementById("conversion-status");
+    if (statusEl) {
+      const statusText = statusEl.querySelector(".status-text");
+      const progressText = statusEl.querySelector(".progress-text");
+      
+      if (statusText) {
+        statusText.textContent = "Ready";
+      }
+      if (progressText) {
+        progressText.textContent = "";
+      }
+    }
   }
 
   updateOverallProgress(progress) {
@@ -3730,7 +3776,16 @@ class TelegramUtilities {
 
     const statusElement = document.getElementById("conversion-status");
     if (statusElement) {
-      statusElement.textContent = progress.currentStage || `Converting ${progress.completedFiles}/${progress.totalFiles}`;
+      const statusText = statusElement.querySelector(".status-text");
+      const progressText = statusElement.querySelector(".progress-text");
+      
+      if (statusText) {
+        statusText.textContent = progress.currentStage || `Converting ${progress.completedFiles}/${progress.totalFiles}`;
+      }
+      
+      if (progressText && progress.completedFiles !== undefined && progress.totalFiles !== undefined) {
+        progressText.textContent = `${progress.completedFiles}/${progress.totalFiles}`;
+      }
     }
 
     // File statuses are already updated in getConversionProgress
