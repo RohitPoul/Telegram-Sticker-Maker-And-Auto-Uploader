@@ -6,7 +6,6 @@ const axios = require("axios");
 
 // SIMPLIFIED AND STABLE: Use software rendering by default
 // This eliminates GPU crashes while maintaining excellent performance
-console.log("Using stable software rendering mode");
 app.disableHardwareAcceleration();
 
 // Minimize Chromium/Electron console noise and warnings in production/dev
@@ -29,7 +28,6 @@ app.commandLine.appendSwitch('js-flags', '--expose-gc'); // Allow manual garbage
 
 // Optional: Users can still enable GPU if they want to experiment
 if (process.env.ENABLE_GPU === "1") {
-  console.log("GPU acceleration manually enabled via ENABLE_GPU=1");
   app.enableHardwareAcceleration();
 }
 
@@ -41,12 +39,10 @@ const BACKEND_URL = `http://${BACKEND_HOST}:${BACKEND_PORT}`;
 
 function cleanupPythonProcess() {
     if (pythonProcess) {
-        console.log("Cleaning up Python process...");
         try {
             pythonProcess.kill('SIGTERM');
             setTimeout(() => {
                 if (pythonProcess && !pythonProcess.killed) {
-                    console.log("Force killing Python process...");
                     pythonProcess.kill('SIGKILL');
                 }
             }, 3000); // Reduced timeout for faster cleanup
@@ -64,11 +60,7 @@ function cleanupPythonProcess() {
         const pythonCmd = process.platform === "win32" ? "python" : "python3";
         
         exec(`${pythonCmd} "${killScript}"`, { cwd: pythonPath }, (error, stdout, stderr) => {
-            if (error) {
-                console.log("Kill script error (expected if no processes to kill):", error.message);
-            } else {
-                console.log("Kill script output:", stdout);
-            }
+            // Silent execution
         });
     } catch (error) {
         console.error("Error running kill script:", error);
@@ -111,34 +103,27 @@ function createWindow() {
     mainWindow.once("ready-to-show", () => {
         mainWindow.show();
         mainWindow.maximize();  // Ensure window is maximized
-        console.log("✅ Application started successfully in stable mode");
     });
 
     mainWindow.on('close', async (event) => {
         try {
-            console.log("[CLOSE] Starting CLEAN WORKFLOW cleanup on app close...");
-            
             // Set a timeout to force close if cleanup takes too long
             const cleanupTimeout = setTimeout(() => {
-                console.log("[CLOSE] Cleanup timeout reached, forcing close...");
                 cleanupPythonProcess();
                 mainWindow.destroy();
             }, 15000); // Increased timeout for thorough cleanup
             
             // PRESERVE SESSIONS CLEANUP SEQUENCE - Only clean locks and temp files
-            console.log("[CLOSE] Step 1: Stop active processes...");
             await Promise.allSettled([
                 // Stop all active processes but don't force disconnect
                 axios.post(`${BACKEND_URL}/api/stop-process`, { process_id: 'ALL' }, { timeout: 3000 })
             ]);
             
-            console.log("[CLOSE] Step 2: Clean temporary files and locks only...");
             await Promise.allSettled([
                 // Clear ONLY temporary sessions and lock files - preserve main sessions
                 axios.post(`${BACKEND_URL}/api/clear-session`, {}, { timeout: 3000 })
             ]);
             
-            console.log("[CLOSE] Step 3: Process cleanup...");
             await Promise.allSettled([
                 // Kill our app's Python processes
                 axios.post(`${BACKEND_URL}/api/kill-our-processes`, {}, { timeout: 3000 })
@@ -148,7 +133,6 @@ function createWindow() {
             await new Promise(resolve => setTimeout(resolve, 1000));
             
             clearTimeout(cleanupTimeout);
-            console.log("[CLOSE] CLEAN WORKFLOW cleanup completed successfully");
         } catch (error) {
             console.error("[CLOSE] Error during cleanup:", error);
         } finally {
@@ -194,13 +178,13 @@ function startPythonBackend() {
             },
         });
         
-        // Always log backend output for debugging
+        // Silent backend output
         pythonProcess.stdout.on('data', (data) => {
-            console.log(`Backend: ${data}`);
+            // Silent
         });
         
         pythonProcess.stderr.on('data', (data) => {
-            console.error(`Backend Error: ${data}`);
+            // Silent
         });
 
         // Resolve when process has spawned successfully
@@ -271,13 +255,11 @@ ipcMain.handle("select-files", async (event, options) => {
             try {
                 // Check if file exists and is accessible
                 if (!fs.existsSync(filePath)) {
-                    console.warn(`File does not exist: ${filePath}`);
                     return false;
                 }
                 
                 // Check file path length (Windows limit is ~260 characters)
                 if (filePath.length > 250) {
-                    console.warn(`File path too long: ${filePath}`);
                     return false;
                 }
                 
@@ -285,13 +267,11 @@ ipcMain.handle("select-files", async (event, options) => {
                 const fileName = path.basename(filePath);
                 const invalidChars = /[<>:"|?*]/;
                 if (invalidChars.test(fileName)) {
-                    console.warn(`File name contains invalid characters: ${fileName}`);
                     return false;
                 }
                 
                 return true;
             } catch (error) {
-                console.warn(`Error validating file path ${filePath}:`, error.message);
                 return false;
             }
         });
@@ -312,12 +292,6 @@ ipcMain.handle("select-directory", async () => {
 
 ipcMain.handle('api-request', async (event, { method, endpoint, data }) => {
     try {
-        // Only log API requests in debug mode
-        const debugMode = process.env.ELECTRON_DEBUG === '1';
-        if (debugMode) {
-            console.log(`[API REQUEST] ${method} ${BACKEND_URL}${endpoint}`);
-            if (data) console.log(`[API REQUEST] Data:`, JSON.stringify(data, null, 2));
-        }
         
         const config = {
             method,
@@ -334,7 +308,6 @@ ipcMain.handle('api-request', async (event, { method, endpoint, data }) => {
         
         const response = await axios(config);
         
-        if (debugMode) console.log(`[API SUCCESS] Status: ${response.status}`);
         return { success: true, data: response.data };
     } catch (error) {
         console.error(`[API ERROR] ${error.message}`);
