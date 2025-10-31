@@ -11,7 +11,6 @@
 function registerAllTutorials() {
   // Ensure tutorialSystem is available
   if (typeof tutorialSystem === "undefined") {
-    console.warn("Tutorial system not available yet, deferring registration");
     return;
   }
 
