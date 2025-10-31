@@ -13,8 +13,10 @@ class ImageHandler {
     this.currentProcessId = null;
     this.selectedImageIndex = null;
     this.previewMode = "original"; // 'original' or 'converted'
+    this.progressCheckInterval = null; // Track polling interval
 
     this.init();
+    this.loadSavedOutputDir(); // Load last used output directory
   }
 
   // Ensure UI and state are reset when images are cleared/removed
@@ -48,6 +50,31 @@ class ImageHandler {
     const convertBtn = document.getElementById("start-image-conversion");
     if (convertBtn) {
       convertBtn.disabled = true; // Disabled until images selected and output dir set
+    }
+  }
+
+  loadSavedOutputDir() {
+    // Load last used output directory from localStorage
+    try {
+      const savedDir = localStorage.getItem('imageConverterOutputDir');
+      if (savedDir) {
+        this.outputDir = savedDir;
+        const outputDirInput = document.getElementById("image-output-dir");
+        if (outputDirInput) {
+          outputDirInput.value = this.outputDir;
+        }
+      }
+    } catch (e) {
+      // Silent failure
+    }
+  }
+
+  saveOutputDir(dir) {
+    // Save output directory to localStorage for next session
+    try {
+      localStorage.setItem('imageConverterOutputDir', dir);
+    } catch (e) {
+      // Silent failure
     }
   }
 
@@ -122,7 +149,7 @@ class ImageHandler {
         }
       }
     } catch (error) {
-      console.error("Error checking ImageMagick:", error);
+      // Silent failure
     }
   }
 
@@ -171,7 +198,6 @@ class ImageHandler {
         this.app.showToast("success", "Images Added", `Added ${filePaths.length} image(s)`);
       }
     } catch (error) {
-      console.error("Error selecting images:", error);
       this.app.showToast("error", "Error", "Failed to select images");
     }
   }
@@ -532,11 +558,7 @@ class ImageHandler {
         // Metadata will be displayed on next list update
       }
     } catch (error) {
-      console.error("Error loading metadata:", error);
-      const metaEl = document.getElementById(`image-meta-${index}`);
-      if (metaEl) {
-        metaEl.textContent = "Error loading info";
-      }
+      // Silent failure - metadata loading is non-critical
     }
   }
 
@@ -683,6 +705,7 @@ class ImageHandler {
       // The IPC handler returns a string directly (or undefined if canceled)
       if (directory) {
         this.outputDir = directory;
+        this.saveOutputDir(directory); // Save for next session
         const outputDirInput = document.getElementById("image-output-dir");
         if (outputDirInput) {
           outputDirInput.value = this.outputDir;
@@ -693,7 +716,6 @@ class ImageHandler {
         this.app.showToast("success", "Output Directory Set", "Ready to convert images");
       }
     } catch (error) {
-      console.error("Error selecting directory:", error);
       this.app.showToast("error", "Error", "Failed to select directory");
     }
   }
@@ -782,9 +804,7 @@ class ImageHandler {
         process_id: processId
       };
 
-      console.log("[IMAGE] Sending batch request:", payload);
       const response = await this.app.apiRequest("POST", "/api/image/process-batch", payload);
-      console.log("[IMAGE] Batch response:", response);
 
       if (response && response.success) {
         this.currentProcessId = processId;
@@ -794,7 +814,6 @@ class ImageHandler {
         throw new Error(response?.error || "Failed to start conversion");
       }
     } catch (error) {
-      console.error("Conversion error:", error);
       this.app.showToast("error", "Conversion Failed", error.message || "Failed to start conversion");
 
       // Reset button state
@@ -819,14 +838,20 @@ class ImageHandler {
     const startBtn = document.getElementById("start-image-conversion");
 
     let pollCount = 0;
-    const maxPolls = 200; // 60 seconds max
+    const maxPolls = 300; // Increased timeout for large batches
+    let lastUpdatedCount = 0; // Track when images actually update
+
+    // Clear any existing interval
+    if (this.progressCheckInterval) {
+      clearInterval(this.progressCheckInterval);
+      this.progressCheckInterval = null;
+    }
 
     const checkProgress = async () => {
       pollCount++;
 
       try {
         const response = await this.app.apiRequest("GET", `/api/image/process-status/${processId}`);
-        console.log("[MONITOR] Progress check response:", response);
 
         if (response && response.success && response.process) {
           const proc = response.process;
@@ -850,6 +875,7 @@ class ImageHandler {
           // REAL-TIME UPDATE: Update list as each image completes
           if (proc.results && proc.results.length > 0) {
             let updated = false;
+            let newlyCompleted = 0;
             proc.results.forEach(result => {
               const img = this.imageFiles.find(img => img.path === result.input_path);
               if (img && result.success && !img.converted) { // Only update if not already updated
@@ -858,26 +884,43 @@ class ImageHandler {
                 img.convertedMetadata = result.final_metadata;
                 img.status = result.final_metadata && result.final_metadata.file_size_kb <= 512 ? "success" : "warning";
                 updated = true;
+                newlyCompleted++;
               } else if (img && !result.success && img.status === "processing") {
                 img.status = "error";
+                img.errorMessage = result.error || "Conversion failed";
                 updated = true;
+                newlyCompleted++;
               }
             });
             // Update the list view in real-time if we made changes
             if (updated) {
+              lastUpdatedCount += newlyCompleted;
               this.updateImageList();
+              // Update preview if currently selected image was just converted
+              if (this.selectedImageIndex !== null) {
+                const currentImg = this.imageFiles[this.selectedImageIndex];
+                if (currentImg && currentImg.converted) {
+                  this.updateImageDetails(currentImg);
+                }
+              }
             }
           }
 
           // Check if completed or failed
-          console.log("[MONITOR] Current status:", proc.status, "Progress:", proc.progress);
-          
           if (proc.status === "completed") {
-            console.log("[MONITOR] Conversion completed", proc);
+            // Clear polling interval
+            if (this.progressCheckInterval) {
+              clearInterval(this.progressCheckInterval);
+              this.progressCheckInterval = null;
+            }
             this.handleConversionComplete(proc);
             return;
           } else if (proc.status === "failed") {
-            console.error("[MONITOR] Conversion failed", proc);
+            // Clear polling interval
+            if (this.progressCheckInterval) {
+              clearInterval(this.progressCheckInterval);
+              this.progressCheckInterval = null;
+            }
             const errorMsg = proc.error || proc.message || "Conversion process failed";
             this.app.showToast("error", "Conversion Failed", errorMsg);
             if (statusEl) {
@@ -886,8 +929,6 @@ class ImageHandler {
             }
             // Still update what we have and extract specific error
             if (proc.results && proc.results.length > 0) {
-              console.log("[MONITOR] Updating results despite failure", proc.results);
-
               // Get the first error message for display
               const firstError = proc.results.find(r => !r.success && r.error);
               if (firstError && firstError.error) {
@@ -918,23 +959,28 @@ class ImageHandler {
             }
             // Reset button
             if (startBtn) {
-              startBtn.disabled = false;
+              const selectedCount = this.imageFiles.filter(img => img.selected).length;
+              startBtn.disabled = selectedCount === 0 || !this.outputDir;
               startBtn.innerHTML = '<i class="fas fa-magic"></i> Convert';
             }
             return;
           }
 
-          // Continue monitoring
-          setTimeout(checkProgress, 300); // Faster polling for better responsiveness
+          // Continue monitoring - use slower polling to avoid overwhelming the backend
+          setTimeout(checkProgress, 500); // Balanced polling rate
         } else {
           // Handle case where process is not found or response is invalid
-          console.warn("[MONITOR] Invalid response or process not found", response);
 
           // If we've polled too many times, give up
           if (pollCount >= maxPolls) {
+            if (this.progressCheckInterval) {
+              clearInterval(this.progressCheckInterval);
+              this.progressCheckInterval = null;
+            }
             this.app.showToast("error", "Conversion Timeout", "Process monitoring timed out");
             if (startBtn) {
-              startBtn.disabled = false;
+              const selectedCount = this.imageFiles.filter(img => img.selected).length;
+              startBtn.disabled = selectedCount === 0 || !this.outputDir;
               startBtn.innerHTML = '<i class="fas fa-magic"></i> Convert';
             }
             return;
@@ -944,13 +990,17 @@ class ImageHandler {
           setTimeout(checkProgress, 500);
         }
       } catch (error) {
-        console.error("[MONITOR] Error checking progress:", error);
 
         // If we've polled too many times, give up
         if (pollCount >= maxPolls) {
+          if (this.progressCheckInterval) {
+            clearInterval(this.progressCheckInterval);
+            this.progressCheckInterval = null;
+          }
           this.app.showToast("error", "Conversion Error", error.message || "Failed to monitor conversion");
           if (startBtn) {
-            startBtn.disabled = false;
+            const selectedCount = this.imageFiles.filter(img => img.selected).length;
+            startBtn.disabled = selectedCount === 0 || !this.outputDir;
             startBtn.innerHTML = '<i class="fas fa-magic"></i> Convert';
           }
           return;
@@ -961,38 +1011,48 @@ class ImageHandler {
       }
     };
 
+    // Start monitoring
     checkProgress();
   }
 
   handleConversionComplete(proc) {
-    console.log("[IMAGE] handleConversionComplete called", proc);
     const statusEl = document.getElementById("image-conversion-status");
     const startBtn = document.getElementById("start-image-conversion");
 
+    // Update status display
     if (statusEl) {
       const statusText = statusEl.querySelector(".status-text");
       const progressText = statusEl.querySelector(".progress-text");
       if (statusText) statusText.textContent = "Completed";
       if (progressText) {
         const successCount = proc.success_count || 0;
-        progressText.textContent = `${successCount} successful, ${proc.failed_count || 0} failed`;
+        const totalCount = proc.total_files || 0;
+        progressText.textContent = `✅ ${successCount} / ${totalCount} images converted`;
       }
     }
 
-    // Reset the convert button
-    console.log("[IMAGE] Resetting button, startBtn:", startBtn);
+    // CRITICAL: Reset the convert button to default state
     if (startBtn) {
-      startBtn.disabled = false;
+      const selectedCount = this.imageFiles.filter(img => img.selected).length;
+      const canConvert = selectedCount > 0 && this.outputDir;
+      startBtn.disabled = !canConvert;
       startBtn.innerHTML = '<i class="fas fa-magic"></i> Convert';
-      console.log("[IMAGE] Button reset complete");
-    } else {
-      console.error("[IMAGE] startBtn not found!");
     }
 
-    this.app.showToast("success", "Conversion Complete",
-      `Successfully converted ${proc.success_count || 0} of ${proc.total_files || 0} images`);
+    // Show success toast with detailed stats
+    const successCount = proc.success_count || 0;
+    const failedCount = proc.failed_count || 0;
+    const totalCount = proc.total_files || 0;
+    
+    if (successCount > 0) {
+      this.app.showToast("success", "Conversion Complete",
+        `✅ ${successCount} / ${totalCount} images converted successfully${failedCount > 0 ? ` (${failedCount} failed)` : ''}`);
+    } else {
+      this.app.showToast("error", "Conversion Failed",
+        `❌ All ${totalCount} images failed to convert`);
+    }
 
-    // Update image files with conversion results
+    // Final update of all image files with conversion results
     if (proc.results && proc.results.length > 0) {
       proc.results.forEach(result => {
         const img = this.imageFiles.find(img => img.path === result.input_path);
@@ -1004,10 +1064,12 @@ class ImageHandler {
             img.status = result.final_metadata && result.final_metadata.file_size_kb <= 512 ? "success" : "warning";
           } else {
             img.status = "error";
+            img.errorMessage = result.error || "Conversion failed";
           }
         }
       });
 
+      // Force complete UI update
       this.updateImageList();
 
       // Update preview if current image was converted
