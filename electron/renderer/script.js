@@ -184,7 +184,6 @@ class TelegramUtilities {
             return segments[0].segment;
           }
         } catch (e) {
-          console.warn("[EMOJI] Segmenter failed, using fallback:", e.message);
         }
       }
 
@@ -1894,7 +1893,6 @@ class TelegramUtilities {
 
       // If modal is still not visible, attempt to fix it
       if (computedStyle.display === "none" || parseFloat(computedStyle.opacity) < 0.5) {
-        console.warn("Modal visibility issue detected - attempting to fix");
         // Force display and opacity
         modal.style.display = "flex";
         modal.style.opacity = "1";
@@ -2029,11 +2027,9 @@ class TelegramUtilities {
   // TEST METHOD - Remove in production
   testSuccessModal() {
     const testLink = "https://t.me/addstickers/test_sticker_pack_123";
-    console.log(`🗋 [TEST] Triggering success modal with test link: ${testLink}`);
     this.showSuccessModal(testLink);
   }
   createAnotherPack() {
-    console.log("🔄 [RESET] Starting complete process reset...");
 
     this.hideSuccessModal();
 
@@ -2133,10 +2129,8 @@ class TelegramUtilities {
         packNameInput.focus();
       }
 
-      console.log("🔄 [RESET] Form reset completed - Telegram connection preserved");
     }, 100);
 
-    console.log("🔄 [RESET] Complete process reset finished!");
     this.showToast("success", "Ready for New Pack", "Form cleared - ready to create another sticker pack!");
     this.addStatusItem("🔄 Ready to create new sticker pack", "ready");
   }
@@ -2154,7 +2148,6 @@ class TelegramUtilities {
       }
     }
 
-    console.log("🔄 [MANUAL_RESET] User initiated form reset...");
 
     // Optional: Clear any active sticker processes in the backend
     this.clearActiveProcesses();
@@ -2168,11 +2161,9 @@ class TelegramUtilities {
       // This is optional - clear any running sticker processes
       const response = await this.apiRequest("POST", "/api/clear-sticker-processes");
       if (response.success) {
-        console.log("🔄 [RESET] Backend sticker processes cleared");
       }
     } catch (error) {
       // Don't block reset if this fails
-      console.log("🔄 [RESET] Backend process clearing skipped:", error.message);
     }
   }
 
@@ -2467,14 +2458,12 @@ class TelegramUtilities {
 
   // Virtual scrolling implementation for video files
   renderVirtualVideoList(container) {
-    console.log(`🚀 Virtual scrolling: ${this.videoFiles.length} files`);
 
     // Match CSS: min-height (70px) + margin (4px) = 74px per item
     const itemHeight = 74;
     const visibleHeight = 350; // Fixed height from CSS
     const totalHeight = this.videoFiles.length * itemHeight;
 
-    console.log(`📐 Container height: ${visibleHeight}px, Total height: ${totalHeight}px`);
 
     // Setup container
     container.innerHTML = "";
@@ -2509,7 +2498,6 @@ class TelegramUtilities {
         Math.ceil((scrollTop + visibleHeight) / itemHeight) + renderBuffer
       );
 
-      console.log(`👁️ Rendering items ${startIndex} to ${endIndex}`);
 
       // Only re-render if scrolled significantly
       if (Math.abs(scrollTop - lastRenderTop) < itemHeight / 2 && itemsContainer.children.length > 0) return;
@@ -2533,7 +2521,6 @@ class TelegramUtilities {
       itemsContainer.innerHTML = "";
       itemsContainer.appendChild(fragment);
 
-      console.log(`✅ Rendered ${itemsContainer.children.length} visible items`);
     };
 
     // Debounced scroll handler
@@ -2988,7 +2975,6 @@ class TelegramUtilities {
         // Check timeout
         const processInfo = this.activeProcesses.get(processId);
         if (!processInfo || Date.now() - processInfo.startTime > MAX_OPERATION_TIME) {
-          if (RENDERER_DEBUG) console.warn("Process timeout or not found");
           this.stopProgressMonitoring();
           this.resetOperationState();
           this.showToast("warning", "Timeout", "Operation took too long");
@@ -3098,7 +3084,6 @@ class TelegramUtilities {
 
     // Update all file statuses based on results
     if (processData.file_statuses) {
-      if (RENDERER_DEBUG) console.log("🔄 Updating file statuses from completion data:", processData.file_statuses);
       Object.keys(processData.file_statuses).forEach(index => {
         const fileStatus = processData.file_statuses[index];
         const file = this.videoFiles[parseInt(index)];
@@ -3120,16 +3105,10 @@ class TelegramUtilities {
             file.stage = fileStatus.stage || "Processing";
           }
 
-          if (RENDERER_DEBUG) console.log(`📁 File ${index} (${file.name}):`);
-          if (RENDERER_DEBUG) console.log(`   Status: ${oldStatus} → ${file.status}`);
-          if (RENDERER_DEBUG) console.log(`   Progress: ${oldProgress}% → ${file.progress}%`);
-          if (RENDERER_DEBUG) console.log(`   Stage: ${oldStage} → ${file.stage}`);
         } else {
-          if (RENDERER_DEBUG) console.warn(`❌ File index ${index} not found in videoFiles array`);
         }
       });
     } else {
-      if (RENDERER_DEBUG) console.warn("⚠️ No file_statuses in completion data");
     }
 
     // Update UI
@@ -3139,8 +3118,6 @@ class TelegramUtilities {
     const allFilesCompleted = this.videoFiles.every(file => file.status === "completed");
     const anyFilesFailed = this.videoFiles.some(file => file.status === "error");
 
-    if (RENDERER_DEBUG) console.log("🎯 All files completed:", allFilesCompleted);
-    if (RENDERER_DEBUG) console.log("🎯 Any files failed:", anyFilesFailed);
 
     // Show toast notification
     if (allFilesCompleted) {
@@ -3170,23 +3147,14 @@ class TelegramUtilities {
 
     // Only reset operation state if ALL files are completed
     if (allFilesCompleted) {
-      if (RENDERER_DEBUG) console.log("🎯 ALL files completed, resetting operation state");
       this.resetOperationState();
     } else {
-      if (RENDERER_DEBUG) console.log("🎯 Not all files completed, keeping operation state active");
-      if (RENDERER_DEBUG) console.log("🎯 Remaining files:", this.videoFiles.filter(f => f.status !== "completed").map(f => f.name));
     }
 
-    if (RENDERER_DEBUG) console.log("=== PROCESS COMPLETION END ===");
   }
 
   // Improved reset method
   resetOperationState() {
-    if (RENDERER_DEBUG) console.log("=== RESET OPERATION STATE DEBUG ===");
-    if (RENDERER_DEBUG) console.log("Before reset - Current operation:", this.currentOperation);
-    if (RENDERER_DEBUG) console.log("Before reset - Current process ID:", this.currentProcessId);
-    if (RENDERER_DEBUG) console.log("Before reset - Is paused:", this.isPaused);
-    if (RENDERER_DEBUG) console.log("Before reset - Progress interval:", this.progressInterval);
 
     // Clear all operation flags
     this.currentOperation = null;
@@ -3236,11 +3204,6 @@ class TelegramUtilities {
     // Update button states
     this.updateButtonStates();
 
-    if (RENDERER_DEBUG) console.log("After reset - Current operation:", this.currentOperation);
-    if (RENDERER_DEBUG) console.log("After reset - Current process ID:", this.currentProcessId);
-    if (RENDERER_DEBUG) console.log("After reset - Is paused:", this.isPaused);
-    if (RENDERER_DEBUG) console.log("After reset - Progress interval:", this.progressInterval);
-    if (RENDERER_DEBUG) console.log("=== RESET COMPLETE ===");
   }
 
   async startHexEdit() {
@@ -3354,7 +3317,6 @@ class TelegramUtilities {
     this.progressInterval = setInterval(async () => {
       // Check for long-running operation
       if (Date.now() - operationStartTime > LONG_OPERATION_TIMEOUT) {
-        if (RENDERER_DEBUG) console.warn("[PROGRESS] Operation exceeded maximum time limit");
         this.stopProgressMonitoring();
         this.resetOperationState();
         this.showToast("warning", "Operation Timeout", "Operation took too long and was stopped");
@@ -3376,7 +3338,6 @@ class TelegramUtilities {
         this.logProgressDetails(progress);
 
         // Existing progress handling logic
-        if (RENDERER_DEBUG) console.log(`[PROGRESS] ${processId}: ${progress.progress}% - ${progress.currentStage}`);
 
         // Update pause state if changed
         if (progress.paused !== this.isPaused) {
@@ -3436,7 +3397,6 @@ class TelegramUtilities {
 
     let consecutiveErrors = 0;
     const startTs = Date.now();
-    if (RENDERER_DEBUG) console.log("[HEX] monitor:start", { processId, files: this.videoFiles.length });
 
     // For hex edit, check progress immediately since it's very fast
     this.checkHexProgressImmediately(processId);
@@ -3446,7 +3406,6 @@ class TelegramUtilities {
 
       // Timeout guard
       if (Date.now() - startTs > LONG_OPERATION_TIMEOUT) {
-        if (RENDERER_DEBUG) console.warn("[HEX] monitor:timeout - stopping polling");
         clearInterval(this.progressInterval);
         this.progressInterval = null;
         this.resetOperationState();
@@ -3456,7 +3415,6 @@ class TelegramUtilities {
 
       try {
         const progress = await this.getHexEditProgress(processId);
-        if (RENDERER_DEBUG) console.log("[HEX] monitor:data", progress);
 
         // Update overall UI for hex edit
         this.updateHexOverallProgress(progress);
@@ -3465,14 +3423,12 @@ class TelegramUtilities {
         this.updateVideoFileList();
 
         if (progress.status === "completed" || progress.status === "error") {
-          if (RENDERER_DEBUG) console.log("[HEX] monitor:complete", { status: progress.status });
           clearInterval(this.progressInterval);
           this.progressInterval = null;
           await this.handleConversionComplete(progress); // Reuse completion UI with wasHexEdit detection inside
         }
       } catch (err) {
         consecutiveErrors += 1;
-        if (RENDERER_DEBUG) console.warn("[HEX] monitor:error", { consecutiveErrors, err: err?.message });
         if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
           clearInterval(this.progressInterval);
           this.progressInterval = null;
@@ -3488,12 +3444,10 @@ class TelegramUtilities {
   // Immediate progress check for hex edit since it's very fast
   async checkHexProgressImmediately(processId) {
     try {
-      if (RENDERER_DEBUG) console.log("[HEX] immediate:check", { processId });
       const progress = await this.getHexEditProgress(processId);
 
       // If hex edit is already completed (very fast operation)
       if (progress.status === "completed") {
-        if (RENDERER_DEBUG) console.log("[HEX] immediate:completed", progress);
         clearInterval(this.progressInterval);
         this.progressInterval = null;
         await this.handleConversionComplete(progress);
@@ -3505,7 +3459,6 @@ class TelegramUtilities {
       this.updateVideoFileList();
 
     } catch (err) {
-      if (RENDERER_DEBUG) console.warn("[HEX] immediate:error", err?.message);
       // Continue with normal polling if immediate check fails
     }
   }
@@ -3518,7 +3471,6 @@ class TelegramUtilities {
     const data = resp.data || {};
     const fileStatuses = data.file_statuses || {};
     const keys = Object.keys(fileStatuses);
-    if (RENDERER_DEBUG) console.log("[HEX] progress:raw", { keysCount: keys.length, keys });
 
     // Apply statuses to our local videoFiles array
     keys.forEach((k) => {
@@ -3541,7 +3493,6 @@ class TelegramUtilities {
       }
 
       if (before.s !== file.status || before.p !== file.progress || before.st !== file.stage) {
-        if (RENDERER_DEBUG) console.log("[HEX] file:update", { idx, before, after: { s: file.status, p: file.progress, st: file.stage } });
       }
     });
 
@@ -3589,7 +3540,7 @@ class TelegramUtilities {
   }
 
   logProgressDetails(progress) {
-    if (RENDERER_DEBUG) console.log("[PROGRESS DETAILS]", {
+    console.log("Progress Details:", {
       processId: this.currentProcessId,
       progress: progress.progress,
       status: progress.status,
@@ -3613,7 +3564,6 @@ class TelegramUtilities {
   }
 
   async handleConversionComplete(progress) {
-    if (RENDERER_DEBUG) console.log(`[COMPLETE] Operation finished with status: ${progress.status}`);
 
     this.stopProgressMonitoring();
     const wasHexEdit = this.currentOperation === "hexediting";
@@ -3806,7 +3756,6 @@ class TelegramUtilities {
       if (!response.success) {
         if (RENDERER_DEBUG) console.error(`Progress check failed for ${processId}:`, response.error);
         if (response.details && response.details.active_processes) {
-          if (RENDERER_DEBUG) console.log("Active processes:", response.details.active_processes);
         }
         return null;
       }
@@ -3844,12 +3793,10 @@ class TelegramUtilities {
 
       // Update the videoFiles array immediately for both conversion and hex edit
       if ((this.currentOperation === "converting" || this.currentOperation === "hexediting") && Object.keys(fileStatuses).length > 0) {
-        if (RENDERER_DEBUG) console.log(`[PROGRESS] Updating ${Object.keys(fileStatuses).length} file statuses for ${this.currentOperation}`);
 
         Object.entries(fileStatuses).forEach(([idx, fs]) => {
           const file = this.videoFiles[parseInt(idx)];
           if (!file) {
-            if (RENDERER_DEBUG) console.warn(`[PROGRESS] File at index ${idx} not found in videoFiles`);
             return;
           }
 
@@ -3864,7 +3811,7 @@ class TelegramUtilities {
 
           // Log if there were changes
           if (oldStatus !== file.status || oldProgress !== file.progress || oldStage !== file.stage) {
-            if (RENDERER_DEBUG) console.log(`[PROGRESS] File ${idx} updated:`, {
+            console.log("File status changed:", {
               status: `${oldStatus} → ${file.status}`,
               progress: `${oldProgress}% → ${file.progress}%`,
               stage: `${oldStage} → ${file.stage}`
@@ -4006,7 +3953,6 @@ class TelegramUtilities {
   // TELEGRAM STICKER BOT METHODS
   // =============================================
   async disconnectTelegram() {
-    if (RENDERER_DEBUG) console.log("[DEBUG] disconnectTelegram called");
 
     try {
       this.updateTelegramStatus("connecting"); // Show as connecting/processing
@@ -4041,7 +3987,6 @@ class TelegramUtilities {
     try {
       // Check if there's already a valid session first when user wants to connect
       try {
-        if (RENDERER_DEBUG) console.log("[DEBUG] User wants to connect - checking for existing session...");
 
         const sessionResponse = await this.apiRequest("GET", "/api/telegram/session-status");
 
@@ -4049,21 +3994,17 @@ class TelegramUtilities {
           const { session_exists, session_valid } = sessionResponse.data;
 
           if (session_exists && session_valid) {
-            if (RENDERER_DEBUG) console.log("[DEBUG] Found valid existing session - using it");
             this.updateTelegramStatus("connected");
             this.showToast("success", "Already Connected", "Using existing Telegram session");
             return;
           } else if (session_exists && !session_valid) {
-            if (RENDERER_DEBUG) console.log("[DEBUG] Found invalid session - cleaning up before new connection");
             try {
               await this.cleanupTelegramSession();
             } catch (cleanupError) {
-              console.warn("[DEBUG] Could not clean up invalid session:", cleanupError);
             }
           }
         }
       } catch (error) {
-        if (RENDERER_DEBUG) console.warn("[DEBUG] Could not check existing session, proceeding with new connection:", error);
       }
 
       // ... rest of connection logic ...
@@ -4072,12 +4013,6 @@ class TelegramUtilities {
       const apiIdInput = document.getElementById("telegram-api-id");
       const apiHashInput = document.getElementById("telegram-api-hash");
       const phoneInput = document.getElementById("telegram-phone");
-
-      if (RENDERER_DEBUG) console.log("[DEBUG] connectTelegram called - checking inputs:", {
-        apiIdInput: !!apiIdInput,
-        apiHashInput: !!apiHashInput,
-        phoneInput: !!phoneInput
-      });
 
       if (!apiIdInput || !apiHashInput || !phoneInput) {
         if (RENDERER_DEBUG) console.error("[DEBUG] Missing input elements:", {
@@ -4092,12 +4027,6 @@ class TelegramUtilities {
       const apiId = apiIdInput.value.trim();
       const apiHash = apiHashInput.value.trim();
       const phoneNumber = phoneInput.value.trim();
-
-      if (RENDERER_DEBUG) console.log("[DEBUG] Input values:", {
-        apiId: apiId ? "provided" : "empty",
-        apiHash: apiHash ? "provided" : "empty",
-        phoneNumber: phoneNumber ? "provided" : "empty"
-      });
 
       // Validate inputs
       if (!apiId || !apiHash || !phoneNumber) {
@@ -4128,7 +4057,6 @@ class TelegramUtilities {
 
       this.showLoadingOverlay("Connecting to Telegram...");
 
-      if (RENDERER_DEBUG) console.log("[DEBUG] Sending connection request to backend");
 
       let response;
       let retryCount = 0;
@@ -4143,7 +4071,6 @@ class TelegramUtilities {
             process_id: "connect_" + Date.now(),
           });
 
-          if (RENDERER_DEBUG) console.log("[DEBUG] Connection response received:", response);
           break; // Success, exit retry loop
 
         } catch (error) {
@@ -4200,7 +4127,6 @@ class TelegramUtilities {
           }, 500);
         } else {
           // Successful connection
-          if (RENDERER_DEBUG) console.log("[DEBUG] Connection successful - updating UI");
 
           // Show session reuse information
           let successMessage = "Successfully connected to Telegram";
@@ -4342,9 +4268,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           const result = (response.data !== undefined && response.data !== null) ? response.data : response;
           // Check if 2FA password is needed
           const needsPassword = !!(result && result.needs_password);
-          if (RENDERER_DEBUG) console.debug("[verify-code] response:", response, "computed needsPassword=", needsPassword);
-          if (RENDERER_DEBUG) console.debug("[verify-code] result object:", result);
-          if (RENDERER_DEBUG) console.debug("[verify-code] needs_password field:", result?.needs_password);
           if (needsPassword) {
             this.pendingCode = false;
             this.pendingPassword = true;
@@ -4503,7 +4426,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       // Validate files before processing
       const validFiles = files.filter(file => {
         if (!file || typeof file !== "string") {
-          console.warn("Invalid file path:", file);
           return false;
         }
         return true;
@@ -4601,7 +4523,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       // Validate files before processing
       const validFiles = files.filter(file => {
         if (!file || typeof file !== "string") {
-          console.warn("Invalid file path:", file);
           return false;
         }
         return true;
@@ -4691,7 +4612,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   updateMediaFileList() {
     const container = document.getElementById("sticker-media-list");
     if (!container) {
-      if (RENDERER_DEBUG) console.warn("⚠️ sticker-media-list container not found");
       // Try again after a short delay in case DOM is still loading
       setTimeout(() => {
         const retryContainer = document.getElementById("sticker-media-list");
@@ -4877,7 +4797,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
 
       // Log status change for debugging
       if (oldStatus !== status) {
-        console.log(`🔄 [MEDIA_STATUS] File ${fileIndex} (${file.name}): ${oldStatus} → ${status}`);
       }
 
       // Update the specific media item in the DOM without full refresh
@@ -5519,7 +5438,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           // CRITICAL FIX: Handle backend bug where both icon_request and url_name_taken are set
           // Priority: Icon request comes FIRST, then URL conflict
           if (isIconRequest && isUrlConflict) {
-            console.warn("[MONITORING] Backend bug: Both icon_request and url_name_taken are set! Prioritizing icon request.");
             // Force isUrlConflict to false to handle icon first
             isUrlConflict = false;
           }
@@ -6113,7 +6031,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       this.addStatusItem(`Sticker pack creation failed: ${progressData?.error || "Unknown error"}`, "error");
     } else {
       // CRITICAL FIX: Prevent duplicate completion messages
-      console.log("Workflow already completed, skipping duplicate completion message");
     }
     this.updateStats();
 
@@ -6175,11 +6092,9 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       });
 
       if (response.success) {
-        console.log("✅ [STATS] Successfully updated sticker stats");
         // Force refresh database stats display
         this.updateDatabaseStats();
       } else {
-        console.warn("⚠️ [STATS] Failed to update sticker stats:", response.error);
       }
     } catch (error) {
       console.error("❌ [STATS] Error updating sticker creation stats:", error);
@@ -6383,10 +6298,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
 
   // Icon Selection Modal Functions
   showIconModal(iconRequestMessage) {
-    console.log(`🖼️ [ICON_MODAL] Showing icon modal with message: ${iconRequestMessage}`);
     // Guard: suppress icon modal if verification flow is active
     if (this.pendingCode || this.pendingPassword) {
-      console.warn("[ICON_MODAL] Skipped because verification modal is active");
       return;
     }
     // DOM-based guard: if code/password modal is visible, skip
@@ -6396,7 +6309,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       const codeVisible = codeModal && codeModal.style && codeModal.style.display && codeModal.style.display !== "none";
       const passVisible = passModal && passModal.style && passModal.style.display && passModal.style.display !== "none";
       if (codeVisible || passVisible) {
-        console.warn("[ICON_MODAL] Skipped due to verification modal visible (DOM)");
         return;
       }
     } catch { }
@@ -6444,7 +6356,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   }
 
   showUrlNameModal(takenUrlName, attemptNumber, maxAttempts, processId = null) {
-    console.log(`🔗 [URL_MODAL] Showing URL name modal - taken: ${takenUrlName}, attempt: ${attemptNumber}/${maxAttempts}`);
 
     // Store process ID for later use
     if (processId) {
@@ -7610,7 +7521,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   async forceUpdateDatabaseStats() {
     try {
       await this.updateDatabaseStats();
-      if (RENDERER_DEBUG) console.log("🔄 Database stats force updated");
     } catch (e) {
       console.error("❌ forceUpdateDatabaseStats failed:", e);
     }
@@ -7843,10 +7753,8 @@ This action cannot be undone. Are you sure?
         // Clear backend session
         this.apiRequest("POST", "/api/clear-session")
           .then(() => {
-            if (RENDERER_DEBUG) console.log("Backend session cleared");
           })
           .catch(err => {
-            if (RENDERER_DEBUG) console.log("Failed to clear backend session:", err);
           });
 
         this.showToast(
@@ -8340,7 +8248,6 @@ This action cannot be undone. Are you sure?
     const tabsContainer = document.querySelector(".emoji-tabs");
 
     if (!tabsContainer) {
-      console.log("Emoji tabs container not found");
       return;
     }
 
@@ -8635,7 +8542,6 @@ This action cannot be undone. Are you sure?
     projectLinks.forEach(link => {
       link.addEventListener("click", (e) => {
         // Track project clicks
-        if (RENDERER_DEBUG) console.log("🚀 Project link clicked:", link.href);
         this.showToast("info", "Opening Project", "Opening project in your browser...");
       });
     });
@@ -8645,7 +8551,6 @@ This action cannot be undone. Are you sure?
     const channelBtn = document.querySelector(".channel-join-btn");
     if (channelBtn) {
       channelBtn.addEventListener("click", (e) => {
-        if (RENDERER_DEBUG) console.log("📱 Channel join button clicked");
         this.showToast("success", "Joining Channel", "Opening Telegram channel in your browser...");
       });
     }
@@ -8813,7 +8718,6 @@ This action cannot be undone. Are you sure?
 
   initializeNavigation() {
     const navItems = document.querySelectorAll(".nav-item");
-    if (RENDERER_DEBUG) console.log("Navigation items:", navItems);
 
     navItems.forEach((item) => {
       item.addEventListener("click", () => {
@@ -8824,7 +8728,6 @@ This action cannot be undone. Are you sure?
         item.classList.add("active");
 
         const tabId = item.getAttribute("data-tab");
-        if (RENDERER_DEBUG) console.log("Clicked tab:", tabId);
 
         this.handleTabSwitch(tabId);
       });
@@ -8834,10 +8737,8 @@ This action cannot be undone. Are you sure?
     const initialActiveTab = document.querySelector(".nav-item.active");
     if (initialActiveTab) {
       const initialTabId = initialActiveTab.getAttribute("data-tab");
-      if (RENDERER_DEBUG) console.log("Initial active tab:", initialTabId);
       this.handleTabSwitch(initialTabId);
     } else {
-      if (RENDERER_DEBUG) console.warn("No initial active tab found");
     }
   }
 
@@ -8970,7 +8871,6 @@ This action cannot be undone. Are you sure?
         };
       }
     } catch (error) {
-      if (RENDERER_DEBUG) console.warn(`Failed to get metadata for ${filePath}:`, error);
     }
 
     // Fallback: try to get basic file size
@@ -8989,7 +8889,6 @@ This action cannot be undone. Are you sure?
         };
       }
     } catch (error) {
-      if (RENDERER_DEBUG) console.warn(`Failed to analyze video ${filePath}:`, error);
     }
 
     return {
@@ -9036,7 +8935,6 @@ This action cannot be undone. Are you sure?
       // Encrypt sensitive data before storing
       const encryptedValue = this.encryptData(value);
       localStorage.setItem(key, encryptedValue);
-      if (RENDERER_DEBUG) console.log(`[SECURE] Stored ${key} securely`);
     } catch (error) {
       if (RENDERER_DEBUG) console.error(`[SECURE] Error storing ${key}:`, error);
       this.showToast("error", "Credential Storage Error", "Failed to securely store credentials");
@@ -9176,7 +9074,6 @@ This action cannot be undone. Are you sure?
         localStorage.setItem("telegram_recent_phones", JSON.stringify(uniqueRecentPhones));
       }
 
-      if (RENDERER_DEBUG) console.log("[PHONE] Phone number saved successfully");
     } catch (error) {
       if (RENDERER_DEBUG) console.error("[PHONE] Error saving phone number:", error);
     }
@@ -9267,7 +9164,6 @@ This action cannot be undone. Are you sure?
   // Check for existing Telegram session on startup
   async checkExistingConnection() {
     try {
-      if (RENDERER_DEBUG) console.log("[DEBUG] Checking for existing Telegram session...");
 
       const response = await this.apiRequest("GET", "/api/telegram/session-status");
 
@@ -9275,13 +9171,11 @@ This action cannot be undone. Are you sure?
         const { session_exists, session_valid } = response.data;
 
         if (session_exists && session_valid) {
-          if (RENDERER_DEBUG) console.log("[DEBUG] Found valid existing session - setting connected status");
           this.updateTelegramStatus("connected");
           return true;
         }
       }
 
-      if (RENDERER_DEBUG) console.log("[DEBUG] No valid session found - setting disconnected status");
       this.updateTelegramStatus("disconnected");
       return false;
 
@@ -9372,13 +9266,6 @@ This action cannot be undone. Are you sure?
     const phoneInput = document.getElementById("telegram-phone");
     const connectBtn = document.getElementById("connect-telegram");
 
-    if (RENDERER_DEBUG) console.log("[DEBUG] Telegram form elements check:", {
-      apiIdInput: !!apiIdInput,
-      apiHashInput: !!apiHashInput,
-      phoneInput: !!phoneInput,
-      connectBtn: !!connectBtn
-    });
-
     if (!connectBtn) {
       if (RENDERER_DEBUG) console.error("[DEBUG] Critical: Connect button not found!");
       return;
@@ -9395,7 +9282,6 @@ This action cannot be undone. Are you sure?
     // Sync visibility icons
     this.syncVisibilityIcons?.();
 
-    if (RENDERER_DEBUG) console.log("[DEBUG] Telegram connection initialization complete");
   }
 
   syncVisibilityIcons() {
@@ -9519,7 +9405,6 @@ if (document.readyState === "loading") {
     window.app = app;
     // Force immediate database stats update on app startup
     app.forceUpdateDatabaseStats();
-    if (RENDERER_DEBUG) console.log("✅ App initialized after DOM ready");
   });
 } else {
   // DOM is already loaded (shouldn't happen in normal flow but just in case)
@@ -9528,7 +9413,6 @@ if (document.readyState === "loading") {
   window.app = app;
   // Force immediate database stats update on app startup
   app.forceUpdateDatabaseStats();
-  if (RENDERER_DEBUG) console.log("✅ App initialized (DOM was already ready)");
 }
 
 // Additional global functions for inline event handlers (use arrow functions to get app at call time)
@@ -9591,16 +9475,15 @@ window.addEventListener("beforeunload", (event) => {
 // ===== TRACE BOOT BANNER =====
 (function () {
   try {
-    // console.info('[TRACE] boot hook executing');
-    const banner = () => { /* console.info('[TRACE] Frontend tracing active'); */ };
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", banner, { once: true });
     } else {
       banner();
     }
-  } catch (e) { console.warn("TRACE boot failed", e); }
+  } catch (e) {
+    // Ignore banner errors
+  }
 })();
-
 // ===== Aggressive apiRequest patch (poll until app exists) =====
 // REMOVED: Debug tracing to improve performance
 // The tracing code was causing slowness and memory issues
