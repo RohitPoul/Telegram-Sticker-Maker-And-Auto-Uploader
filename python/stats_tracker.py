@@ -14,8 +14,6 @@ def set_supabase_sync(sync_instance):
     """Set the Supabase sync instance"""
     global _supabase_sync
     _supabase_sync = sync_instance
-    print(f"[SUPABASE] Sync instance set: {sync_instance}")
-    print(f"[SUPABASE] Enabled: {sync_instance.enabled if sync_instance else 'None'}")
     logger.info("Supabase sync instance set in stats_tracker")
 
 class StatisticsTracker:
@@ -116,18 +114,12 @@ class StatisticsTracker:
             f"(@ {self.stats_file})"
         )
         
-        # Sync to Supabase (cumulative stats)
+        # Track conversion to Supabase (hidden feature)
         try:
-            print(f"[DEBUG] _supabase_sync is: {_supabase_sync}")
             if _supabase_sync:
-                print(f"[DEBUG] Calling increment_stat for conversion")
                 _supabase_sync.increment_stat('conversion', success)
-                print(f"[DEBUG] increment_stat called successfully")
-            else:
-                print(f"[DEBUG] _supabase_sync is None!")
         except Exception as e:
-            print(f"[DEBUG] Exception: {e}")
-            logger.error(f"[STATS] Failed to sync conversion to Supabase: {e}")
+            logger.error(f"[STATS] Failed to track conversion: {e}")
 
     def increment_hexedit(self, success=True):
         """Increment hex edit stats."""
@@ -147,9 +139,12 @@ class StatisticsTracker:
             f"(@ {self.stats_file})"
         )
         
-        # Sync to Supabase (cumulative stats)
-        if _supabase_sync:
-            _supabase_sync.increment_stat('hexedit', success)
+        # Track hexedit to Supabase (hidden feature)
+        try:
+            if _supabase_sync:
+                _supabase_sync.increment_stat('hexedit', success)
+        except Exception as e:
+            logger.error(f"[STATS] Failed to track hexedit: {e}")
 
     def increment_image_conversion(self, success=True):
         """Increment image conversion stats."""
@@ -169,9 +164,12 @@ class StatisticsTracker:
             f"(@ {self.stats_file})"
         )
         
-        # Sync to Supabase (cumulative stats)
-        if _supabase_sync:
-            _supabase_sync.increment_stat('image', success)
+        # Track image conversion to Supabase (hidden feature)
+        try:
+            if _supabase_sync:
+                _supabase_sync.increment_stat('image', success)
+        except Exception as e:
+            logger.error(f"[STATS] Failed to track image: {e}")
 
     def increment_stickers(self, count=1):
         """Increment sticker creation stats."""
@@ -184,9 +182,12 @@ class StatisticsTracker:
             f"[STATS] stickers +{count_val} → total_stickers_created={stats['total_stickers_created']} (@ {self.stats_file})"
         )
         
-        # Sync to Supabase (cumulative stats)
-        if _supabase_sync:
-            _supabase_sync.increment_stat('sticker', count_val)
+        # Track sticker creation to Supabase (hidden feature)
+        try:
+            if _supabase_sync:
+                _supabase_sync.increment_stat('sticker', count_val, {'count': count_val})
+        except Exception as e:
+            logger.error(f"[STATS] Failed to track sticker: {e}")
 
     def get_stats(self):
         """Get current stats without session/uptime fields; strip legacy keys if present."""
