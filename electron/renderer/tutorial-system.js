@@ -450,7 +450,7 @@ class TutorialSystem {
         try {
           registerAllTutorials();
         } catch (e) {
-          console.error("Failed to register tutorials:", e);
+          // Silent failure
         }
       }
     }
@@ -490,7 +490,6 @@ class TutorialSystem {
   async startTutorial(tutorialId) {
     const tutorial = this.tutorials.get(tutorialId);
     if (!tutorial) {
-      console.error(`Tutorial ${tutorialId} not found`);
       return;
     }
 
