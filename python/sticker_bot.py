@@ -1978,10 +1978,6 @@ def register_sticker_routes(app):
 
             # Import active_processes from shared state
             from shared_state import active_processes, process_lock, add_process, get_next_process_id
-            print(f"🔧 [STICKER_API] Imported active_processes from shared state")
-            print(f"🔧 [STICKER_API] active_processes type: {type(active_processes)}")
-            print(f"🔧 [STICKER_API] active_processes id: {id(active_processes)}")
-            print(f"🔧 [STICKER_API] Current processes before creation: {list(active_processes.keys())}")
 
             # Check for existing process
             with process_lock:
