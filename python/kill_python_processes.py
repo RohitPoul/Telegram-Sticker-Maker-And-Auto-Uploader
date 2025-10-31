@@ -282,31 +282,20 @@ def kill_all_python_processes():
 
 def main():
     """Main function for command line usage"""
-    print(f"{ICON_SNAKE} Python Process Killer")
-    print("=" * 40)
 
     # Show current process info
     current_pid = os.getpid()
-    print(f"Current process PID: {current_pid}")
-    print(f"Current process name: {psutil.Process(current_pid).name()}")
-    print()
 
     # Confirm before killing
     try:
         confirm = input("Are you sure you want to kill ALL Python processes? (y/N): ").strip().lower()
         if confirm not in ['y', 'yes']:
-            print("Operation cancelled.")
             return
     except KeyboardInterrupt:
-        print("\nOperation cancelled.")
         return
 
-    print(f"\n{ICON_SCAN} Scanning for Python processes...")
     results = kill_python_processes(target_our_app_only=False)
 
-    print(f"\n{ICON_RESULTS} Results:")
-    print(f"Success: {results['success']}")
-    print(f"Processes killed: {results['killed_count']}")
 
     if results['errors']:
         print(f"Errors: {len(results['errors'])}")
@@ -314,9 +303,7 @@ def main():
             print(f"  - {error}")
 
     if results['success'] and results['killed_count'] > 0:
-        print(f"\n{ICON_OK} Python processes have been terminated!")
     elif results['killed_count'] == 0:
-        print(f"\n{ICON_INFO} No Python processes were found to kill.")
     else:
         print(f"\n{ICON_ERR} Some errors occurred during the kill operation.")
 
