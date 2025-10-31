@@ -231,7 +231,7 @@ class PerformanceOptimizer {
         
         // Only warn for extremely low FPS and less frequently
         if (fps < 15) {
-          console.warn(`Extremely Low FPS: ${fps}`);
+          // Silent - extremely low FPS detected
         }
         
         // Send FPS data to main process if available (less frequently)
