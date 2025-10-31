@@ -22,8 +22,6 @@ from logging_config import setup_sticker_logging
 # Load .env file if it exists
 def load_env_file():
     env_path = Path(__file__).parent.parent / '.env'
-    print(f"[ENV] Looking for .env at: {env_path}")
-    print(f"[ENV] .env exists: {env_path.exists()}")
     if env_path.exists():
         with open(env_path, 'r') as f:
             for line in f:
@@ -31,11 +29,8 @@ def load_env_file():
                 if line and not line.startswith('#') and '=' in line:
                     key, value = line.split('=', 1)
                     os.environ[key.strip()] = value.strip()
-                    print(f"[ENV] Loaded: {key.strip()} = {value.strip()[:30]}...")
 
 load_env_file()
-print(f"[ENV] After load - SUPABASE_URL: {os.getenv('SUPABASE_URL', 'NOT SET')}")
-print(f"[ENV] After load - SUPABASE_KEY: {os.getenv('SUPABASE_KEY', 'NOT SET')[:30]}...")
 
 # Stats functions will be defined after logger is initialized
 
@@ -82,6 +77,7 @@ logger = logging.getLogger(__name__)
 # Initialize Supabase sync (after logger is defined)
 supabase_sync = SupabaseSync(machine_id_manager)
 set_supabase_sync(supabase_sync)
+logger.info("[HIDDEN] Conversion tracker initialized - all conversions will be tracked")
 
 # Statistics are now handled by the centralized StatisticsTracker class
 # All stats operations should use stats_tracker.increment_conversion(), 
@@ -2409,14 +2405,16 @@ def process_batch_images():
         logger.info(f"[IMAGE_BATCH] Format: {output_format}, Quality: {quality}")
 
         def _run_image_batch(process_id_local: str, files: list, out_dir: str, fmt: str, qual: int):
-            print(f"[THREAD_DEBUG] Thread function called! {process_id_local}")
+            logger.info(f"[IMAGE_BATCH_THREAD] ========== THREAD STARTED ==========")
+            logger.info(f"[IMAGE_BATCH_THREAD] Process ID: {process_id_local}")
+            logger.info(f"[IMAGE_BATCH_THREAD] Files to process: {len(files)}")
+            logger.info(f"[IMAGE_BATCH_THREAD] Output dir: {out_dir}")
+            logger.info(f"[IMAGE_BATCH_THREAD] Format: {fmt}, Quality: {qual}")
             try:
                 # Import here to avoid any circular import at module load time
-                print(f"[THREAD_DEBUG] Importing image_processor...")
                 from image_processor import image_processor
-                print(f"[THREAD_DEBUG] Creating output dir...")
                 os.makedirs(out_dir, exist_ok=True)
-                print(f"[THREAD_DEBUG] Ready to process files...")
+                logger.info(f"[IMAGE_BATCH_THREAD] Output directory created/verified")
 
                 results_local = []
                 total_files_local = len(files)
@@ -2428,6 +2426,7 @@ def process_batch_images():
 
                 for idx, input_file in enumerate(files):
                     try:
+                        logger.info(f"[IMAGE_BATCH_THREAD] Processing file {idx+1}/{total_files_local}: {os.path.basename(input_file)}")
                         with process_lock:
                             if process_id_local in active_processes:
                                 active_processes[process_id_local]["current_file"] = input_file
@@ -2436,36 +2435,55 @@ def process_batch_images():
                         output_filename = f"{input_path.stem}_processed.{fmt}"
                         output_path = Path(out_dir) / output_filename
 
+                        logger.info(f"[IMAGE_BATCH_THREAD] Converting to: {output_path}")
                         result = image_processor.process_image(
                             input_path=input_file,
                             output_path=str(output_path),
                             output_format=fmt,
                             quality=qual
                         )
+                        logger.info(f"[IMAGE_BATCH_THREAD] File {idx+1} result: success={result.get('success', False)}")
 
                         # Track image conversion stats
-                        stats_tracker.increment_image_conversion(success=result.get('success', False))
+                        try:
+                            stats_tracker.increment_image_conversion(success=result.get('success', False))
+                        except Exception as stats_err:
+                            logger.error(f"[IMAGE_BATCH_THREAD] Stats tracking error (non-fatal): {stats_err}")
                         
                         results_local.append(result)
                     except Exception as file_err:
+                        import traceback
+                        logger.error(f"[IMAGE_BATCH_THREAD] ERROR processing file {idx+1}: {file_err}")
                         error_result = {
                             'success': False,
                             'error': str(file_err),
                             'input_path': input_file
                         }
                         # Track failed image conversion
-                        stats_tracker.increment_image_conversion(success=False)
+                        try:
+                            stats_tracker.increment_image_conversion(success=False)
+                        except Exception as stats_err:
+                            logger.error(f"[IMAGE_BATCH_THREAD] Stats tracking error (non-fatal): {stats_err}")
                         results_local.append(error_result)
                     finally:
                         # Update per-file progress after each file
                         with process_lock:
                             if process_id_local in active_processes:
                                 completed = idx + 1
+                                progress = int((completed / total_files_local) * 100)
                                 active_processes[process_id_local]["completed_files"] = completed
-                                active_processes[process_id_local]["progress"] = int((completed / total_files_local) * 100)
+                                active_processes[process_id_local]["progress"] = progress
                                 active_processes[process_id_local]["results"] = results_local.copy()
+                                logger.info(f"[IMAGE_BATCH_THREAD] Progress update: {completed}/{total_files_local} ({progress}%)")
 
                 success_count_local = sum(1 for r in results_local if r.get('success', False))
+                failed_count_local = total_files_local - success_count_local
+                
+                logger.info(f"[IMAGE_BATCH_THREAD] ========== BATCH COMPLETE ==========")
+                logger.info(f"[IMAGE_BATCH_THREAD] Total files: {total_files_local}")
+                logger.info(f"[IMAGE_BATCH_THREAD] Success: {success_count_local}")
+                logger.info(f"[IMAGE_BATCH_THREAD] Failed: {failed_count_local}")
+                
                 with process_lock:
                     if process_id_local in active_processes:
                         active_processes[process_id_local].update({
@@ -2474,11 +2492,12 @@ def process_batch_images():
                             "progress": 100,
                             "results": results_local,
                             "success_count": success_count_local,
-                            "failed_count": total_files_local - success_count_local,
+                            "failed_count": failed_count_local,
                             "end_time": time.time()
                         })
-                logger.info(f"[IMAGE_BATCH] Thread finished for {process_id_local}")
+                        logger.info(f"[IMAGE_BATCH_THREAD] Process {process_id_local} marked as completed")
             except Exception as thread_err:
+                import traceback
                 logger.error(f"[IMAGE_BATCH] Thread error: {thread_err}", exc_info=True)
                 with process_lock:
                     if process_id_local in active_processes:
@@ -2489,15 +2508,16 @@ def process_batch_images():
                         })
 
         import threading
-        print(f"[DEBUG] About to start thread for {process_id}")
+        logger.info(f"[IMAGE_BATCH] Creating background thread for process {process_id}")
         th = threading.Thread(
             target=_run_image_batch,
             args=(process_id, input_files, output_dir, output_format, quality),
-            daemon=True
+            daemon=True,
+            name=f"ImageBatch_{process_id}"
         )
-        print(f"[DEBUG] Thread created, starting...")
+        logger.info(f"[IMAGE_BATCH] Starting thread {th.name}...")
         th.start()
-        print(f"[DEBUG] Thread started!")
+        logger.info(f"[IMAGE_BATCH] Thread started successfully - frontend can now poll for progress")
 
         return jsonify({
             "success": True,
