@@ -28,10 +28,11 @@ app.commandLine.appendSwitch('js-flags', '--expose-gc'); // Allow manual garbage
 
 // Optional: Users can still enable GPU if they want to experiment
 if (process.env.ENABLE_GPU === "1") {
-  app.enableHardwareAcceleration();
+    app.enableHardwareAcceleration();
 }
 
 let mainWindow;
+let splashWindow;
 let pythonProcess;
 const BACKEND_PORT = 5000;
 const BACKEND_HOST = "127.0.0.1";
@@ -51,20 +52,39 @@ function cleanupPythonProcess() {
         }
         pythonProcess = null;
     }
-    
+
     // Also try to kill our app's Python processes using the kill script
     try {
         const { exec } = require('child_process');
         const pythonPath = path.join(__dirname, "..", "python");
         const killScript = path.join(pythonPath, "kill_python_processes.py");
         const pythonCmd = process.platform === "win32" ? "python" : "python3";
-        
+
         exec(`${pythonCmd} "${killScript}"`, { cwd: pythonPath }, (error, stdout, stderr) => {
             // Silent execution
         });
     } catch (error) {
         console.error("Error running kill script:", error);
     }
+}
+
+function createSplashWindow() {
+    splashWindow = new BrowserWindow({
+        width: 500,
+        height: 300,
+        transparent: true,
+        frame: false,
+        alwaysOnTop: true,
+        resizable: false,
+        webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true
+        }
+    });
+
+    splashWindow.loadFile(path.join(__dirname, "splash.html"));
+    splashWindow.center();
+    splashWindow.show();
 }
 
 function createWindow() {
@@ -101,6 +121,11 @@ function createWindow() {
     }
 
     mainWindow.once("ready-to-show", () => {
+        // Close splash screen
+        if (splashWindow && !splashWindow.isDestroyed()) {
+            splashWindow.close();
+        }
+        // Show main window
         mainWindow.show();
         mainWindow.maximize();  // Ensure window is maximized
     });
@@ -112,26 +137,26 @@ function createWindow() {
                 cleanupPythonProcess();
                 mainWindow.destroy();
             }, 15000); // Increased timeout for thorough cleanup
-            
+
             // PRESERVE SESSIONS CLEANUP SEQUENCE - Only clean locks and temp files
             await Promise.allSettled([
                 // Stop all active processes but don't force disconnect
                 axios.post(`${BACKEND_URL}/api/stop-process`, { process_id: 'ALL' }, { timeout: 3000 })
             ]);
-            
+
             await Promise.allSettled([
                 // Clear ONLY temporary sessions and lock files - preserve main sessions
                 axios.post(`${BACKEND_URL}/api/clear-session`, {}, { timeout: 3000 })
             ]);
-            
+
             await Promise.allSettled([
                 // Kill our app's Python processes
                 axios.post(`${BACKEND_URL}/api/kill-our-processes`, {}, { timeout: 3000 })
             ]);
-            
+
             // Small delay to ensure cleanup is processed
             await new Promise(resolve => setTimeout(resolve, 1000));
-            
+
             clearTimeout(cleanupTimeout);
         } catch (error) {
             console.error("[CLOSE] Error during cleanup:", error);
@@ -157,7 +182,7 @@ function createWindow() {
     }, 300000); // Every 5 minutes
 
     // no noisy log on did-finish-load
-    mainWindow.webContents.on("did-finish-load", () => {});
+    mainWindow.webContents.on("did-finish-load", () => { });
 }
 
 function startPythonBackend() {
@@ -165,9 +190,9 @@ function startPythonBackend() {
         const pythonPath = path.join(__dirname, "..", "python");
         const scriptPath = path.join(pythonPath, "backend.py");
         const pythonCmd = process.platform === "win32" ? "python" : "python3";
-        
+
         // Start Python backend quietly
-        
+
         pythonProcess = spawn(pythonCmd, [scriptPath], {
             cwd: pythonPath,
             stdio: ["ignore", "pipe", "pipe"],
@@ -177,12 +202,12 @@ function startPythonBackend() {
                 BACKEND_LOG_TO_STDOUT: '0',
             },
         });
-        
+
         // Silent backend output
         pythonProcess.stdout.on('data', (data) => {
             // Silent
         });
-        
+
         pythonProcess.stderr.on('data', (data) => {
             // Silent
         });
@@ -208,24 +233,24 @@ function startPythonBackend() {
 async function waitForBackend() {
     const maxAttempts = 60;
     let attempts = 0;
-    
+
     // quiet health checks
-    
+
     while (attempts < maxAttempts) {
         try {
             const response = await axios.get(`${BACKEND_URL}/api/health`, {
                 timeout: 5000,
                 headers: { 'Content-Type': 'application/json' }
             });
-            
+
             if (response.data && response.data.status === "healthy") {
                 return true;
             }
-            
+
             throw new Error("Backend not healthy");
         } catch (error) {
             attempts++;
-            
+
             if (attempts < maxAttempts) {
                 // Exponential backoff
                 const delay = Math.min(1000 * Math.pow(2, attempts), 10000);
@@ -233,7 +258,7 @@ async function waitForBackend() {
             }
         }
     }
-    
+
     throw new Error(`Backend failed to start after ${maxAttempts} attempts`);
 }
 
@@ -244,12 +269,12 @@ ipcMain.handle("select-files", async (event, options) => {
             properties: ["openFile", "multiSelections"],
             filters: options.filters || [{ name: "All Files", extensions: ["*"] }],
         });
-        
+
         // Check if dialog was cancelled
         if (result.canceled) {
             return [];
         }
-        
+
         // Validate file paths and handle Windows-specific issues
         const validPaths = result.filePaths.filter(filePath => {
             try {
@@ -257,25 +282,25 @@ ipcMain.handle("select-files", async (event, options) => {
                 if (!fs.existsSync(filePath)) {
                     return false;
                 }
-                
+
                 // Check file path length (Windows limit is ~260 characters)
                 if (filePath.length > 250) {
                     return false;
                 }
-                
+
                 // Check for invalid characters in filename
                 const fileName = path.basename(filePath);
                 const invalidChars = /[<>:"|?*]/;
                 if (invalidChars.test(fileName)) {
                     return false;
                 }
-                
+
                 return true;
             } catch (error) {
                 return false;
             }
         });
-        
+
         return validPaths;
     } catch (error) {
         console.error("Error in select-files handler:", error);
@@ -292,7 +317,7 @@ ipcMain.handle("select-directory", async () => {
 
 ipcMain.handle('api-request', async (event, { method, endpoint, data }) => {
     try {
-        
+
         const config = {
             method,
             url: `${BACKEND_URL}${endpoint}`,
@@ -301,13 +326,13 @@ ipcMain.handle('api-request', async (event, { method, endpoint, data }) => {
                 'Content-Type': 'application/json'
             }
         };
-        
+
         if (data) {
             config.data = data;
         }
-        
+
         const response = await axios(config);
-        
+
         return { success: true, data: response.data };
     } catch (error) {
         console.error(`[API ERROR] ${error.message}`);
@@ -334,7 +359,7 @@ ipcMain.handle("open-external", async (event, url) => {
 
 ipcMain.handle('read-stats', async () => {
     try {
-        const statsPath = path.join(process.cwd(), 'logs', 'stats.json');
+        const statsPath = path.join(process.cwd(), 'Local Database', 'stats.json');
         const raw = fs.readFileSync(statsPath, 'utf8');
         const data = JSON.parse(raw);
         return { success: true, data, path: statsPath };
@@ -348,16 +373,22 @@ ipcMain.handle('read-stats', async () => {
 // APP LIFECYCLE
 app.whenReady().then(async () => {
     try {
+        // Show splash screen immediately
+        createSplashWindow();
+
+        // Start backend and wait for it
         await startPythonBackend();
         await waitForBackend();
+
+        // Create main window (splash will close when main window is ready)
         createWindow();
-        
+
         app.on("activate", () => {
             if (BrowserWindow.getAllWindows().length === 0) {
                 createWindow();
             }
         });
-        
+
     } catch (error) {
         // Minimal error log for startup failure
         console.error("Failed to start application:", error?.message || error);
@@ -369,10 +400,10 @@ app.whenReady().then(async () => {
 app.on("window-all-closed", () => {
     // PRESERVE SESSIONS: Only clean temp files and processes
     (async () => {
-        try { 
-            await axios.post(`${BACKEND_URL}/api/clear-session`).catch(() => {}); 
-            await axios.post(`${BACKEND_URL}/api/kill-our-processes`).catch(() => {});
-        } catch {}
+        try {
+            await axios.post(`${BACKEND_URL}/api/clear-session`).catch(() => { });
+            await axios.post(`${BACKEND_URL}/api/kill-our-processes`).catch(() => { });
+        } catch { }
     })().finally(() => cleanupPythonProcess());
     if (process.platform !== "darwin") {
         app.quit();
@@ -381,8 +412,8 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
     // Gentle backend shutdown - preserve sessions
-    try { exec(`curl -s -X POST -H \"Content-Type: application/json\" -d '{"process_id":"ALL"}' ${BACKEND_URL}/api/stop-process`); } catch {}
-    try { exec(`curl -s -X POST ${BACKEND_URL}/api/clear-session`); } catch {}
+    try { exec(`curl -s -X POST -H \"Content-Type: application/json\" -d '{"process_id":"ALL"}' ${BACKEND_URL}/api/stop-process`); } catch { }
+    try { exec(`curl -s -X POST ${BACKEND_URL}/api/clear-session`); } catch { }
     cleanupPythonProcess();
 });
 
