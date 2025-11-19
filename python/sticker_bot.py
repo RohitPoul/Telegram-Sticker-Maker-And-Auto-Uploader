@@ -112,11 +112,13 @@ class FileLock:
 class SecureCredentialManager:
     """Secure management of Telegram credentials with cross-platform file locking"""
     
-    def __init__(self, credentials_path='telegram_credentials.json'):
+    def __init__(self, credentials_path='Credentials/telegram_credentials.json'):
         # Always resolve credentials path relative to this file to avoid CWD issues
         if not os.path.isabs(credentials_path):
             base_dir = os.path.dirname(__file__)
             credentials_path = os.path.join(base_dir, credentials_path)
+            # Ensure Credentials directory exists
+            os.makedirs(os.path.dirname(credentials_path), exist_ok=True)
         self.credentials_path = credentials_path
         self._encryption_key = None
         self._cipher_suite = None
