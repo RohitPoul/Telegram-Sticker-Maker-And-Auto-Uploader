@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loading...</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: transparent;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .splash-container {
+            text-align: center;
+            color: white;
+            padding: 40px;
+            background: #1a1a1a;
+            border-radius: 16px;
+            border: 1px solid #464647;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            position: relative;
+            overflow: hidden;
+            width: 400px;
+        }
+
+        /* Anime Speed Lines Background Effect */
+        .speed-lines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background:
+                repeating-linear-gradient(90deg,
+                    transparent 0,
+                    transparent 40px,
+                    rgba(33, 150, 243, 0.03) 40px,
+                    rgba(33, 150, 243, 0.03) 41px);
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .content-wrapper {
+            position: relative;
+            z-index: 1;
+        }
+
+        .logo-section {
+            margin-bottom: 40px;
+        }
+
+        .logo-text {
+            font-size: 24px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #2196f3, #ff9800);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            animation: glowPulse 2s infinite;
+        }
+
+        /* MAGIC CIRCLE LOADER */
+        .magic-loader {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 40px;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Outer Ring */
+        .ring-outer {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 2px dashed rgba(33, 150, 243, 0.6);
+            border-top-color: transparent;
+            border-bottom-color: transparent;
+            animation: spin 3s linear infinite;
+            box-shadow: 0 0 15px rgba(33, 150, 243, 0.2);
+        }
+
+        /* Middle Ring (Orange) */
+        .ring-middle {
+            position: absolute;
+            width: 75%;
+            height: 75%;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            border-top: 2px solid #ff9800;
+            border-right: 2px solid #ff9800;
+            animation: spinReverse 1.5s linear infinite;
+            box-shadow: 0 0 10px rgba(255, 152, 0, 0.3);
+        }
+
+        /* Inner Geometric Core */
+        .core-square {
+            position: absolute;
+            width: 40%;
+            height: 40%;
+            border: 2px solid #2196f3;
+            animation: spin 2s linear infinite;
+            box-shadow: 0 0 10px rgba(33, 150, 243, 0.4), inset 0 0 10px rgba(33, 150, 243, 0.4);
+        }
+
+        .core-square::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: 2px solid #ff9800;
+            transform: rotate(45deg);
+            box-shadow: 0 0 10px rgba(255, 152, 0, 0.4);
+        }
+
+        /* Center Dot */
+        .core-dot {
+            width: 10px;
+            height: 10px;
+            background: white;
+            border-radius: 50%;
+            box-shadow: 0 0 15px white, 0 0 30px #2196f3;
+            animation: pulse 1s ease-in-out infinite;
+        }
+
+        /* Progress Bar */
+        .progress-bar {
+            width: 250px;
+            height: 4px;
+            background: #2a2a2a;
+            border-radius: 2px;
+            margin: 0 auto 15px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #2196f3, #ff9800);
+            width: 0%;
+            animation: progressAnimation 6s ease-in-out infinite;
+            box-shadow: 0 0 15px rgba(33, 150, 243, 0.8);
+        }
+
+        /* Glitch Text Effect for Status */
+        .status-text {
+            font-family: 'Consolas', monospace;
+            font-size: 12px;
+            color: #2196f3;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            animation: textFlicker 3s infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes spinReverse {
+            0% {
+                transform: rotate(360deg);
+            }
+
+            100% {
+                transform: rotate(0deg);
+            }
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            50% {
+                transform: scale(1.5);
+                opacity: 0.7;
+            }
+        }
+
+        @keyframes glowPulse {
+
+            0%,
+            100% {
+                text-shadow: 0 0 10px rgba(33, 150, 243, 0.5);
+            }
+
+            50% {
+                text-shadow: 0 0 20px rgba(255, 152, 0, 0.5);
+            }
+        }
+
+        @keyframes progressAnimation {
+            0% {
+                width: 0%;
+            }
+
+            20% {
+                width: 10%;
+            }
+
+            40% {
+                width: 45%;
+            }
+
+            60% {
+                width: 60%;
+            }
+
+            80% {
+                width: 85%;
+            }
+
+            95% {
+                width: 95%;
+            }
+
+            100% {
+                width: 98%;
+            }
+        }
+
+        @keyframes textFlicker {
+            0% {
+                opacity: 1;
+            }
+
+            5% {
+                opacity: 0.8;
+            }
+
+            10% {
+                opacity: 1;
+            }
+
+            15% {
+                opacity: 0.3;
+            }
+
+            20% {
+                opacity: 1;
+            }
+
+            100% {
+                opacity: 1;
+            }
+        }
+
+        .version-text {
+            position: absolute;
+            bottom: 10px;
+            right: 15px;
+            font-size: 10px;
+            color: #464647;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="splash-container">
+        <div class="speed-lines"></div>
+        <div class="content-wrapper">
+            <div class="logo-section">
+                <div class="logo-text">SYSTEM INITIALIZING</div>
+            </div>
+
+            <div class="magic-loader">
+                <div class="ring-outer"></div>
+                <div class="ring-middle"></div>
+                <div class="core-square"></div>
+                <div class="core-dot"></div>
+            </div>
+
+            <div class="progress-bar">
+                <div class="progress-fill"></div>
+            </div>
+            <div class="status-text">
+                LOADING MODULES...
+            </div>
+
+            <div class="version-text">v2.0.0</div>
+        </div>
+    </div>
+</body>
+
+</html>
