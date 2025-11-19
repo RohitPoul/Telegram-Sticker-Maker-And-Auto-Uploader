@@ -19,9 +19,9 @@ def set_supabase_sync(sync_instance):
 class StatisticsTracker:
     def __init__(self):
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        # Fix path: stats.json is in logs/ directory relative to project root, not python/../logs/
+        # Fix path: stats.json is in Local Database/ directory relative to project root, not python/../Local Database/
         project_root = os.path.dirname(base_dir)  # Go up from python/ to project root
-        logs_dir = os.path.join(project_root, 'logs')
+        logs_dir = os.path.join(project_root, 'Local Database')
         os.makedirs(logs_dir, exist_ok=True)
         self.stats_file = Path(os.path.join(logs_dir, 'stats.json'))
         self.lock = threading.Lock()
