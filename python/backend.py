@@ -1585,7 +1585,7 @@ def clear_logs():
         log_files = [
             "backend.log",
             "python/backend.log",
-            "logs/telegram_connection_debug.log"
+            "Local Database/telegram_connection_debug.log"
         ]
         
         cleared_files = []
@@ -1614,8 +1614,8 @@ def clear_credentials():
         return '', 200
     try:
         credential_files = [
-            "python/telegram_credentials.json",
-            "telegram_credentials.json"
+            "python/Credentials/telegram_credentials.json",
+            "Credentials/telegram_credentials.json"
         ]
         
         cleared_files = []
