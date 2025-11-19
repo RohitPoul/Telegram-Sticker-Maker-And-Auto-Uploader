@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 if not logger.handlers:
     # Only setup connection debug logging to the main log file
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-    logs_dir = os.path.join(project_root, 'logs')
+    logs_dir = os.path.join(project_root, 'Local Database')
     try:
         os.makedirs(logs_dir, exist_ok=True)
         log_path = os.path.join(logs_dir, 'telegram_connection_debug.log')
@@ -250,11 +250,13 @@ class TelegramConnectionHandler:
                 try:
                     from telethon import TelegramClient
                     
-                    # Use phone-based session file for persistence
+                    # Use phone-based session file for persistence in Credentials folder
                     base_dir = os.path.dirname(__file__)
+                    credentials_dir = os.path.join(base_dir, 'Credentials')
+                    os.makedirs(credentials_dir, exist_ok=True)
                     # Clean phone number for filename
                     clean_phone = phone_number.replace("+", "").replace(" ", "").replace("-", "")
-                    session_file = os.path.join(base_dir, f"telegram_session_{clean_phone}")
+                    session_file = os.path.join(credentials_dir, f"telegram_session_{clean_phone}")
                     
                     logger.info(f"[CONNECT] Creating/using session: {session_file}")
                     self._client = TelegramClient(session_file, int(api_id), api_hash)
@@ -470,18 +472,26 @@ class TelegramConnectionHandler:
                 'telegram_session_*.session-shm'
             ]
             
+            
             cleaned = 0
             base_dir = os.path.dirname(__file__)
+            credentials_dir = os.path.join(base_dir, 'Credentials')
             
-            for pattern in lock_patterns:
-                lock_files = glob.glob(os.path.join(base_dir, pattern))
-                for lock_file in lock_files:
-                    try:
-                        os.unlink(lock_file)
-                        logger.debug(f"[FORCE_CLEANUP] Removed lock file: {lock_file}")
-                        cleaned += 1
-                    except Exception as e:
-                        logger.debug(f"[FORCE_CLEANUP] Could not remove {lock_file}: {e}")
+            # Search in both base directory (for old files) and Credentials directory
+            search_dirs = [base_dir, credentials_dir]
+            
+            for search_dir in search_dirs:
+                if not os.path.exists(search_dir):
+                    continue
+                for pattern in lock_patterns:
+                    lock_files = glob.glob(os.path.join(search_dir, pattern))
+                    for lock_file in lock_files:
+                        try:
+                            os.unlink(lock_file)
+                            logger.debug(f"[FORCE_CLEANUP] Removed lock file: {lock_file}")
+                            cleaned += 1
+                        except Exception as e:
+                            logger.debug(f"[FORCE_CLEANUP] Could not remove {lock_file}: {e}")
             
             if cleaned > 0:
                 logger.info(f"[FORCE_CLEANUP] Cleaned up {cleaned} session lock files")
@@ -560,25 +570,30 @@ class TelegramConnectionHandler:
             import time
             
             base_dir = os.path.dirname(__file__)
-            session_pattern = os.path.join(base_dir, "telegram_session_*.session*")
+            credentials_dir = os.path.join(base_dir, 'Credentials')
+            
+            # Search in both directories for session files
+            search_dirs = [base_dir, credentials_dir]
+            session_patterns = [os.path.join(d, "telegram_session_*.session*") for d in search_dirs if os.path.exists(d)]
             
             current_time = time.time()
             cleaned_count = 0
             
-            for session_file in glob.glob(session_pattern):
-                try:
-                    # Skip if it's our current session
-                    if session_file == self._current_session_file:
-                        continue
-                    
-                    # Check if session is older than 7 days or corrupted
-                    file_age = current_time - os.path.getctime(session_file)
-                    if file_age > (7 * 24 * 3600):  # 7 days
-                        os.remove(session_file)
-                        logger.info(f"[CLEANUP] Removed old session: {session_file}")
-                        cleaned_count += 1
-                except Exception as e:
-                    logger.warning(f"[CLEANUP] Could not process {session_file}: {e}")
+            for session_pattern in session_patterns:
+                for session_file in glob.glob(session_pattern):
+                    try:
+                        # Skip if it's our current session
+                        if session_file == self._current_session_file:
+                            continue
+                        
+                        # Check if session is older than 7 days or corrupted
+                        file_age = current_time - os.path.getctime(session_file)
+                        if file_age > (7 * 24 * 3600):  # 7 days
+                            os.remove(session_file)
+                            logger.info(f"[CLEANUP] Removed old session: {session_file}")
+                            cleaned_count += 1
+                    except Exception as e:
+                        logger.warning(f"[CLEANUP] Could not process {session_file}: {e}")
             
             if cleaned_count > 0:
                 logger.info(f"[CLEANUP] Cleaned {cleaned_count} expired session files")
@@ -595,20 +610,27 @@ class TelegramConnectionHandler:
             import time
             
             base_dir = os.path.dirname(__file__)
+            credentials_dir = os.path.join(base_dir, 'Credentials')
             current_time = time.time()
             cleaned_count = 0
             
+            # Search in both directories for old session files
+            search_dirs = [base_dir, credentials_dir]
+            
             # Clean up very old sessions (30+ days) - these are likely abandoned
-            old_session_pattern = os.path.join(base_dir, "telegram_session_*.session*")
-            for session_file in glob.glob(old_session_pattern):
-                try:
-                    file_age = current_time - os.path.getctime(session_file)
-                    if file_age > (30 * 24 * 3600):  # 30 days
-                        os.remove(session_file)
-                        logger.info(f"[STARTUP_CLEANUP] Removed very old session: {session_file}")
-                        cleaned_count += 1
-                except Exception as e:
-                    logger.warning(f"[STARTUP_CLEANUP] Could not remove old session {session_file}: {e}")
+            for search_dir in search_dirs:
+                if not os.path.exists(search_dir):
+                    continue
+                old_session_pattern = os.path.join(search_dir, "telegram_session_*.session*")
+                for session_file in glob.glob(old_session_pattern):
+                    try:
+                        file_age = current_time - os.path.getctime(session_file)
+                        if file_age > (30 * 24 * 3600):  # 30 days
+                            os.remove(session_file)
+                            logger.info(f"[STARTUP_CLEANUP] Removed very old session: {session_file}")
+                            cleaned_count += 1
+                    except Exception as e:
+                        logger.warning(f"[STARTUP_CLEANUP] Could not remove old session {session_file}: {e}")
             
             # Clean up orphaned lock files and temp files that can cause database locks
             lock_patterns = [
