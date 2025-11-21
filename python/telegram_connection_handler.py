@@ -15,8 +15,8 @@ import concurrent.futures
 logger = logging.getLogger(__name__)
 if not logger.handlers:
     # Only setup connection debug logging to the main log file
-    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-    logs_dir = os.path.join(project_root, 'Local Database')
+    # Log to python/logs directory
+    logs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
     try:
         os.makedirs(logs_dir, exist_ok=True)
         log_path = os.path.join(logs_dir, 'telegram_connection_debug.log')
