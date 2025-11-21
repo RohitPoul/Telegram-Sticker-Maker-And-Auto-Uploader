@@ -303,7 +303,9 @@ def main():
             print(f"  - {error}")
 
     if results['success'] and results['killed_count'] > 0:
+        print(f"\n{ICON_OK} Successfully killed {results['killed_count']} Python process(es).")
     elif results['killed_count'] == 0:
+        print(f"\n{ICON_INFO} No Python processes were found to kill.")
     else:
         print(f"\n{ICON_ERR} Some errors occurred during the kill operation.")
 
