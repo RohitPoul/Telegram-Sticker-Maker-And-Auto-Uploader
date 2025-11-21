@@ -52,7 +52,11 @@ from supabase_sync import SupabaseSync
 log_level_name = os.getenv('BACKEND_LOG_LEVEL', 'ERROR').upper()
 log_level = getattr(logging, log_level_name, logging.ERROR)
 
-handlers = [logging.FileHandler('backend.log', encoding='utf-8')]
+# Ensure logs directory exists
+logs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
+os.makedirs(logs_dir, exist_ok=True)
+
+handlers = [logging.FileHandler(os.path.join(logs_dir, 'backend.log'), encoding='utf-8')]
 if os.getenv('BACKEND_LOG_TO_STDOUT', '0') in ('1', 'true', 'TRUE'):
     handlers.append(logging.StreamHandler(stream=sys.stdout))
 
