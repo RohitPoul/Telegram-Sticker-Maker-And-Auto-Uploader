@@ -2247,6 +2247,56 @@ def verify_telegram_password():
             "success": False, 
             "error": str(e)
         }), 500
+# ==================== TELEGRAM PRESET MANAGEMENT ====================
+from telegram_preset_manager import preset_manager
+
+@app.route('/api/presets/list', methods=['GET', 'OPTIONS'], strict_slashes=False)
+def list_presets():
+    if request.method == 'OPTIONS':
+        return '', 200
+    try:
+        presets = preset_manager.list_presets()
+        return jsonify({'success': True, 'presets': presets})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/presets/save', methods=['POST', 'OPTIONS'], strict_slashes=False)
+def save_preset():
+    if request.method == 'OPTIONS':
+        return '', 200
+    try:
+        data = request.get_json()
+        result = preset_manager.save_preset(
+            data.get('name'),
+            data.get('api_id'),
+            data.get('api_hash'),
+            data.get('phone_number')
+        )
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+@app.route('/api/presets/load', methods=['POST', 'OPTIONS'], strict_slashes=False)
+def load_preset():
+    if request.method == 'OPTIONS':
+        return '', 200
+    try:
+        data = request.get_json()
+        preset_data = preset_manager.load_preset(data.get('name'))
+        return jsonify({'success': True, 'data': preset_data})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 404
+
+@app.route('/api/presets/delete', methods=['POST', 'OPTIONS'], strict_slashes=False)
+def delete_preset():
+    if request.method == 'OPTIONS':
+        return '', 200
+    try:
+        data = request.get_json()
+        result = preset_manager.delete_preset(data.get('name'))
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 404
 
 # ==================== IMAGE PROCESSING API ====================
 
