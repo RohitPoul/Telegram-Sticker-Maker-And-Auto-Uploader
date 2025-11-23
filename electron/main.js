@@ -38,6 +38,7 @@ const BACKEND_PORT = 5000;
 const BACKEND_HOST = "127.0.0.1";
 const BACKEND_URL = `http://${BACKEND_HOST}:${BACKEND_PORT}`;
 
+
 function cleanupPythonProcess() {
     if (pythonProcess) {
         try {
@@ -93,6 +94,7 @@ function createWindow() {
         height: 900,
         minWidth: 1200,
         minHeight: 800,
+        backgroundColor: '#0f0f0f', // Prevent white flash
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
@@ -213,7 +215,9 @@ function startPythonBackend() {
         });
 
         // Resolve when process has spawned successfully
-        pythonProcess.on('spawn', () => resolve());
+        pythonProcess.on('spawn', () => {
+            resolve();
+        });
 
         // Rely on health check instead of stdout parsing
 
