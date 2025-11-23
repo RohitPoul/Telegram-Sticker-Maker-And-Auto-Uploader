@@ -43,20 +43,41 @@ class SupabaseSync:
         # Pending sync flag
         self.needs_sync = False
         
-        # Initialize Supabase client
+        # Initialize Supabase client (but don't authenticate yet)
         self.supabase = None
         self.user_id = None
-        self._init_supabase_client()
+        self._initialization_complete = False
+        self._initialization_started = False
         
-        # Register device silently
-        self._register_device()
-        
-        # Background sync thread
+        # Background initialization and sync thread
         self.running = True
-        self.sync_thread = threading.Thread(target=self._background_sync, daemon=True)
-        self.sync_thread.start()
         
-        logger.info("[CONVERSION_TRACKER] Initialized with anonymous auth + RLS")
+        # Start background thread for async initialization
+        self.init_thread = threading.Thread(target=self._async_initialization, daemon=True)
+        self.init_thread.start()
+        
+        logger.info("[CONVERSION_TRACKER] Fast initialization complete (auth deferred to background)")
+    
+    def _async_initialization(self):
+        """Background thread for non-blocking Supabase initialization"""
+        try:
+            logger.info("[SUPABASE_INIT] Starting async initialization...")
+            
+            # Initialize Supabase client and authenticate
+            self._init_supabase_client()
+            
+            # Register device silently
+            self._register_device()
+            
+            self._initialization_complete = True
+            logger.info("[SUPABASE_INIT] Async initialization complete")
+            
+            # Start sync loop
+            self._background_sync()
+            
+        except Exception as e:
+            logger.error(f"[SUPABASE_INIT] Async initialization failed: {e}")
+            self._initialization_complete = True  # Mark as complete even on failure
     
     def _init_supabase_client(self):
         """Initialize Supabase client with anonymous authentication"""
