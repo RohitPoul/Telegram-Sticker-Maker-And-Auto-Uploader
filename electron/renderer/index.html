@@ -274,6 +274,22 @@
               </div>
             </div>
             <div class="card-body">
+              <!-- Preset Selector -->
+              <div class="form-group preset-selector">
+                <label>Account Presets</label>
+                <div class="preset-controls">
+                  <select id="telegram-preset-select" class="form-control preset-dropdown">
+                    <option value="">-- Select Preset --</option>
+                  </select>
+                  <button class="btn btn-sm btn-secondary" id="save-preset-btn" title="Save Current Credentials">
+                    <i class="fas fa-save"></i>
+                  </button>
+                  <button class="btn btn-sm btn-danger" id="delete-preset-btn" title="Delete Selected Preset" disabled>
+                    <i class="fas fa-trash"></i>
+                  </button>
+                </div>
+              </div>
+
               <div class="form-group">
                 <label>API ID</label>
                 <div class="input-group with-toggle">
@@ -974,6 +990,27 @@
           </button>
           <button class="btn btn-primary" id="submit-password">
             Authenticate
+          </button>
+        </div>
+      </div>
+
+      <!-- Preset Name Input Modal -->
+      <div class="modal" id="preset-name-modal" style="display: none">
+        <div class="modal-header">
+          <h3><i class="fas fa-save"></i> Save Telegram Preset</h3>
+        </div>
+        <div class="modal-body">
+          <p>Enter a name for this preset:</p>
+          <input type="text" id="preset-name-input" class="form-control" placeholder="My Telegram Account"
+            maxlength="50" autocomplete="off" />
+          <small class="help-text">Choose a memorable name to identify this account</small>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="cancel-preset-name">
+            Cancel
+          </button>
+          <button class="btn btn-primary" id="submit-preset-name">
+            Save Preset
           </button>
         </div>
       </div>
@@ -2196,6 +2233,7 @@
   <script src="modules/component-optimizer.js"></script>
   <script src="image-handler.js"></script>
   <script src="image-viewer.js"></script>
+  <script src="telegram-preset-manager.js"></script>
   <script src="script.js"></script>
 
   <!-- Initialize Tutorial Launcher -->
