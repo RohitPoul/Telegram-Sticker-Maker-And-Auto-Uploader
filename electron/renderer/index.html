@@ -409,14 +409,44 @@
               <h3><i class="fas fa-box"></i> Pack Configuration</h3>
             </div>
             <div class="card-body">
+              <!-- Pack Mode Selector -->
               <div class="form-group">
+                <label>Pack Mode</label>
+                <div class="radio-group">
+                  <label class="radio-item">
+                    <input type="radio" name="pack-mode" value="create" checked id="mode-create" />
+                    <span><i class="fas fa-plus-circle"></i> Create New Pack</span>
+                  </label>
+                  <label class="radio-item">
+                    <input type="radio" name="pack-mode" value="add" id="mode-add" />
+                    <span><i class="fas fa-layer-group"></i> Add to Existing Pack</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Existing Pack Selector (hidden by default) -->
+              <div class="form-group" id="existing-pack-selector" style="display: none;">
+                <label>Pack Short Name</label>
+                <div class="input-group">
+                  <span class="input-prefix">t.me/addstickers/</span>
+                  <input type="text" id="existing-pack-name" class="form-control" placeholder="my_existing_pack"
+                    maxlength="32" pattern="[a-zA-Z][a-zA-Z0-9_]{4,31}" />
+                </div>
+                <small class="help-text">Enter the short name of your sticker pack (e.g., my_pack_2025)</small>
+                <div class="validation-message" id="existing-pack-validation"></div>
+              </div>
+
+              <!-- Pack Name (for new packs only) -->
+              <div class="form-group" id="pack-name-group">
                 <label>Pack Name</label>
                 <input type="text" id="pack-name" class="form-control" placeholder="My Awesome Sticker Pack"
                   maxlength="64" />
                 <small class="help-text">Pack name (max 64 characters)</small>
                 <div class="validation-message" id="pack-name-validation"></div>
               </div>
-              <div class="form-group">
+
+              <!-- URL Name (for new packs only) -->
+              <div class="form-group" id="pack-url-group">
                 <label>URL Name</label>
                 <div class="input-group">
                   <span class="input-prefix">t.me/addstickers/</span>
@@ -427,7 +457,9 @@
                   only)</small>
                 <div class="validation-message" id="pack-url-name-validation"></div>
               </div>
-              <div class="form-group">
+
+              <!-- Sticker Type (only shown for new packs) -->
+              <div class="form-group" id="sticker-type-group">
                 <label>Sticker Type</label>
                 <div class="radio-group">
                   <label class="radio-item">
@@ -440,7 +472,9 @@
                   </label>
                 </div>
               </div>
-              <div class="form-group">
+
+              <!-- Auto-skip Icon (only for new packs) -->
+              <div class="form-group" id="auto-skip-group">
                 <div class="toggle-setting">
                   <div class="toggle-header">
                     <div class="toggle-info">
@@ -464,9 +498,11 @@
                   </div>
                 </div>
               </div>
+
+              <!-- Action Button -->
               <div class="pack-actions">
                 <button class="btn btn-success btn-large" id="create-sticker-pack" disabled>
-                  <i class="fas fa-magic"></i> Create Sticker Pack
+                  <i class="fas fa-magic"></i> <span id="pack-action-text">Create Sticker Pack</span>
                 </button>
               </div>
             </div>
@@ -2231,6 +2267,7 @@
   <script src="modules/performance-turbo.js"></script>
   <script src="modules/performance-optimizations.js"></script>
   <script src="modules/component-optimizer.js"></script>
+  <script src="modules/confirm-modal.js"></script>
   <script src="image-handler.js"></script>
   <script src="image-viewer.js"></script>
   <script src="telegram-preset-manager.js"></script>
