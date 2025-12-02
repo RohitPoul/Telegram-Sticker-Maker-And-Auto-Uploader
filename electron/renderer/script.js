@@ -95,6 +95,7 @@ class TelegramUtilities {
     this.lastStatusType = null;
     // Removed autoSkipAttempted flag - auto-skip is handled entirely by backend
     this.lastStage = null;
+
     this.telegramConnectionData = null;
     this.mediaData = {};
 
@@ -108,6 +109,10 @@ class TelegramUtilities {
     // Debouncing for UI updates
     this.debouncedUpdateVideoFileList = this.debounce(this.updateVideoFileList.bind(this), 100);
     this._lastMinorUpdate = 0;
+
+    // Pack mode management - NEW for add to existing pack feature
+    this.currentPackMode = "create"; // 'create' or 'add'
+    this.userStickerPacks = []; // Cache of user's sticker packs
 
     this.init();
     this.initializeNavigation(); // Add this line to initialize navigation
@@ -543,6 +548,36 @@ class TelegramUtilities {
       resetStickerFormBtn.addEventListener("click", () => this.resetStickerForm());
     }
 
+    // Pack mode selector - NEW
+    const modeCreate = document.getElementById("mode-create");
+    const modeAdd = document.getElementById("mode-add");
+
+    if (modeCreate) {
+      modeCreate.addEventListener("change", () => {
+        if (modeCreate.checked) {
+          this.togglePackMode("create");
+        }
+      });
+    }
+
+    if (modeAdd) {
+      modeAdd.addEventListener("change", () => {
+        if (modeAdd.checked) {
+          this.togglePackMode("add");
+        }
+      });
+    }
+
+    // Existing pack input - NEW
+    const packInput = document.getElementById("existing-pack-name");
+    if (packInput) {
+      packInput.addEventListener("input", (e) => {
+        const validation = this.validateUrlName(e.target.value);
+        this.updateValidationDisplay("existing-pack", validation);
+        this.updatePackActions();
+      });
+    }
+
     // Icon Selection Modal Events - with null checks
     const uploadIconBtn = document.getElementById("upload-icon-btn");
     const skipIconBtn = document.getElementById("skip-icon-btn");
@@ -632,35 +667,50 @@ class TelegramUtilities {
     if (selectImageBtn) {
       selectImageBtn.addEventListener("click", () => {
         this.selectedMediaType = "image";
-        selectImageBtn.classList.add("active");
-        selectVideoBtn.classList.remove("active");
-        mediaControls.style.display = "flex";
-        mediaTypeText.textContent = "Images";
-        // Clear any existing media of different type
+        // Check if we need to clear existing media of different type
         if (this.mediaFiles.some(f => f.type === "video")) {
-          if (confirm("Switching to images will clear existing videos. Continue?")) {
-            this.clearMedia();
-          } else {
-            return;
-          }
+          window.confirmModal.show("Switching to images will clear existing videos. Continue?", "Switch Media Type").then(confirmed => {
+            if (confirmed) {
+              this.clearMedia();
+              this.selectedMediaType = "image";
+              selectImageBtn.classList.add("active");
+              selectVideoBtn.classList.remove("active");
+              mediaControls.style.display = "flex";
+              mediaTypeText.textContent = "Images";
+            }
+            // If not confirmed, do nothing - stay on current type
+          });
+        } else {
+          this.selectedMediaType = "image";
+          selectImageBtn.classList.add("active");
+          selectVideoBtn.classList.remove("active");
+          mediaControls.style.display = "flex";
+          mediaTypeText.textContent = "Images";
         }
       });
     }
 
     if (selectVideoBtn) {
       selectVideoBtn.addEventListener("click", () => {
-        this.selectedMediaType = "video";
-        selectVideoBtn.classList.add("active");
-        selectImageBtn.classList.remove("active");
-        mediaControls.style.display = "flex";
-        mediaTypeText.textContent = "Videos";
-        // Clear any existing media of different type
+        // Check if we need to clear existing media of different type
         if (this.mediaFiles.some(f => f.type === "image")) {
-          if (confirm("Switching to videos will clear existing images. Continue?")) {
-            this.clearMedia();
-          } else {
-            return;
-          }
+          window.confirmModal.show("Switching to videos will clear existing images. Continue?", "Switch Media Type").then(confirmed => {
+            if (confirmed) {
+              this.clearMedia();
+              this.selectedMediaType = "video";
+              selectVideoBtn.classList.add("active");
+              selectImageBtn.classList.remove("active");
+              mediaControls.style.display = "flex";
+              mediaTypeText.textContent = "Videos";
+            }
+            // If not confirmed, do nothing - stay on current type
+          });
+        } else {
+          this.selectedMediaType = "video";
+          selectVideoBtn.classList.add("active");
+          selectImageBtn.classList.remove("active");
+          mediaControls.style.display = "flex";
+          mediaTypeText.textContent = "Videos";
         }
       });
     }
@@ -2077,7 +2127,7 @@ class TelegramUtilities {
       progressText.textContent = "0/0 files processed";
     }
 
-    // STEP 7: Reset create button to initial state (but respect connection status)
+    // STEP 7: Reset create button to initial state (but respect connection status and pack mode)
     const createBtn = document.getElementById("create-sticker-pack");
     if (createBtn) {
       // Don't just enable the button - check all conditions properly
@@ -2091,7 +2141,8 @@ class TelegramUtilities {
 
       const canCreate = isPackNameValid && isUrlNameValid && hasMedia && isConnected;
       createBtn.disabled = !canCreate;
-      createBtn.innerHTML = '<i class="fas fa-magic"></i> Create Sticker Pack';
+      // Respect current pack mode - force reset since this is a form reset
+      this.resetButtonText(createBtn, true);
     }
 
     // STEP 8: Reset any internal flags
@@ -2142,17 +2193,17 @@ class TelegramUtilities {
       document.getElementById("pack-url-name").value.trim() !== "";
 
     if (hasData) {
-      const confirmed = confirm("This will clear all your current form data and media files. Are you sure?");
-      if (!confirmed) {
-        return;
-      }
+      window.confirmModal.show("This will clear all your current form data and media files. Are you sure?", "Reset Form").then(confirmed => {
+        if (confirmed) {
+          this.clearActiveProcesses();
+          this.createAnotherPack();
+        }
+      });
+      return;
     }
 
-
-    // Optional: Clear any active sticker processes in the backend
+    // No data to clear, just reset
     this.clearActiveProcesses();
-
-    // Call the same comprehensive reset function used by "Create Another Pack"
     this.createAnotherPack();
   }
 
@@ -2171,18 +2222,155 @@ class TelegramUtilities {
     const createBtn = document.getElementById("create-sticker-pack");
     if (!createBtn) return;
 
-    const packName = document.getElementById("pack-name")?.value.trim() || "";
-    const urlName = document.getElementById("pack-url-name")?.value.trim() || "";
-
-    const isPackNameValid = packName.length > 0 && packName.length <= 64;
-    const isUrlNameValid = /^[a-zA-Z][a-zA-Z0-9_]{4,31}$/.test(urlName);
     const hasMedia = this.mediaFiles.length > 0;
     const isConnected = this.telegramConnected;
 
-    // CRITICAL FIX: Button should only be disabled if Telegram is disconnected
-    // If Telegram is connected, keep button enabled so user can see they can fill fields
-    // The actual validation will happen when they click the button
-    createBtn.disabled = !isConnected;
+    console.log("[UPDATE_PACK_ACTIONS] Mode:", this.currentPackMode, "| Connected:", isConnected, "| Media files:", this.mediaFiles.length);
+
+    if (this.currentPackMode === "create") {
+      // Existing validation for create mode
+      const packName = document.getElementById("pack-name")?.value.trim() || "";
+      const urlName = document.getElementById("pack-url-name")?.value.trim() || "";
+
+      const isPackNameValid = packName.length > 0 && packName.length <= 64;
+      const isUrlNameValid = /^[a-zA-Z][a-zA-Z0-9_]{4,31}$/.test(urlName);
+
+      // FIXED: Only disable if not connected, let validation handle the rest on click
+      createBtn.disabled = !isConnected;
+    } else {
+      // Validation for add mode
+      const packInput = document.getElementById("existing-pack-name");
+      const packName = packInput?.value.trim() || "";
+      const isPackNameValid = /^[a-zA-Z][a-zA-Z0-9_]{4,31}$/.test(packName);
+
+      console.log("[UPDATE_PACK_ACTIONS] Add mode - Pack name:", packName, "| Valid:", isPackNameValid, "| Button should be:", (!isConnected ? "DISABLED" : "ENABLED"));
+
+      // FIXED: Only disable if not connected, let validation handle the rest on click
+      createBtn.disabled = !isConnected;
+    }
+  }
+
+  // ==========================================
+  // PACK MODE MANAGEMENT - NEW METHODS
+  // ==========================================
+
+  togglePackMode(mode) {
+    this.currentPackMode = mode;
+
+    const packNameGroup = document.getElementById("pack-name-group");
+    const packUrlGroup = document.getElementById("pack-url-group");
+    const autoSkipGroup = document.getElementById("auto-skip-group");
+    const existingPackSelector = document.getElementById("existing-pack-selector");
+    const stickerTypeGroup = document.getElementById("sticker-type-group");
+    const actionButton = document.getElementById("create-sticker-pack");
+    const actionText = document.getElementById("pack-action-text");
+
+    if (mode === "create") {
+      // Show new pack fields
+      if (packNameGroup) packNameGroup.style.display = "block";
+      if (packUrlGroup) packUrlGroup.style.display = "block";
+      if (autoSkipGroup) autoSkipGroup.style.display = "block";
+      if (existingPackSelector) existingPackSelector.style.display = "none";
+      if (stickerTypeGroup) stickerTypeGroup.style.display = "block";
+    } else {
+      // Show existing pack input, hide sticker type (pack already has a type)
+      if (packNameGroup) packNameGroup.style.display = "none";
+      if (packUrlGroup) packUrlGroup.style.display = "none";
+      if (autoSkipGroup) autoSkipGroup.style.display = "none";
+      if (existingPackSelector) existingPackSelector.style.display = "block";
+      if (stickerTypeGroup) stickerTypeGroup.style.display = "none";
+    }
+
+    // Update button text and icon using helper - but only if no process is running
+    if (actionButton && !this.stickerProgressInterval && !this.currentProcessId) {
+      this.resetButtonText(actionButton);
+    }
+
+    // Update validation
+    this.updatePackActions();
+  }
+
+  async addToExistingPack() {
+    const packInput = document.getElementById("existing-pack-name");
+    const packShortName = packInput?.value.trim() || "";
+
+    // Validation
+    if (!packShortName) {
+      this.showToast("error", "Pack Name Required", "Please enter the pack short name");
+      return;
+    }
+
+    // Validate URL name format
+    const validation = this.validateUrlName(packShortName);
+    if (!validation.valid) {
+      this.showToast("error", "Invalid Pack Name", validation.error);
+      return;
+    }
+
+    // Check Telegram connection
+    if (!this.telegramConnected) {
+      this.showToast("error", "Not Connected", "Please connect to Telegram first");
+      return;
+    }
+
+    // Check media files
+    if (this.mediaFiles.length === 0) {
+      this.showToast("error", "No Media", "Please add images or videos first");
+      return;
+    }
+
+    try {
+      // Generate process ID
+      let processId = `add_sticker_${Date.now()}`.replace(/[^a-zA-Z0-9_-]/g, "_");
+      processId = processId.substring(0, 50);
+
+      // Disable button
+      const createBtn = document.getElementById("create-sticker-pack");
+      if (createBtn) {
+        createBtn.disabled = true;
+        createBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+      }
+
+      // Prepare media files
+      const mediaFiles = this.mediaFiles.map((file) => ({
+        file_path: file.file_path,
+        emoji: file.emoji || "😀",
+        type: file.type
+      }));
+
+      // Call API
+      const response = await this.apiRequest("POST", "/api/sticker/add-to-pack", {
+        pack_short_name: packShortName,
+        media_files: mediaFiles,
+        process_id: processId
+      });
+
+      if (response.success) {
+        this.currentProcessId = processId;
+        this.currentOperation = "adding_stickers";
+
+        this.addStatusItem(`🚀 Adding ${mediaFiles.length} stickers to pack "${packShortName}"...`, "processing");
+
+        // Start progress monitoring
+        this.startStickerProgressMonitoring(processId);
+      } else {
+        throw new Error(response.error || "Failed to start process");
+      }
+    } catch (error) {
+      console.error("[ADD_TO_PACK] Error:", error);
+      this.showToast("error", "Failed", error.message);
+
+      // Clear process tracking since it failed
+      this.currentProcessId = null;
+      this.currentOperation = null;
+
+      // Re-enable button - force reset since process failed
+      const createBtn = document.getElementById("create-sticker-pack");
+      if (createBtn) {
+        createBtn.disabled = false;
+        this.resetButtonText(createBtn, true);
+      }
+    }
   }
 
   validatePackName(packName) {
@@ -3528,11 +3716,11 @@ class TelegramUtilities {
       const statusText = statusEl.querySelector(".status-text");
       const progressText = statusEl.querySelector(".progress-text");
       const total = progress.totalFiles || this.videoFiles.length;
-      
+
       if (statusText) {
         statusText.textContent = progress.currentStage || `Hex editing ${progress.completedFiles}/${total}`;
       }
-      
+
       if (progressText && progress.completedFiles !== undefined) {
         progressText.textContent = `${progress.completedFiles}/${total}`;
       }
@@ -3700,13 +3888,13 @@ class TelegramUtilities {
 
     // Reset button states to show Start/Hex Edit buttons
     this.updateButtonStates();
-    
+
     // Reset status text to Ready
     const statusEl = document.getElementById("conversion-status");
     if (statusEl) {
       const statusText = statusEl.querySelector(".status-text");
       const progressText = statusEl.querySelector(".progress-text");
-      
+
       if (statusText) {
         statusText.textContent = "Ready";
       }
@@ -3728,11 +3916,11 @@ class TelegramUtilities {
     if (statusElement) {
       const statusText = statusElement.querySelector(".status-text");
       const progressText = statusElement.querySelector(".progress-text");
-      
+
       if (statusText) {
         statusText.textContent = progress.currentStage || `Converting ${progress.completedFiles}/${progress.totalFiles}`;
       }
-      
+
       if (progressText && progress.completedFiles !== undefined && progress.totalFiles !== undefined) {
         progressText.textContent = `${progress.completedFiles}/${progress.totalFiles}`;
       }
@@ -5132,6 +5320,11 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   }
 
   async createStickerPack() {
+    // Check if we're creating new or adding to existing
+    if (this.currentPackMode === "add") {
+      return await this.addToExistingPack();
+    }
+
     const packNameEl = document.getElementById("pack-name");
     const packName = (packNameEl && typeof packNameEl.value === "string") ? packNameEl.value.trim() : "";
     const packUrlNameEl = document.getElementById("pack-url-name");
@@ -5218,8 +5411,9 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
 
     if (incompatibleFiles.length > 0) {
       this.addStatusItem(`⚠️ Warning: ${incompatibleFiles.length} files don't match sticker type`, "warning");
-      const proceed = confirm(
-        `${incompatibleFiles.length} files don't match the sticker type (${stickerType}). Continue with compatible files only?`
+      const proceed = await window.confirmModal.show(
+        `${incompatibleFiles.length} files don't match the sticker type (${stickerType}). Continue with compatible files only?`,
+        "Incompatible Files"
       );
       if (!proceed) {
         this.addStatusItem("❌ Creation cancelled by user", "info");
@@ -5346,15 +5540,23 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           response.error || "Failed to start creation"
         );
 
-        // Re-enable the button on failure
+        // Clear process tracking since it failed
+        this.currentProcessId = null;
+        this.currentOperation = null;
+
+        // Re-enable the button on failure - force reset
         if (createBtn) {
           createBtn.disabled = false;
-          createBtn.innerHTML = '<i class="fas fa-magic"></i> Create Sticker Pack';
+          this.resetButtonText(createBtn, true);
         }
       }
     } catch (error) {
       this.hideLoadingOverlay();
       console.error("Error creating sticker pack:", error);
+
+      // Clear process tracking since it failed
+      this.currentProcessId = null;
+      this.currentOperation = null;
 
       // ENHANCED: Better error handling for [Errno 22] Invalid argument
       let errorMessage = error.message;
@@ -5362,24 +5564,26 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         errorMessage = "Invalid request data - contains invalid characters. Please check your inputs and try again.";
       }
 
-      this.addStatusItem(`❌ Error: Failed to create sticker pack - ${errorMessage}`, "error");
+      const isAddMode = this.currentPackMode === "add";
+      this.addStatusItem(`❌ Error: Failed to ${isAddMode ? 'add stickers' : 'create sticker pack'} - ${errorMessage}`, "error");
       this.showToast(
         "error",
-        "Creation Error",
-        "Failed to create sticker pack: " + errorMessage
+        isAddMode ? "Add Error" : "Creation Error",
+        `Failed to ${isAddMode ? 'add stickers' : 'create sticker pack'}: ` + errorMessage
       );
 
-      // Re-enable the button on error
+      // Re-enable the button on error - force reset
       const createBtn = document.getElementById("create-sticker-pack");
       if (createBtn) {
         createBtn.disabled = false;
-        createBtn.innerHTML = '<i class="fas fa-magic"></i> Create Sticker Pack';
+        this.resetButtonText(createBtn, true);
       }
     }
   }
   startStickerProgressMonitoring(processId) {
     // CRITICAL FIX: Always clear previous interval to prevent memory leaks
-    this.stopStickerProgressMonitoring();
+    // Pass false to NOT reset the button - we're starting a new monitoring session
+    this.stopStickerProgressMonitoring(false);
 
     // Reset auto-skip flag for this process
     // Removed autoSkipAttempted flag - auto-skip is handled entirely by backend
@@ -5627,14 +5831,19 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
             if (progress.waiting_for_user) {
               // Continue monitoring - this is a backend bug
             } else {
-              // CRITICAL FIX: Check if we have a shareable_link, which means the process is ACTUALLY completed
-              // In auto-skip flow without URL conflicts, backend completes successfully and provides shareable_link
+              // Check if we have a shareable_link, which means the process is ACTUALLY completed
               const hasShareableLink = !!(progress.shareable_link || progress.pack_link || progress.link);
+              
+              // For "add to pack" mode, just check if status is completed and we have stickers_added
+              const isAddMode = this.currentPackMode === "add" || this.currentOperation === "adding_stickers";
+              const addModeCompleted = isAddMode && (progress.stickers_added > 0 || progress.completed_files > 0);
 
-              // ENHANCED: For auto-skip scenario without URL conflicts, backend completes successfully
-              // Check for shareable_link OR auto_skip_handled OR normal workflow completion
-              if (hasShareableLink || this.workflowState.packCompleted || (this.workflowState.iconUploaded && this.workflowState.urlNameSubmitted) || progress.auto_skip_handled) {
-                this.addStatusItem("✅ Sticker pack creation completed successfully!", "completed");
+              // Check for completion: shareable_link OR add mode completed OR normal workflow completion
+              if (hasShareableLink || addModeCompleted || this.workflowState.packCompleted || (this.workflowState.iconUploaded && this.workflowState.urlNameSubmitted) || progress.auto_skip_handled) {
+                const successMsg = isAddMode 
+                  ? `✅ Successfully added ${progress.stickers_added || progress.completed_files || 1} sticker(s) to pack!`
+                  : "✅ Sticker pack creation completed successfully!";
+                this.addStatusItem(successMsg, "completed");
                 this.stopStickerProgressMonitoring();
                 this.onStickerProcessCompleted(true, progress);
                 return;
@@ -5645,7 +5854,9 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
               }
             }
           } else if (progress.status === "error" || progress.status === "failed") {
-            this.addStatusItem(`❌ Sticker pack creation failed: ${progress.current_stage || "Unknown error"}`, "error");
+            const isAddMode = this.currentPackMode === "add" || this.currentOperation === "adding_stickers";
+            const errorMsg = progress.current_stage || progress.error || "Unknown error";
+            this.addStatusItem(`❌ ${isAddMode ? 'Add stickers' : 'Sticker pack creation'} failed: ${errorMsg}`, "error");
             this.stopStickerProgressMonitoring();
             this.onStickerProcessCompleted(false, progress);
             return;
@@ -5783,18 +5994,43 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     this.stickerProgressInterval = setInterval(checkProgress, 2000); // Check every 2 seconds for faster response
   }
 
-  stopStickerProgressMonitoring() {
+  stopStickerProgressMonitoring(resetButton = true) {
     // CRITICAL FIX: Clear sticker progress interval to prevent memory leaks
     if (this.stickerProgressInterval) {
       clearInterval(this.stickerProgressInterval);
       this.stickerProgressInterval = null;
     }
 
-    // Reset the create button
-    const createBtn = document.getElementById("create-sticker-pack");
-    if (createBtn) {
-      createBtn.disabled = false;
-      createBtn.innerHTML = '<i class="fas fa-magic"></i> Create Sticker Pack';
+    // Only reset button and clear tracking if explicitly requested (not when starting new monitoring)
+    if (resetButton) {
+      // Clear process tracking FIRST so resetButtonText knows process is done
+      this.currentProcessId = null;
+      this.currentOperation = null;
+
+      // Reset the create button - respect pack mode, force reset since process is done
+      const createBtn = document.getElementById("create-sticker-pack");
+      if (createBtn) {
+        createBtn.disabled = false;
+        this.resetButtonText(createBtn, true); // Force reset
+      }
+    }
+  }
+
+  // Helper function to reset button text based on current pack mode
+  // Only resets if no process is actively running
+  resetButtonText(btn, force = false) {
+    if (!btn) return;
+    
+    // Don't reset if a process is running (unless forced)
+    if (!force && (this.stickerProgressInterval || this.currentProcessId)) {
+      console.log("[BUTTON] Skipping reset - process is running");
+      return;
+    }
+    
+    if (this.currentPackMode === "add") {
+      btn.innerHTML = '<i class="fas fa-plus"></i> <span id="pack-action-text">Add to Pack</span>';
+    } else {
+      btn.innerHTML = '<i class="fas fa-magic"></i> <span id="pack-action-text">Create Sticker Pack</span>';
     }
   }
 
@@ -5998,6 +6234,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
 
   onStickerProcessCompleted(success, progressData) {
     const createBtn = document.getElementById("create-sticker-pack");
+    const isAddMode = this.currentPackMode === "add" || this.currentOperation === "adding_stickers";
 
     // CRITICAL FIX: Only show completion if workflow is actually finished
     if (success && !this.workflowState.packCompleted) {
@@ -6015,29 +6252,46 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         // Show special modal for manual completion
         this.showManualCompletionModal();
       } else {
-        this.addStatusItem("Sticker pack created successfully!", "completed");
+        // Different messages for add mode vs create mode
+        const stickersAdded = progressData?.stickers_added || progressData?.completed_files || this.mediaFiles.length;
+        
+        if (isAddMode) {
+          this.addStatusItem(`✅ Successfully added ${stickersAdded} sticker(s) to pack!`, "completed");
+        } else {
+          this.addStatusItem("Sticker pack created successfully!", "completed");
+        }
 
-        // ENHANCED: Check for multiple possible property names for shareable link with detailed logging
+        // ENHANCED: Check for multiple possible property names for shareable link
         const shareableLink = progressData?.shareable_link || progressData?.pack_link || progressData?.link;
 
-        if (shareableLink) {
+        if (shareableLink && !isAddMode) {
+          // Only show success modal for new pack creation
           this.showSuccessModal(shareableLink);
         } else {
-          // Still show a success message even without link
-          this.showToast("success", "Pack Created", "Sticker pack created successfully!");
+          // Show toast for add mode or when no link
+          const toastTitle = isAddMode ? "Stickers Added" : "Pack Created";
+          const toastMsg = isAddMode 
+            ? `Successfully added ${stickersAdded} sticker(s) to pack!`
+            : "Sticker pack created successfully!";
+          this.showToast("success", toastTitle, toastMsg);
         }
       }
     } else if (!success) {
-      this.addStatusItem(`Sticker pack creation failed: ${progressData?.error || "Unknown error"}`, "error");
+      const errorMessage = progressData?.error || progressData?.current_stage || "Unknown error";
+      const failMsg = isAddMode ? "Add stickers failed" : "Sticker pack creation failed";
+      this.addStatusItem(`${failMsg}: ${errorMessage}`, "error");
     } else {
       // CRITICAL FIX: Prevent duplicate completion messages
     }
     this.updateStats();
+    
+    // Reset current operation
+    this.currentOperation = null;
 
-    // Reset button
+    // Reset button - respect current pack mode using helper
     if (createBtn) {
       createBtn.disabled = false;
-      createBtn.innerHTML = '<i class="fas fa-magic"></i> Create Sticker Pack';
+      this.resetButtonText(createBtn);
     }
 
     // Mark all files as completed or error
@@ -6049,18 +6303,13 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
 
     this.updateMediaFileList();
 
-    // Show completion notification
+    // Show completion notification - respect pack mode (use isAddMode from above)
     if (success) {
       if (!progressData?.manual_completion_required) {
-        this.showToast(
-          "success",
-          "Pack Created",
-          "Sticker pack created successfully!"
-        );
         this.playNotificationSound();
         this.showSystemNotification(
-          "Sticker Pack Created",
-          "Your sticker pack has been published successfully!"
+          isAddMode ? "Stickers Added" : "Sticker Pack Created",
+          isAddMode ? "Your stickers have been added to the pack!" : "Your sticker pack has been published successfully!"
         );
       }
 
@@ -6068,10 +6317,22 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       this.updateStickerCreationStats(this.mediaFiles.length);
 
     } else {
+      const errorMessage = progressData?.error || progressData?.current_stage || "Unknown error";
+      // Check if this is a user error (like invalid pack name, duration too long, etc.)
+      const isUserError = progressData?.user_error || 
+        errorMessage.includes("Invalid sticker pack") || 
+        errorMessage.includes("not found") ||
+        errorMessage.includes("duration") ||
+        errorMessage.includes("too long") ||
+        errorMessage.includes("too large") ||
+        errorMessage.includes("dimensions") ||
+        errorMessage.includes("format") ||
+        errorMessage.includes("Please");
+      
       this.showToast(
-        "error",
-        "Creation Failed",
-        `Sticker pack creation failed: ${progressData?.error || "Unknown error"}`
+        isUserError ? "warning" : "error",
+        isUserError ? "Sticker Error" : (isAddMode ? "Add Failed" : "Creation Failed"),
+        errorMessage
       );
     }
 
@@ -7699,19 +7960,11 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     }
   }
   clearApplicationData() {
-    const confirmMessage = `
-This will permanently delete:
-• All saved API credentials
-• Application settings and preferences  
-• Session data and cached files
-• File lists and progress data
-This action cannot be undone. Are you sure?
-        `;
-
-    if (confirm(confirmMessage.trim())) {
+    window.confirmModal.show("This will permanently delete all saved credentials, settings, session data and file lists. This cannot be undone. Are you sure?", "Factory Reset").then(confirmed => {
+      if (!confirmed) return;
+      
       try {
-        // Clear localStorage
-        const keysToKeep = ["app_theme"]; // Keep theme preference
+        // Clear localStorage (keep theme)
         const theme = localStorage.getItem("app_theme");
         localStorage.clear();
         if (theme) localStorage.setItem("app_theme", theme);
@@ -7725,14 +7978,7 @@ This action cannot be undone. Are you sure?
         this.pendingPassword = false;
 
         // Clear form values
-        const formInputs = [
-          "api-id",
-          "api-hash",
-          "phone-number",
-          "video-output-dir",
-          "pack-name",
-        ];
-        formInputs.forEach((id) => {
+        ["api-id", "api-hash", "phone-number", "video-output-dir", "pack-name"].forEach(id => {
           const input = document.getElementById(id);
           if (input) input.value = "";
         });
@@ -7744,33 +7990,19 @@ This action cannot be undone. Are you sure?
 
         // Clear any active processes
         this.stopProgressMonitoring();
-
         if (this.stickerProgressInterval) {
           clearInterval(this.stickerProgressInterval);
           this.stickerProgressInterval = null;
         }
 
         // Clear backend session
-        this.apiRequest("POST", "/api/clear-session")
-          .then(() => {
-          })
-          .catch(err => {
-          });
+        this.apiRequest("POST", "/api/clear-session").catch(() => {});
 
-        this.showToast(
-          "success",
-          "Data Cleared",
-          "All application data has been cleared successfully"
-        );
+        this.showToast("success", "Data Cleared", "All application data has been cleared successfully");
       } catch (error) {
-        if (RENDERER_DEBUG) console.error("Error clearing data:", error);
-        this.showToast(
-          "error",
-          "Clear Failed",
-          "Failed to clear some data: " + error.message
-        );
+        this.showToast("error", "Clear Failed", "Failed to clear some data: " + error.message);
       }
-    }
+    });
   }
 
   updateButtonStates() {
@@ -7975,57 +8207,56 @@ This action cannot be undone. Are you sure?
   }
 
   async resetStats() {
-    if (confirm("Are you sure you want to reset all statistics?")) {
-      try {
-        const response = await this.apiRequest("POST", "/api/reset-stats");
-        if (response.success) {
-          this.showToast("success", "Statistics Reset", "All statistics have been reset");
-          // Force immediate database stats update after reset
-          await this.forceUpdateDatabaseStats();
-          // Update the display
-          await this.updateDatabaseStats();
-        } else {
-          this.showToast("error", "Reset Failed", response.error || "Failed to reset statistics");
-        }
-      } catch (error) {
-        this.showToast("error", "Reset Failed", "Failed to reset statistics: " + error.message);
+    const confirmed = await window.confirmModal.show("Are you sure you want to reset all statistics?", "Reset Statistics");
+    if (!confirmed) return;
+    
+    try {
+      const response = await this.apiRequest("POST", "/api/reset-stats");
+      if (response.success) {
+        this.showToast("success", "Statistics Reset", "All statistics have been reset");
+        await this.forceUpdateDatabaseStats();
+        await this.updateDatabaseStats();
+      } else {
+        this.showToast("error", "Reset Failed", response.error || "Failed to reset statistics");
       }
+    } catch (error) {
+      this.showToast("error", "Reset Failed", "Failed to reset statistics: " + error.message);
     }
   }
 
   async clearLogs() {
-    if (confirm("Are you sure you want to clear all log files?")) {
-      try {
-        const response = await this.apiRequest("POST", "/api/clear-logs");
-        if (response.success) {
-          this.showToast("success", "Logs Cleared", response.message);
-        } else {
-          this.showToast("error", "Clear Failed", response.error || "Failed to clear logs");
-        }
-      } catch (error) {
-        this.showToast("error", "Clear Failed", "Failed to clear logs: " + error.message);
+    const confirmed = await window.confirmModal.show("Are you sure you want to clear all log files?", "Clear Logs");
+    if (!confirmed) return;
+    
+    try {
+      const response = await this.apiRequest("POST", "/api/clear-logs");
+      if (response.success) {
+        this.showToast("success", "Logs Cleared", response.message);
+      } else {
+        this.showToast("error", "Clear Failed", response.error || "Failed to clear logs");
       }
+    } catch (error) {
+      this.showToast("error", "Clear Failed", "Failed to clear logs: " + error.message);
     }
   }
 
   async clearCredentials() {
-    if (confirm("Are you sure you want to clear all saved credentials? This will require you to re-enter your Telegram API credentials.")) {
-      try {
-        const response = await this.apiRequest("POST", "/api/clear-credentials");
-        if (response.success) {
-          this.showToast("success", "Credentials Cleared", response.message);
-          // Clear local storage credentials too
-          localStorage.removeItem("telegram_api_id");
-          localStorage.removeItem("telegram_api_hash");
-          localStorage.removeItem("telegram_phone");
-          // Reload the form
-          this.initializeTelegramForm();
-        } else {
-          this.showToast("error", "Clear Failed", response.error || "Failed to clear credentials");
-        }
-      } catch (error) {
-        this.showToast("error", "Clear Failed", "Failed to clear credentials: " + error.message);
+    const confirmed = await window.confirmModal.show("Clear all saved credentials? You'll need to re-enter your Telegram API credentials.", "Clear Credentials");
+    if (!confirmed) return;
+    
+    try {
+      const response = await this.apiRequest("POST", "/api/clear-credentials");
+      if (response.success) {
+        this.showToast("success", "Credentials Cleared", response.message);
+        localStorage.removeItem("telegram_api_id");
+        localStorage.removeItem("telegram_api_hash");
+        localStorage.removeItem("telegram_phone");
+        this.initializeTelegramForm();
+      } else {
+        this.showToast("error", "Clear Failed", response.error || "Failed to clear credentials");
       }
+    } catch (error) {
+      this.showToast("error", "Clear Failed", "Failed to clear credentials: " + error.message);
     }
   }
 
