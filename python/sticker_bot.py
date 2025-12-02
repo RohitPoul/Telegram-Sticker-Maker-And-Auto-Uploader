@@ -10,6 +10,7 @@ import queue
 import glob
 import uuid
 import traceback
+import random
 from typing import Optional, Dict, List
 from enum import Enum
 from dataclasses import dataclass
@@ -490,6 +491,34 @@ class SimpleConversationManager:
         # If we reach here, we've timed out
         self.logger.warning(f"[WAIT] Timeout waiting for any of {[t.value for t in expected_types]} after {timeout} seconds")
         raise TimeoutError(f"Timeout waiting for any of {[t.value for t in expected_types]}")
+
+    async def send_message(self, message: str):
+        """Send a message without waiting for a specific response"""
+        self.logger.info(f"[MSG] Sending message: {message}")
+        await self.client.send_message(self.bot_peer, message)
+        self.logger.info(f"[MSG] Sent message: {message}")
+    
+    async def send_file(self, file_path: str):
+        """Send a file without waiting for a specific response"""
+        self.logger.info(f"[FILE] Sending file: {file_path}")
+        await self.client.send_file(self.bot_peer, file_path, force_document=True)
+        self.logger.info(f"[FILE] Sent file: {os.path.basename(file_path)}")
+    
+    async def wait_for_message(self, timeout: float = 30.0):
+        """Wait for any message from the bot"""
+        self._ensure_queue()
+        
+        start_time = time.time()
+        
+        while time.time() - start_time < timeout:
+            try:
+                response = await asyncio.wait_for(self.response_queue.get(), timeout=2.0)
+                self.logger.info(f"[WAIT] Received message: {response.message[:100]}...")
+                return response
+            except asyncio.TimeoutError:
+                continue
+        
+        raise asyncio.TimeoutError(f"Timeout waiting for message after {timeout} seconds")
 
     async def send_and_wait(self, message: str, expected_response, timeout: float = 30.0):
         self.logger.info(f"[MSG] Sending: {message}")
@@ -1292,6 +1321,379 @@ class StickerBotCore:
             logging.error(f"[STICKER_CONNECTION] Full traceback: {traceback.format_exc()}")
             return False
 
+    def add_to_existing_pack(self, pack_short_name: str, media_files: List[Dict], process_id: str):
+        """
+        Add stickers to an existing Telegram sticker pack
+        
+        :param pack_short_name: Short name of the existing pack (e.g., "my_pack_2025")
+        :param media_files: List of media files to add as stickers
+        :param process_id: Unique process identifier for tracking
+        """
+        try:
+            self.logger.info(f"[ADD_STICKER] Adding {len(media_files)} stickers to pack '{pack_short_name}' - Process: {process_id}")
+            
+            # Always get fresh handler and set up conversation manager
+            from telegram_connection_handler import get_telegram_handler
+            handler = get_telegram_handler()
+            
+            if not handler:
+                raise RuntimeError("Telegram handler not available. Please reconnect.")
+            
+            if not handler._client:
+                raise RuntimeError("Telegram client not available. Please reconnect.")
+            
+            # Check if client is actually connected
+            if not handler.has_active_connection():
+                raise RuntimeError("Telegram connection lost. Please reconnect.")
+            
+            # Always set up fresh conversation manager for this operation
+            self.logger.info("[ADD_STICKER] Setting up conversation manager...")
+            
+            async def setup_conversation_manager():
+                try:
+                    # Check if client is connected
+                    if not handler._client.is_connected():
+                        self.logger.info("[ADD_STICKER] Client not connected, attempting to connect...")
+                        await handler._client.connect()
+                    
+                    bot_peer = await handler._client.get_entity('@stickers')
+                    self.client = handler._client
+                    self.bot_peer = bot_peer
+                    self.conversation_manager = SimpleConversationManager(
+                        self.client, self.bot_peer, self.logger
+                    )
+                    await self.conversation_manager.start_listening()
+                    self.logger.info("[ADD_STICKER] Conversation manager set up successfully")
+                    return True
+                except Exception as e:
+                    self.logger.error(f"[ADD_STICKER] Setup error: {e}")
+                    import traceback
+                    self.logger.error(f"[ADD_STICKER] Traceback: {traceback.format_exc()}")
+                    return False
+            
+            success = handler.run_async(setup_conversation_manager())
+            if not success:
+                raise RuntimeError("Failed to set up bot communication. Please try reconnecting.")
+            
+            if not self.conversation_manager:
+                raise RuntimeError("Conversation manager not initialized. Please reconnect.")
+            
+            # Verify conversation manager is listening
+            if not self.conversation_manager.listening:
+                self.logger.warning("[ADD_STICKER] Conversation manager not listening, attempting to restart...")
+                try:
+                    handler.run_async(self.conversation_manager.start_listening())
+                    self.logger.info("[ADD_STICKER] Conversation manager restarted successfully")
+                except Exception as e:
+                    self.logger.error(f"[ADD_STICKER] Failed to restart conversation manager: {e}")
+                    raise RuntimeError("Failed to start bot communication. Please reconnect.")
+
+            # Convert to MediaItem objects and sanitize paths
+            media_items = []
+            for media_file in media_files:
+                file_path = media_file['file_path']
+                # Sanitize path - handle both Windows and forward slashes
+                file_path = file_path.replace('/', os.sep).replace('\\\\', os.sep)
+                
+                # MediaItem(file_path, media_type, emoji) - correct order!
+                media_item = MediaItem(
+                    file_path,
+                    media_file.get('type', 'video'),
+                    media_file.get('emoji', '😀')
+                )
+                media_items.append(media_item)
+            
+            # Run the actual pack addition in async using handler's event loop
+            self.logger.info("[ADD_STICKER] Starting async pack addition...")
+            handler.run_async(
+                self._add_to_existing_pack_async(pack_short_name, media_items, process_id)
+            )
+            
+        except Exception as e:
+            self.logger.error(f"[ADD_STICKER] Pack addition error: {e}")
+            raise
+
+    async def _add_to_existing_pack_async(self, pack_short_name: str, media_items: List[MediaItem], process_id: str):
+        """
+        Async implementation of add_to_existing_pack with comprehensive error handling
+        """
+        import shared_state  # Import here to avoid circular dependency
+        try:
+            process_state = shared_state.active_processes.get(process_id, {})
+            
+            # Send /addsticker command
+            self.logger.info(f"[ADD_STICKER] Sending /addsticker")
+            process_state['stage'] = 'starting'
+            process_state['status'] = 'processing'
+            process_state['current_stage'] = 'Initiating add sticker process...'
+            process_state['message'] = 'Initiating add sticker process...'
+            await self.conversation_manager.send_message('/addsticker')
+            await asyncio.sleep(random.uniform(0.7, 1.2))
+            
+            # Read the bot's response - it should ask for the sticker set
+            response = await self.conversation_manager.wait_for_message(timeout=10)
+            response_text = response.message.lower() if hasattr(response, 'message') else str(response).lower()
+            
+            self.logger.info(f"[ADD_STICKER] Bot response after /addsticker: {response_text[:200]}")
+            
+            # Check if bot is asking to choose a sticker set
+            if 'choose a sticker set' in response_text or 'select a sticker set' in response_text:
+                # Send the pack short name
+                self.logger.info(f"[ADD_STICKER] Sending pack short name: {pack_short_name}")
+                process_state['stage'] = 'selecting_pack'
+                process_state['current_stage'] = f'Selecting pack: {pack_short_name}...'
+                process_state['message'] = f'Selecting pack: {pack_short_name}...'
+                
+                await self.conversation_manager.send_message(pack_short_name)
+                await asyncio.sleep(random.uniform(0.7, 1.2))
+                
+                # Read bot's response to pack selection
+                response = await self.conversation_manager.wait_for_message(timeout=10)
+                response_text = response.message.lower() if hasattr(response, 'message') else str(response).lower()
+                
+                self.logger.info(f"[ADD_STICKER] Bot response after pack name: {response_text[:200]}")
+                
+                # ERROR HANDLING: Check for various error conditions (user errors, not app errors)
+                if 'invalid set selected' in response_text or 'invalid' in response_text:
+                    error_msg = "Invalid sticker pack. You can only add stickers to packs you own. Please enter a valid pack name."
+                    self.logger.warning(f"[ADD_STICKER] User error: {error_msg}")
+                    process_state['stage'] = 'user_error'
+                    process_state['current_stage'] = error_msg
+                    process_state['error'] = error_msg
+                    process_state['status'] = 'failed'
+                    process_state['user_error'] = True
+                    # Don't raise - just return to end gracefully
+                    return
+                
+                if 'not found' in response_text or "doesn't exist" in response_text:
+                    error_msg = f"Sticker pack '{pack_short_name}' not found. Please check the pack name and try again."
+                    self.logger.warning(f"[ADD_STICKER] User error: {error_msg}")
+                    process_state['stage'] = 'user_error'
+                    process_state['current_stage'] = error_msg
+                    process_state['error'] = error_msg
+                    process_state['status'] = 'failed'
+                    process_state['user_error'] = True
+                    # Don't raise - just return to end gracefully
+                    return
+            
+            # Add each sticker
+            total_stickers = len(media_items)
+            stickers_added = 0
+            pack_limit_reached = False
+            
+            for idx, media_item in enumerate(media_items, 1):
+                try:
+                    # Check if we hit the 120 limit
+                    if pack_limit_reached:
+                        self.logger.warning(f"[ADD_STICKER] Skipping remaining stickers - pack limit reached")
+                        break
+                    
+                    self.logger.info(f"[ADD_STICKER] Adding sticker {idx}/{total_stickers}: {os.path.basename(media_item.file_path)}")
+                    process_state['stage'] = 'uploading'
+                    process_state['current_stage'] = f'Adding sticker {idx}/{total_stickers}...'
+                    process_state['message'] = f'Adding sticker {idx}/{total_stickers}...'
+                    process_state['current_sticker'] = idx
+                    process_state['total_stickers'] = total_stickers
+                    process_state['completed_files'] = stickers_added
+                    
+                    # Upload the media file
+                    await self.conversation_manager.send_file(media_item.file_path)
+                    await asyncio.sleep(random.uniform(1.0, 1.8))
+                    
+                    # Wait for bot's response after upload
+                    response = await self.conversation_manager.wait_for_message(timeout=15)
+                    response_text = response.message.lower() if hasattr(response, 'message') else str(response).lower()
+                    
+                    self.logger.info(f"[ADD_STICKER] Bot response after upload: {response_text[:200]}")
+                    
+                    # ERROR HANDLING: Check for 120 sticker limit
+                    if '120 sticker' in response_text or 'enough stickers' in response_text or 'give it a break' in response_text:
+                        self.logger.warning(f"[ADD_STICKER] Pack has reached 120 sticker limit!")
+                        pack_limit_reached = True
+                        process_state['stage'] = 'completed'
+                        process_state['current_stage'] = f'Pack limit reached! Successfully added {stickers_added} stickers.'
+                        process_state['message'] = f'Pack limit reached! Successfully added {stickers_added} stickers. The pack cannot have more than 120 stickers.'
+                        process_state['status'] = 'completed'
+                        process_state['stickers_added'] = stickers_added
+                        process_state['completed_files'] = stickers_added
+                        process_state['limit_reached'] = True
+                        process_state['shareable_link'] = f'https://t.me/addstickers/{pack_short_name}'
+                        
+                        # Send /done to finish
+                        await self.conversation_manager.send_message('/done')
+                        await asyncio.sleep(0.5)
+                        
+                        self.logger.info(f"[ADD_STICKER] Completed with limit - added {stickers_added}/{total_stickers} stickers")
+                        return
+                    
+                    # ERROR HANDLING: Check for Telegram errors
+                    # Video duration too long
+                    if 'duration is too long' in response_text or 'may not exceed' in response_text:
+                        error_msg = "Video duration is too long. Video stickers may not exceed 3 seconds."
+                        self.logger.warning(f"[ADD_STICKER] User error: {error_msg}")
+                        process_state['stage'] = 'user_error'
+                        process_state['current_stage'] = error_msg
+                        process_state['error'] = error_msg
+                        process_state['status'] = 'failed'
+                        process_state['user_error'] = True
+                        return
+                    
+                    # File size too large
+                    if 'file is too big' in response_text or 'too large' in response_text:
+                        error_msg = "File is too large. Video stickers must be under 256KB."
+                        self.logger.warning(f"[ADD_STICKER] User error: {error_msg}")
+                        process_state['stage'] = 'user_error'
+                        process_state['current_stage'] = error_msg
+                        process_state['error'] = error_msg
+                        process_state['status'] = 'failed'
+                        process_state['user_error'] = True
+                        return
+                    
+                    # Wrong dimensions
+                    if 'dimensions' in response_text or '512' in response_text:
+                        error_msg = "Invalid sticker dimensions. Stickers must be 512x512 pixels."
+                        self.logger.warning(f"[ADD_STICKER] User error: {error_msg}")
+                        process_state['stage'] = 'user_error'
+                        process_state['current_stage'] = error_msg
+                        process_state['error'] = error_msg
+                        process_state['status'] = 'failed'
+                        process_state['user_error'] = True
+                        return
+                    
+                    # Wrong format
+                    if 'format' in response_text and ('wrong' in response_text or 'invalid' in response_text or 'webm' in response_text):
+                        error_msg = "Invalid file format. Video stickers must be in WEBM format with VP9 codec."
+                        self.logger.warning(f"[ADD_STICKER] User error: {error_msg}")
+                        process_state['stage'] = 'user_error'
+                        process_state['current_stage'] = error_msg
+                        process_state['error'] = error_msg
+                        process_state['status'] = 'failed'
+                        process_state['user_error'] = True
+                        return
+                    
+                    # Wrong media type for pack
+                    if 'video' in response_text and 'not' in response_text:
+                        error_msg = "Cannot add videos to an image sticker pack."
+                        self.logger.warning(f"[ADD_STICKER] User error: {error_msg}")
+                        process_state['stage'] = 'user_error'
+                        process_state['current_stage'] = error_msg
+                        process_state['error'] = error_msg
+                        process_state['status'] = 'failed'
+                        process_state['user_error'] = True
+                        return
+                    
+                    if 'image' in response_text and 'not' in response_text:
+                        error_msg = "Cannot add images to a video sticker pack."
+                        self.logger.warning(f"[ADD_STICKER] User error: {error_msg}")
+                        process_state['stage'] = 'user_error'
+                        process_state['current_stage'] = error_msg
+                        process_state['error'] = error_msg
+                        process_state['status'] = 'failed'
+                        process_state['user_error'] = True
+                        return
+                    
+                    # If upload was successful, send emoji
+                    if 'emoji' in response_text or 'send me an emoji' in response_text:
+                        self.logger.info(f"[ADD_STICKER] Sending emoji: {media_item.emoji}")
+                        await self.conversation_manager.send_message(media_item.emoji)
+                        await asyncio.sleep(random.uniform(0.5, 1.0))
+                        
+                        # Update stickers added count
+                        stickers_added += 1
+                        
+                        # Wait for confirmation
+                        response = await self.conversation_manager.wait_for_message(timeout=10)
+                        response_text = response.message.lower() if hasattr(response, 'message') else str(response).lower()
+                        self.logger.info(f"[ADD_STICKER] Bot response after emoji: {response_text[:100]}")
+                        
+                        # Check for 120 limit again after emoji
+                        if '120 sticker' in response_text or 'enough stickers' in response_text:
+                            pack_limit_reached = True
+                
+                except Exception as e:
+                    self.logger.error(f"[ADD_STICKER] Error adding sticker {idx}: {e}")
+                    # Continue with next sticker instead of failing completely
+                    continue
+            
+            # Send /done to complete
+            self.logger.info(f"[ADD_STICKER] Sending /done to complete")
+            process_state['stage'] = 'finalizing'
+            process_state['current_stage'] = 'Finalizing changes...'
+            process_state['message'] = 'Finalizing changes...'
+            
+            await self.conversation_manager.send_message('/done')
+            
+            # Wait for Telegram's confirmation ("OK, well done!" or similar)
+            try:
+                response = await self.conversation_manager.wait_for_message(timeout=15)
+                response_text = response.message.lower() if hasattr(response, 'message') else str(response).lower()
+                self.logger.info(f"[ADD_STICKER] Bot response after /done: {response_text[:100]}")
+                
+                # Check for success confirmation
+                if 'well done' in response_text or 'ok' in response_text or 'done' in response_text:
+                    self.logger.info(f"[ADD_STICKER] Received success confirmation from Telegram")
+            except asyncio.TimeoutError:
+                self.logger.warning(f"[ADD_STICKER] Timeout waiting for /done confirmation, but stickers were added")
+            
+            # Mark as completed
+            process_state['stage'] = 'completed'
+            process_state['status'] = 'completed'
+            process_state['current_stage'] = f'✅ Successfully added {stickers_added} sticker(s) to pack!'
+            process_state['message'] = f'Successfully added {stickers_added} stickers to pack "{pack_short_name}"!'
+            process_state['stickers_added'] = stickers_added
+            process_state['completed_files'] = stickers_added
+            process_state['shareable_link'] = f'https://t.me/addstickers/{pack_short_name}'
+            process_state['end_time'] = time.time()
+            
+            # Increment stats
+            from stats_tracker import stats_tracker
+            stats_tracker.increment_stickers(stickers_added)
+            
+            self.logger.info(f"[ADD_STICKER] ✅ Successfully added {stickers_added} stickers to pack '{pack_short_name}'")
+            
+            # Stop conversation manager to release resources
+            try:
+                await self.conversation_manager.stop_listening()
+                self.logger.info(f"[ADD_STICKER] Conversation manager stopped")
+            except Exception as e:
+                self.logger.warning(f"[ADD_STICKER] Error stopping conversation manager: {e}")
+            
+            # Schedule process removal after a short delay (let frontend get final status)
+            async def cleanup_process():
+                await asyncio.sleep(5)  # Wait 5 seconds for frontend to get final status
+                if process_id in shared_state.active_processes:
+                    del shared_state.active_processes[process_id]
+                    self.logger.info(f"[ADD_STICKER] Process {process_id} removed from active_processes")
+            
+            asyncio.create_task(cleanup_process())
+            
+        except Exception as e:
+            self.logger.error(f"[ADD_STICKER] Error in async add: {e}")
+            process_state = shared_state.active_processes.get(process_id, {})
+            process_state['stage'] = 'failed'
+            process_state['status'] = 'failed'
+            process_state['current_stage'] = f'Error: {str(e)}'
+            process_state['error'] = str(e)
+            process_state['end_time'] = time.time()
+            
+            # Stop conversation manager to release resources
+            try:
+                if self.conversation_manager:
+                    await self.conversation_manager.stop_listening()
+                    self.logger.info(f"[ADD_STICKER] Conversation manager stopped after error")
+            except Exception as cleanup_error:
+                self.logger.warning(f"[ADD_STICKER] Error stopping conversation manager: {cleanup_error}")
+            
+            # Schedule process removal after a short delay
+            async def cleanup_process():
+                await asyncio.sleep(5)
+                if process_id in shared_state.active_processes:
+                    del shared_state.active_processes[process_id]
+                    self.logger.info(f"[ADD_STICKER] Process {process_id} removed after error")
+            
+            asyncio.create_task(cleanup_process())
+            raise
+
     def __del__(self):
         # Best-effort cleanup on interpreter shutdown
         try:
@@ -1633,20 +2035,29 @@ def run_telegram_coroutine(coro):
     if not asyncio.iscoroutine(coro):
         raise TypeError(f"Expected a coroutine object, got {type(coro)}")
     
+    # Try to get the handler's event loop first
+    handler_loop = None
     try:
-        # Always try to use the handler's event loop first to avoid conflicts
         from telegram_connection_handler import get_telegram_handler
         handler = get_telegram_handler()
         if handler and handler._loop and handler._running:
-            # Use the handler's dedicated event loop
-            future = asyncio.run_coroutine_threadsafe(coro, handler._loop)
-            # No timeout - let it complete naturally
-            return future.result(timeout=None)
-    except ImportError:
-        pass
+            handler_loop = handler._loop
     except Exception as e:
         logging.debug(f"Handler loop not available: {e}")
     
+    # If we found a handler loop, use it exclusively
+    if handler_loop:
+        try:
+            # Use the handler's dedicated event loop
+            future = asyncio.run_coroutine_threadsafe(coro, handler_loop)
+            # No timeout - let it complete naturally
+            return future.result(timeout=None)
+        except Exception:
+            # If the coroutine failed, we must re-raise the exception.
+            # We CANNOT fall back to another loop because the coroutine 
+            # has already been started/consumed.
+            raise
+
     # Only use fallback if handler is truly unavailable
     try:
         # Try to get existing event loop
@@ -1957,6 +2368,97 @@ def register_sticker_routes(app):
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500
 
+    @app.route('/api/sticker/add-to-pack', methods=['POST', 'OPTIONS'], strict_slashes=False)
+    def add_to_existing_pack():
+        """
+        API endpoint to add stickers to an existing Telegram sticker pack
+        """
+        if request.method == 'OPTIONS':
+            return '', 200
+            
+        try:
+            data = request.get_json()
+            
+            # Validate input
+            pack_short_name = data.get('pack_short_name', '').strip()
+            media_files = data.get('media_files', [])
+            process_id = data.get('process_id', '').strip()
+            
+            if not pack_short_name:
+                return jsonify({"success": False, "error": "Pack short name is required"}), 400
+            
+            if not media_files or not isinstance(media_files, list):
+                return jsonify({"success": False, "error": "Media files are required"}), 400
+            
+            if len(media_files) == 0:
+                return jsonify({"success": False, "error": "At least one media file is required"}), 400
+            
+            if not process_id:
+                return jsonify({"success": False, "error": "Process ID is required"}), 400
+            
+            # Validate pack short name format
+            if not re.match(r'^[a-zA-Z][a-zA-Z0-9_]{4,31}$', pack_short_name):
+                return jsonify({
+                    "success": False, 
+                    "error": "Invalid pack short name format. Must be 5-32 characters, start with a letter, and contain only letters, numbers, and underscores."
+                }), 400
+            
+            # Check if bot is connected - use handler for more reliable check
+            from telegram_connection_handler import get_telegram_handler
+            handler = get_telegram_handler()
+            if not handler or not handler.has_active_connection():
+                return jsonify({"success": False, "error": "Not connected to Telegram. Please reconnect."}), 400
+            
+            # Double-check with sticker_bot
+            if not sticker_bot.is_connected():
+                return jsonify({"success": False, "error": "Telegram connection not ready. Please try reconnecting."}), 400
+            
+            # Initialize process tracking
+            import shared_state # Import here to avoid circular dependency if shared_state imports this file
+            shared_state.active_processes[process_id] = {
+                'status': 'starting',
+                'current_stage': f'Preparing to add {len(media_files)} stickers to pack...',
+                'stage': 'initializing',
+                'message': f'Preparing to add {len(media_files)} stickers to pack...',
+                'pack_short_name': pack_short_name,
+                'total_stickers': len(media_files),
+                'total_files': len(media_files),
+                'current_sticker': 0,
+                'completed_files': 0,
+                'stickers_added': 0,
+                'limit_reached': False,
+                'type': 'sticker_add'
+            }
+            
+            # Sanitize file paths
+            for media_file in media_files:
+                if 'file_path' in media_file:
+                    media_file['file_path'] = media_file['file_path'].replace('\\\\', '/').replace('//', '/')
+            
+            # Start the process in a background thread
+            def add_sticker_thread():
+                try:
+                    sticker_bot.add_to_existing_pack(pack_short_name, media_files, process_id)
+                except Exception as e:
+                    logging.error(f"[ADD_TO_PACK_THREAD] Error: {e}")
+                    if process_id in shared_state.active_processes:
+                        shared_state.active_processes[process_id]['status'] = 'failed'
+                        shared_state.active_processes[process_id]['current_stage'] = f'Error: {str(e)}'
+                        shared_state.active_processes[process_id]['error'] = str(e)
+            
+            thread = threading.Thread(target=add_sticker_thread, daemon=True)
+            thread.start()
+            
+            return jsonify({
+                "success": True, 
+                "process_id": process_id,
+                "message": f"Adding stickers to pack '{pack_short_name}'..."
+            })
+
+        except Exception as e:
+            logging.error(f"[ADD_TO_PACK_API] Error: {e}")
+            return jsonify({"success": False, "error": str(e)}), 500
+
     @app.route('/api/sticker/create-pack', methods=['POST', 'OPTIONS'], strict_slashes=False)
     def create_sticker_pack():
         if request.method == 'OPTIONS':
@@ -2108,10 +2610,11 @@ def register_sticker_routes(app):
             return jsonify({
                 "success": True, 
                 "process_id": process_id,
-                "message": "Sticker pack creation queued"
+                "message": "Sticker pack creation started"
             })
 
         except Exception as e:
+            logging.error(f"[ADD_TO_PACK_API] Error: {e}")
             return jsonify({"success": False, "error": str(e)}), 500
 
     @app.route('/api/sticker/connection-status', methods=['GET', 'OPTIONS'], strict_slashes=False)
