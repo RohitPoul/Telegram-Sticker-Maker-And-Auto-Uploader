@@ -269,8 +269,12 @@ class TelegramPresetManager {
             return;
         }
 
-        // Confirm deletion
-        if (!confirm(`Are you sure you want to delete the preset "${selectedPreset}"?`)) {
+        // Confirm deletion using custom modal
+        const confirmed = await window.confirmModal.show(
+            `Are you sure you want to delete the preset "${selectedPreset}"?`,
+            'Delete Preset'
+        );
+        if (!confirmed) {
             return;
         }
 
