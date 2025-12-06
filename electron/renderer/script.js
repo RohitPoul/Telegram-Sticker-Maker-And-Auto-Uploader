@@ -1460,6 +1460,10 @@ class TelegramUtilities {
             connectBtnOk.onclick = () => this.disconnectTelegram();
           }
           this.telegramConnected = true;
+          // Update preset manager UI to disable controls when connected
+          if (window.telegramPresetManager) {
+            window.telegramPresetManager.updateUIState();
+          }
           break;
         }
         case "connecting": {
@@ -1491,6 +1495,10 @@ class TelegramUtilities {
             connectBtnIdle.onclick = () => this.connectTelegram();
           }
           this.telegramConnected = false;
+          // Update preset manager UI to enable controls when disconnected
+          if (window.telegramPresetManager) {
+            window.telegramPresetManager.updateUIState();
+          }
           break;
         }
       }
@@ -5833,14 +5841,14 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
             } else {
               // Check if we have a shareable_link, which means the process is ACTUALLY completed
               const hasShareableLink = !!(progress.shareable_link || progress.pack_link || progress.link);
-              
+
               // For "add to pack" mode, just check if status is completed and we have stickers_added
               const isAddMode = this.currentPackMode === "add" || this.currentOperation === "adding_stickers";
               const addModeCompleted = isAddMode && (progress.stickers_added > 0 || progress.completed_files > 0);
 
               // Check for completion: shareable_link OR add mode completed OR normal workflow completion
               if (hasShareableLink || addModeCompleted || this.workflowState.packCompleted || (this.workflowState.iconUploaded && this.workflowState.urlNameSubmitted) || progress.auto_skip_handled) {
-                const successMsg = isAddMode 
+                const successMsg = isAddMode
                   ? `✅ Successfully added ${progress.stickers_added || progress.completed_files || 1} sticker(s) to pack!`
                   : "✅ Sticker pack creation completed successfully!";
                 this.addStatusItem(successMsg, "completed");
@@ -6020,13 +6028,13 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   // Only resets if no process is actively running
   resetButtonText(btn, force = false) {
     if (!btn) return;
-    
+
     // Don't reset if a process is running (unless forced)
     if (!force && (this.stickerProgressInterval || this.currentProcessId)) {
       console.log("[BUTTON] Skipping reset - process is running");
       return;
     }
-    
+
     if (this.currentPackMode === "add") {
       btn.innerHTML = '<i class="fas fa-plus"></i> <span id="pack-action-text">Add to Pack</span>';
     } else {
@@ -6254,7 +6262,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       } else {
         // Different messages for add mode vs create mode
         const stickersAdded = progressData?.stickers_added || progressData?.completed_files || this.mediaFiles.length;
-        
+
         if (isAddMode) {
           this.addStatusItem(`✅ Successfully added ${stickersAdded} sticker(s) to pack!`, "completed");
         } else {
@@ -6270,7 +6278,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         } else {
           // Show toast for add mode or when no link
           const toastTitle = isAddMode ? "Stickers Added" : "Pack Created";
-          const toastMsg = isAddMode 
+          const toastMsg = isAddMode
             ? `Successfully added ${stickersAdded} sticker(s) to pack!`
             : "Sticker pack created successfully!";
           this.showToast("success", toastTitle, toastMsg);
@@ -6284,7 +6292,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       // CRITICAL FIX: Prevent duplicate completion messages
     }
     this.updateStats();
-    
+
     // Reset current operation
     this.currentOperation = null;
 
@@ -6319,8 +6327,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     } else {
       const errorMessage = progressData?.error || progressData?.current_stage || "Unknown error";
       // Check if this is a user error (like invalid pack name, duration too long, etc.)
-      const isUserError = progressData?.user_error || 
-        errorMessage.includes("Invalid sticker pack") || 
+      const isUserError = progressData?.user_error ||
+        errorMessage.includes("Invalid sticker pack") ||
         errorMessage.includes("not found") ||
         errorMessage.includes("duration") ||
         errorMessage.includes("too long") ||
@@ -6328,7 +6336,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         errorMessage.includes("dimensions") ||
         errorMessage.includes("format") ||
         errorMessage.includes("Please");
-      
+
       this.showToast(
         isUserError ? "warning" : "error",
         isUserError ? "Sticker Error" : (isAddMode ? "Add Failed" : "Creation Failed"),
@@ -7962,7 +7970,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   clearApplicationData() {
     window.confirmModal.show("This will permanently delete all saved credentials, settings, session data and file lists. This cannot be undone. Are you sure?", "Factory Reset").then(confirmed => {
       if (!confirmed) return;
-      
+
       try {
         // Clear localStorage (keep theme)
         const theme = localStorage.getItem("app_theme");
@@ -7996,7 +8004,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         }
 
         // Clear backend session
-        this.apiRequest("POST", "/api/clear-session").catch(() => {});
+        this.apiRequest("POST", "/api/clear-session").catch(() => { });
 
         this.showToast("success", "Data Cleared", "All application data has been cleared successfully");
       } catch (error) {
@@ -8209,7 +8217,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   async resetStats() {
     const confirmed = await window.confirmModal.show("Are you sure you want to reset all statistics?", "Reset Statistics");
     if (!confirmed) return;
-    
+
     try {
       const response = await this.apiRequest("POST", "/api/reset-stats");
       if (response.success) {
@@ -8227,7 +8235,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   async clearLogs() {
     const confirmed = await window.confirmModal.show("Are you sure you want to clear all log files?", "Clear Logs");
     if (!confirmed) return;
-    
+
     try {
       const response = await this.apiRequest("POST", "/api/clear-logs");
       if (response.success) {
@@ -8243,7 +8251,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   async clearCredentials() {
     const confirmed = await window.confirmModal.show("Clear all saved credentials? You'll need to re-enter your Telegram API credentials.", "Clear Credentials");
     if (!confirmed) return;
-    
+
     try {
       const response = await this.apiRequest("POST", "/api/clear-credentials");
       if (response.success) {

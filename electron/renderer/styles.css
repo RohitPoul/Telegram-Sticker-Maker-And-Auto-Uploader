@@ -8105,3 +8105,36 @@ html {
   flex-direction: column;
   gap: 4px;
 }
+/* Locked preset controls when connected to Telegram */
+.preset-controls.locked {
+  opacity: 0.6;
+  pointer-events: none;
+  position: relative;
+}
+
+.preset-controls.locked::after {
+  content: '\f023';
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+  position: absolute;
+  right: -24px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--warning-color);
+  font-size: 0.9rem;
+}
+
+.preset-dropdown:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: var(--bg-tertiary);
+}
+
+/* Disabled credential inputs when connected */
+#telegram-api-id:disabled,
+#telegram-api-hash:disabled,
+#telegram-phone:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: var(--bg-tertiary);
+}

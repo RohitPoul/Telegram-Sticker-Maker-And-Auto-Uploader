@@ -14,6 +14,8 @@ class TelegramPresetManager {
 
         this.initializeEventListeners();
         this.loadPresets();
+        this.observeConnectionStatus();
+        this.updateUIState();
     }
 
     initializeEventListeners() {
@@ -25,6 +27,59 @@ class TelegramPresetManager {
 
         // Delete button click
         this.deleteBtn.addEventListener('click', () => this.deletePreset());
+    }
+
+    /**
+     * Observe connection status changes and update UI accordingly
+     */
+    observeConnectionStatus() {
+        const statusElement = document.getElementById('telegram-connection-status');
+        if (!statusElement) return;
+
+        // Use MutationObserver to watch for class changes on the status icon
+        const observer = new MutationObserver(() => {
+            this.updateUIState();
+        });
+
+        observer.observe(statusElement, {
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['class']
+        });
+    }
+
+    /**
+     * Update UI state based on connection status
+     * Disables preset controls when connected to prevent confusion
+     */
+    updateUIState() {
+        const isConnected = this.isConnected();
+
+        // Disable/enable preset dropdown
+        this.presetSelect.disabled = isConnected;
+
+        // Disable/enable save button
+        this.saveBtn.disabled = isConnected;
+
+        // Delete button should be disabled when connected OR when no preset is selected
+        this.deleteBtn.disabled = isConnected || !this.presetSelect.value;
+
+        // Also disable the credential inputs when connected
+        this.apiIdInput.disabled = isConnected;
+        this.apiHashInput.disabled = isConnected;
+        this.phoneInput.disabled = isConnected;
+
+        // Add/remove visual styling for locked state
+        const presetControls = document.querySelector('.preset-controls');
+        if (presetControls) {
+            if (isConnected) {
+                presetControls.classList.add('locked');
+                presetControls.title = 'Disconnect from Telegram to modify presets';
+            } else {
+                presetControls.classList.remove('locked');
+                presetControls.title = '';
+            }
+        }
     }
 
     async loadPresets() {
@@ -249,12 +304,19 @@ class TelegramPresetManager {
     }
 
     isConnected() {
-        // Check if Telegram is connected by looking at the status indicator
+        // Check if Telegram is connected by looking at the app's connection status
+        // or by checking the status indicator icon
+        if (window.app && typeof window.app.telegramConnected !== 'undefined') {
+            return window.app.telegramConnected === true;
+        }
+
+        // Fallback: Check the status indicator icon
         const statusElement = document.getElementById('telegram-connection-status');
         if (!statusElement) return false;
 
         const statusIcon = statusElement.querySelector('i');
-        return statusIcon && statusIcon.classList.contains('text-success');
+        // When connected, the icon is fa-check-circle
+        return statusIcon && statusIcon.classList.contains('fa-check-circle');
     }
 }
 
