@@ -379,19 +379,6 @@ class TelegramUtilities {
     }
   }
 
-  // ---- Lightweight debug logger for Telegram flows ----
-  logDebug(label, payload = undefined) {
-    // Debug logging removed for production
-  }
-
-  // Debug warning method for detailed UI debugging
-  debugWarn(label, payload = undefined) {
-    // Debug logging removed for production - only log critical errors
-    if (label.includes("ERROR") || label.includes("CRITICAL")) {
-      console.error(label, payload);
-    }
-  }
-
   // OPTIMIZED apiRequest with better error handling and timeout
   async apiRequest(method, path, body = null) {
     // FIXED: Validate path to prevent [Errno 22] Invalid argument
@@ -1094,8 +1081,8 @@ class TelegramUtilities {
     // Manage live System Info updates (incl. uptime)
     const startSystemInfoTimer = () => {
       if (!this.systemInfoInterval) {
-        // Refresh quickly for visible uptime; light work
-        this.systemInfoInterval = setInterval(() => this.updateSystemInfo(), 1000);
+        // Refresh every 3 seconds for visible uptime (reduced from 1s for performance)
+        this.systemInfoInterval = setInterval(() => this.updateSystemInfo(), 3000);
       }
       // Immediate refresh on tab switch
       this.updateSystemInfo();
@@ -1515,15 +1502,15 @@ class TelegramUtilities {
     const savedAutoSkipIcon = localStorage.getItem("auto_skip_icon");
 
     if (savedApiId) {
-      const apiIdInput = document.getElementById("api-id");
+      const apiIdInput = document.getElementById("telegram-api-id");
       if (apiIdInput) apiIdInput.value = savedApiId;
     }
     if (savedApiHash) {
-      const apiHashInput = document.getElementById("api-hash");
+      const apiHashInput = document.getElementById("telegram-api-hash");
       if (apiHashInput) apiHashInput.value = savedApiHash;
     }
     if (savedPhone) {
-      const phoneInput = document.getElementById("phone-number");
+      const phoneInput = document.getElementById("telegram-phone");
       if (phoneInput) phoneInput.value = savedPhone;
     }
     if (savedOutputDir) {
@@ -1544,9 +1531,9 @@ class TelegramUtilities {
 
   saveSettings() {
     // Save settings to localStorage
-    const apiIdInput = document.getElementById("api-id");
-    const apiHashInput = document.getElementById("api-hash");
-    const phoneInput = document.getElementById("phone-number");
+    const apiIdInput = document.getElementById("telegram-api-id");
+    const apiHashInput = document.getElementById("telegram-api-hash");
+    const phoneInput = document.getElementById("telegram-phone");
     const autoSkipIconCheckbox = document.getElementById("auto-skip-icon");
 
     if (apiIdInput) localStorage.setItem("telegram_api_id", apiIdInput.value);
@@ -2082,11 +2069,6 @@ class TelegramUtilities {
     }
   }
 
-  // TEST METHOD - Remove in production
-  testSuccessModal() {
-    const testLink = "https://t.me/addstickers/test_sticker_pack_123";
-    this.showSuccessModal(testLink);
-  }
   createAnotherPack() {
 
     this.hideSuccessModal();
@@ -2514,12 +2496,6 @@ class TelegramUtilities {
     } catch (error) {
       this.showToast("error", "Error", "Failed to add video files: " + error.message);
     }
-  }
-
-  async analyzeVideoFiles() {
-    // This would analyze video files for duration, size, etc.
-    // Implementation would depend on backend capabilities
-    this.showToast("info", "Analyzing", "Analyzing video files...");
   }
 
   clearVideoFiles() {
@@ -3497,89 +3473,6 @@ class TelegramUtilities {
     }
   }
 
-  // Conversion progress monitor (video conversion only)
-  startProgressMonitoring(processId, type = "video") {
-    const MAX_CONSECUTIVE_ERRORS = 5;
-    const RETRY_DELAY = 2000; // 2 seconds
-    const LONG_OPERATION_TIMEOUT = 5 * 60 * 1000; // 5 minutes
-
-    // CRITICAL FIX: Always clear ALL intervals before starting new ones to prevent memory leaks
-    this.stopProgressMonitoring();
-
-    let consecutiveErrors = 0;
-    let operationStartTime = Date.now();
-    this.debugWarn("poll:start", { processId, type });
-
-    this.progressInterval = setInterval(async () => {
-      // Check for long-running operation
-      if (Date.now() - operationStartTime > LONG_OPERATION_TIMEOUT) {
-        this.stopProgressMonitoring();
-        this.resetOperationState();
-        this.showToast("warning", "Operation Timeout", "Operation took too long and was stopped");
-        return;
-      }
-
-      try {
-        const progress = await this.getConversionProgress(processId);
-        this.debugWarn("poll:data", { processId, type, progress });
-
-        if (!progress) {
-          consecutiveErrors++;
-          this.handleProgressError(new Error("No progress data"), consecutiveErrors);
-          return;
-        }
-
-        // Reset error counter on success
-        consecutiveErrors = 0;
-        this.logProgressDetails(progress);
-
-        // Existing progress handling logic
-
-        // Update pause state if changed
-        if (progress.paused !== this.isPaused) {
-          this.isPaused = progress.paused;
-          this.updateConversionButtons(this.currentOperation === "converting", this.currentOperation === "hexediting");
-        }
-
-        // Update overall progress display if needed
-        this.updateOverallProgress(progress);
-
-        // For hex edit, ensure the UI is refreshed after progress updates
-        if (type === "hex_edit") {
-          // The files have already been updated in getConversionProgress
-          // Just refresh the UI to show the changes
-          this.updateVideoFileList();
-        }
-
-        // Check if operation is complete
-        if (progress.status === "completed" || progress.status === "error") {
-          this.debugWarn("poll:complete", { processId, type, status: progress.status });
-
-          // For hex edit completion, only update files that haven't been updated yet
-          if (type === "hex_edit" && progress.status === "completed") {
-            // Only update files that are still pending or processing
-            this.videoFiles.forEach((file) => {
-              if (file.status === "pending" || file.status === "processing") {
-                file.status = "completed";
-                file.progress = 100;
-                file.stage = "Hex edit completed!";
-              }
-            });
-
-            // Update UI immediately
-            this.updateVideoFileList();
-          }
-
-          await this.handleConversionComplete(progress);
-        }
-      } catch (error) {
-        consecutiveErrors++;
-        this.debugWarn("poll:error", { processId, type, error: error?.message });
-        this.handleProgressError(error, consecutiveErrors);
-      }
-    }, RETRY_DELAY);
-  }
-
   // =============================================
   // HEX EDIT PROGRESS (Separate logic from conversion)
   // =============================================
@@ -3823,29 +3716,14 @@ class TelegramUtilities {
     }
 
     // Update file statuses with final values
-    this.debugWarn("🔥 COMPLETION DEBUG - Updating Final File Statuses", {
-      wasHexEdit: wasHexEdit,
-      progressStatus: progress.status,
-      hasFileStatuses: !!(progress.file_statuses && Object.keys(progress.file_statuses).length > 0),
-      fileStatusesKeys: Object.keys(progress.file_statuses || {}),
-      completedFiles: progress.completedFiles,
-      totalFiles: progress.totalFiles
-    });
 
     if (progress.file_statuses && Object.keys(progress.file_statuses).length > 0) {
-      this.debugWarn("🔥 COMPLETION DEBUG - Using file_statuses data");
       this.videoFiles.forEach((file, index) => {
         const fileStatus = progress.file_statuses[index];
         if (fileStatus) {
           file.status = fileStatus.status;
           file.progress = fileStatus.progress;
           file.stage = fileStatus.stage || progress.currentStage;
-          this.debugWarn("🔥 COMPLETION DEBUG - Updated file from file_statuses", {
-            index: index,
-            filename: file.name,
-            status: file.status,
-            progress: file.progress
-          });
         } else {
           // Fallback if no specific file status
           file.status = progress.status === "completed" ? "completed" : "error";
@@ -3853,41 +3731,17 @@ class TelegramUtilities {
           file.stage = progress.status === "completed" ?
             (wasHexEdit ? "Hex edit successful" : "Conversion successful") :
             (wasHexEdit ? "Hex edit failed" : "Conversion failed");
-          this.debugWarn("🔥 COMPLETION DEBUG - Updated file with fallback", {
-            index: index,
-            filename: file.name,
-            status: file.status,
-            progress: file.progress
-          });
         }
       });
     } else {
-      // If no file_statuses at all, update all files with the overall status
-      this.debugWarn("🔥 COMPLETION DEBUG - No file_statuses, using overall status");
       this.videoFiles.forEach((file, index) => {
         file.status = progress.status === "completed" ? "completed" : "error";
         file.progress = progress.status === "completed" ? 100 : file.progress || 0;
         file.stage = progress.status === "completed" ?
           (wasHexEdit ? "Hex edit successful" : "Conversion successful") :
           (wasHexEdit ? "Hex edit failed" : "Conversion failed");
-        this.debugWarn("🔥 COMPLETION DEBUG - Updated file with overall status", {
-          index: index,
-          filename: file.name,
-          status: file.status,
-          progress: file.progress
-        });
       });
     }
-
-    this.debugWarn("🔥 COMPLETION DEBUG - Final File States", {
-      videoFiles: this.videoFiles.map((f, i) => ({
-        index: i,
-        name: f.name,
-        status: f.status,
-        progress: f.progress,
-        stage: f.stage
-      }))
-    });
 
     this.updateVideoFileList();
 
@@ -3940,14 +3794,6 @@ class TelegramUtilities {
   async getConversionProgress(processId) {
     try {
       const response = await this.apiRequest("GET", `/api/conversion-progress/${processId}`);
-      this.debugWarn("🔍 DETAILED DEBUG - Raw API Response", {
-        processId: processId,
-        responseSuccess: response?.success,
-        responseData: response?.data,
-        hasFileStatuses: !!(response?.data?.file_statuses),
-        fileStatusesKeys: Object.keys(response?.data?.file_statuses || {}),
-        fullResponse: response
-      });
 
       if (!response.success) {
         if (RENDERER_DEBUG) console.error(`Progress check failed for ${processId}:`, response.error);
@@ -3957,35 +3803,12 @@ class TelegramUtilities {
       }
 
       const progressData = response.data;
-      this.debugWarn("🔍 DETAILED DEBUG - Progress Data Extracted", {
-        progressData: progressData,
-        fileStatusesRaw: progressData.file_statuses,
-        fileStatusesType: typeof progressData.file_statuses,
-        fileStatusesIsObject: progressData.file_statuses && typeof progressData.file_statuses === "object",
-        fileStatusesKeys: Object.keys(progressData.file_statuses || {})
-      });
 
       // Update file statuses if available - but do this AFTER returning the data
       // so it's available for both conversion and hex edit operations
       const fileStatuses = progressData.file_statuses || {};
 
-      // Debug log to see what we're getting
-      if (Object.keys(fileStatuses).length > 0) {
-        this.debugWarn("🔍 DETAILED DEBUG - File Statuses Processing", {
-          operation: this.currentOperation,
-          count: Object.keys(fileStatuses).length,
-          statuses: fileStatuses,
-          videoFilesCount: this.videoFiles.length,
-          videoFiles: this.videoFiles.map((f, i) => ({ index: i, name: f.name, currentStatus: f.status, currentProgress: f.progress }))
-        });
-      } else {
-        this.debugWarn("🚨 DETAILED DEBUG - NO FILE STATUSES FOUND", {
-          operation: this.currentOperation,
-          progressDataKeys: Object.keys(progressData),
-          fileStatusesValue: progressData.file_statuses,
-          fileStatusesStringified: JSON.stringify(progressData.file_statuses)
-        });
-      }
+      // Debug log to see what we're getting - removed for production
 
       // Update the videoFiles array immediately for both conversion and hex edit
       if ((this.currentOperation === "converting" || this.currentOperation === "hexediting") && Object.keys(fileStatuses).length > 0) {
@@ -4029,12 +3852,6 @@ class TelegramUtilities {
         file_statuses: fileStatuses  // Pass the actual file_statuses object
       };
 
-      this.debugWarn("🔍 DETAILED DEBUG - Returning Progress Data", {
-        returnData: returnData,
-        fileStatusesInReturn: returnData.file_statuses,
-        fileStatusesKeysInReturn: Object.keys(returnData.file_statuses || {})
-      });
-
       return returnData;
     } catch (error) {
       if (RENDERER_DEBUG) console.error("Error getting conversion progress:", error);
@@ -4045,10 +3862,6 @@ class TelegramUtilities {
   updateFileStatuses(fileStatuses) {
     // Handle both object and array-like structures
     if (!fileStatuses || typeof fileStatuses !== "object") {
-      this.debugWarn("🚨 CRITICAL ERROR - Invalid File Statuses", {
-        fileStatuses: fileStatuses,
-        type: typeof fileStatuses
-      });
       return;
     }
 
@@ -4057,7 +3870,6 @@ class TelegramUtilities {
     fileStatusKeys.forEach(index => {
       const fileStatus = fileStatuses[index];
       if (!fileStatus) {
-        this.debugWarn("🚨 CRITICAL ERROR - Empty File Status", { index, fileStatus });
         return;
       }
 
@@ -4066,76 +3878,24 @@ class TelegramUtilities {
 
       if (fileElement) {
         // Update file item class based on status
-        const oldClassName = fileElement.className;
         fileElement.className = `file-item ${fileStatus.status || "pending"}`;
-
-        this.debugWarn("🎯 DETAILED DEBUG - Updated Element Class", {
-          index: index,
-          oldClassName: oldClassName,
-          newClassName: fileElement.className
-        });
 
         // Update progress bar
         const progressBar = fileElement.querySelector(".file-progress-fill");
         const progressText = fileElement.querySelector(".file-progress-text");
         const statusElement = fileElement.querySelector(".file-status");
 
-        this.debugWarn("🎯 DETAILED DEBUG - DOM Elements Found", {
-          index: index,
-          hasProgressBar: !!progressBar,
-          hasProgressText: !!progressText,
-          hasStatusElement: !!statusElement
-        });
-
         if (progressBar) {
-          const oldWidth = progressBar.style.width;
           progressBar.style.width = `${fileStatus.progress}%`;
-          this.debugWarn("🎯 DETAILED DEBUG - Updated Progress Bar", {
-            index: index,
-            oldWidth: oldWidth,
-            newWidth: progressBar.style.width,
-            progress: fileStatus.progress
-          });
-        } else {
-          this.debugWarn("🚨 DETAILED DEBUG - Progress Bar Not Found", { index });
         }
 
         if (progressText) {
-          const oldText = progressText.textContent;
           progressText.textContent = `${fileStatus.progress === 100 ? "✔" : fileStatus.progress + "%"}`;
-          this.debugWarn("🎯 DETAILED DEBUG - Updated Progress Text", {
-            index: index,
-            oldText: oldText,
-            newText: progressText.textContent,
-            progress: fileStatus.progress
-          });
-        } else {
-          this.debugWarn("🚨 DETAILED DEBUG - Progress Text Not Found", { index });
         }
 
         if (statusElement) {
-          const oldStatus = statusElement.textContent;
           statusElement.textContent = fileStatus.stage || fileStatus.status;
-          this.debugWarn("🎯 DETAILED DEBUG - Updated Status Element", {
-            index: index,
-            oldStatus: oldStatus,
-            newStatus: statusElement.textContent,
-            stage: fileStatus.stage,
-            status: fileStatus.status
-          });
-        } else {
-          this.debugWarn("🚨 DETAILED DEBUG - Status Element Not Found", { index });
         }
-      } else {
-        this.debugWarn("🚨 DETAILED DEBUG - File Element Not Found in DOM", {
-          index: index,
-          selector: `[data-index="${index}"]`,
-          availableElements: Array.from(document.querySelectorAll("[data-index]")).map(el => ({
-            index: el.getAttribute("data-index"),
-            className: el.className,
-            innerHTML: el.innerHTML.substring(0, 100) + "..."
-          }))
-        });
       }
     });
   }
@@ -6869,7 +6629,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           if (nextAttempt <= (maxAttempts || 3)) {
             // Show retry modal with updated attempt count
             this.addStatusItem(`❌ URL name '${newUrlName}' is taken. Retry ${nextAttempt}/${maxAttempts}`, "warning");
-            this.showUrlNameModal(processId, newUrlName, nextAttempt, maxAttempts);
+            this.showUrlNameModal(newUrlName, nextAttempt, maxAttempts, processId);
             return; // Don't re-enable the button, show new modal
           } else {
             // Exhausted all retries - mark as completed with manual instruction
@@ -7986,7 +7746,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         this.pendingPassword = false;
 
         // Clear form values
-        ["api-id", "api-hash", "phone-number", "video-output-dir", "pack-name"].forEach(id => {
+        ["telegram-api-id", "telegram-api-hash", "telegram-phone", "video-output-dir", "pack-name"].forEach(id => {
           const input = document.getElementById(id);
           if (input) input.value = "";
         });
@@ -9049,51 +8809,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     };
   }
 
-  // Example usage for file lists
-  initializeVirtualLists() {
-    // Virtual scrolling for video file list
-    this.videoFileList = this.createVirtualList(
-      "#video-file-list",
-      ".file-item",
-      this.videoFiles,
-      (element, file, index) => {
-        element.innerHTML = `
-          <div class="file-info">
-            <i class="fas fa-file-video file-icon"></i>
-            <div class="file-details">
-              <div class="file-name">${file.name}</div>
-              <div class="file-path">${file.path}</div>
-            </div>
-          </div>
-          <div class="file-actions">
-            <button class="btn btn-sm btn-secondary">Remove</button>
-          </div>
-        `;
-      }
-    );
-
-    // Similar implementation for sticker media list
-    this.stickerMediaList = this.createVirtualList(
-      "#sticker-media-list",
-      ".media-item",
-      this.stickerFiles,
-      (element, file, index) => {
-        element.innerHTML = `
-          <div class="media-info">
-            <i class="fas fa-image media-icon"></i>
-            <div class="media-details">
-              <div class="media-name">${file.name}</div>
-              <div class="media-type">${file.type}</div>
-            </div>
-          </div>
-          <div class="media-actions">
-            <button class="btn btn-sm btn-secondary">Remove</button>
-          </div>
-        `;
-      }
-    );
-  }
-
   async getFileMetadata(filePath) {
     try {
       const response = await this.apiRequest("POST", "/api/get-file-info", {
@@ -9194,24 +8909,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     }
   }
 
-  // Simple XOR encryption for localStorage (basic obfuscation)
-  encryptData(data) {
-    if (!data) return "";
-    const key = "TELEGRAM_SECURE_KEY";
-    return btoa(data.split("").map((char, index) =>
-      String.fromCharCode(char.charCodeAt(0) ^ key.charCodeAt(index % key.length))
-    ).join(""));
-  }
 
-  decryptData(encryptedData) {
-    if (!encryptedData) return "";
-    const key = "TELEGRAM_SECURE_KEY";
-    return atob(encryptedData).split("").map((char, index) =>
-      String.fromCharCode(char.charCodeAt(0) ^ key.charCodeAt(index % key.length))
-    ).join("");
-  }
-
-  // Modify existing credential storage methods
+  // Credential storage methods
   saveCredentials() {
     const apiIdInput = document.getElementById("telegram-api-id");
     const apiHashInput = document.getElementById("telegram-api-hash");
@@ -9357,48 +9056,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       recentPhonesContainer.style.display = recentPhones.length > 0 ? "flex" : "none";
     }
   }
-  // Input handling methods
-  setupInputHandlers() {
-    // Clipboard paste functionality
-    const pasteButtons = document.querySelectorAll(".btn-paste");
-    pasteButtons.forEach(button => {
-      button.addEventListener("click", async () => {
-        const targetId = button.getAttribute("data-target");
-        const targetInput = document.getElementById(targetId);
-
-        try {
-          const clipboardText = await navigator.clipboard.readText();
-          if (clipboardText) {
-            targetInput.value = clipboardText.trim();
-            this.showToast("success", "Clipboard", "Text pasted successfully");
-          }
-        } catch (error) {
-          if (RENDERER_DEBUG) console.error("Clipboard paste error:", error);
-          this.showToast("error", "Clipboard Error", "Failed to paste from clipboard");
-        }
-      });
-    });
-
-    // Input visibility toggle
-    const visibilityButtons = document.querySelectorAll(".btn-toggle-visibility");
-    visibilityButtons.forEach(button => {
-      button.addEventListener("click", () => {
-        const targetId = button.getAttribute("data-target");
-        const targetInput = document.getElementById(targetId);
-        const icon = button.querySelector("i");
-
-        if (targetInput.type === "tel" || targetInput.type === "password") {
-          targetInput.type = "text";
-          icon.classList.remove("fa-eye-slash");
-          icon.classList.add("fa-eye");
-        } else {
-          targetInput.type = "tel";
-          icon.classList.remove("fa-eye");
-          icon.classList.add("fa-eye-slash");
-        }
-      });
-    });
-  }
 
   // Check for existing Telegram session on startup
   async checkExistingConnection() {
@@ -9447,8 +9104,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
 
   // Modify initialization to include input handlers
   async initializeTelegramConnection() {
-    this.logDebug("initializeTelegramConnection() - CLEAN WORKFLOW");
-
     // CLEAN WORKFLOW: Always start disconnected and force cleanup
 
     try {
@@ -9667,20 +9322,6 @@ window.applyEmojiToAll = () => window.app?.applyEmojiToAll();
 window.applyRandomEmojis = () => window.app?.applyRandomEmojis();
 window.applySequentialEmojis = () => window.app?.applySequentialEmojis();
 window.applyThemeEmojis = () => window.app?.applyThemeEmojis();
-
-// TEST METHOD - Console access for success modal testing with DOM analysis
-window.testSuccessModal = () => {
-  if (window.app?.testSuccessModal) {
-    window.app.testSuccessModal();
-  }
-};
-
-// Quick manual test - inject and show modal immediately
-window.quickModalTest = () => {
-  if (window.app?.showSuccessModal) {
-    window.app.showSuccessModal("https://t.me/addstickers/test_manual_123");
-  }
-};
 
 // Handle page visibility changes
 document.addEventListener("visibilitychange", () => {
