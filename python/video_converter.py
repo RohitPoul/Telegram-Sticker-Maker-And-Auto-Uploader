@@ -71,7 +71,9 @@ class VideoConverterCore:
                             has_changes = True
                             break
                     
-                    # Update the file status
+                    # Update the file status (with safety check)
+                    if file_index not in self.active_processes[process_id]["file_statuses"]:
+                        self.active_processes[process_id]["file_statuses"][file_index] = {}
                     self.active_processes[process_id]["file_statuses"][file_index].update(file_data)
 
                     # Recalculate aggregate metrics to reflect current file progress immediately
@@ -206,8 +208,7 @@ class VideoConverterCore:
                     'filename': filename
                 })
 
-            # Get video metadata
-            duration, width, height = self.get_video_info(input_file)
+            # Validate video metadata (already retrieved above)
             if not duration or duration <= 0:
                 self.logger.error(f"[ERROR] Invalid video duration for {filename}")
                 if process_id and file_index is not None:
