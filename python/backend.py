@@ -531,7 +531,7 @@ def get_file_info():
                             if file_info["width"] and file_info["height"]:
                                 file_info["dimensions"] = f"{file_info['width']} × {file_info['height']}"
                             file_info["codec"] = stream.get('codec_name', 'Unknown')
-                            file_info["fps"] = eval(stream.get('r_frame_rate', '0/1')) if '/' in str(stream.get('r_frame_rate', '')) else 0
+                            file_info["fps"] = safe_parse_fps(stream.get('r_frame_rate', '0/1'))
                             break
                     
                     file_info["type"] = "video"
@@ -582,6 +582,17 @@ def get_file_format(file_path):
     """Get file format/extension"""
     ext = os.path.splitext(file_path)[1].lower()
     return ext[1:] if ext else "unknown"
+
+def safe_parse_fps(fps_str):
+    """Safely parse frame rate string like '30/1' or '24000/1001' without using eval()"""
+    try:
+        fps_str = str(fps_str)
+        if '/' in fps_str:
+            num, den = fps_str.split('/')
+            return float(num) / float(den) if float(den) != 0 else 0
+        return float(fps_str)
+    except (ValueError, ZeroDivisionError, TypeError):
+        return 0
 
 @app.route('/api/system-stats', methods=['GET', 'OPTIONS'], strict_slashes=False)
 def system_stats():
