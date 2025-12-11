@@ -1,7 +1,6 @@
-// Production mode - debug disabled
 const RENDERER_DEBUG = false;
 
-// Global error handling to prevent white screen crashes
+// Prevent white screen crashes by catching unhandled errors
 window.addEventListener("error", (event) => {
   console.error("🚫 [GLOBAL_ERROR] Unhandled error:", event.error);
   console.error("🚫 [GLOBAL_ERROR] Error details:", {
@@ -11,11 +10,7 @@ window.addEventListener("error", (event) => {
     colno: event.colno,
     stack: event.error?.stack
   });
-
-  // Prevent app from crashing completely
   event.preventDefault();
-
-  // Show error toast if possible
   if (window.app && window.app.showToast) {
     window.app.showToast("error", "Application Error", `Error: ${event.message}`);
   }
@@ -23,11 +18,7 @@ window.addEventListener("error", (event) => {
 
 window.addEventListener("unhandledrejection", (event) => {
   console.error("🚫 [GLOBAL_ERROR] Unhandled promise rejection:", event.reason);
-
-  // Prevent app from crashing
   event.preventDefault();
-
-  // Show error toast if possible
   if (window.app && window.app.showToast) {
     window.app.showToast("error", "Promise Error", `Promise rejection: ${event.reason}`);
   }
@@ -36,7 +27,7 @@ window.addEventListener("unhandledrejection", (event) => {
 class TelegramUtilities {
   constructor() {
     this.activeProcesses = new Map();
-    // Idempotency guards per process
+    // Prevent duplicate modal handling per process
     this.iconHandledProcesses = new Set();
     this.urlPromptHandledProcesses = new Set();
     this.videoFiles = [];
@@ -46,10 +37,9 @@ class TelegramUtilities {
     this.pendingCode = false;
     this.pendingPassword = false;
     this.currentProcessId = null;
-    this.currentStickerProcessId = null; // Add specific tracking for sticker processes
+    this.currentStickerProcessId = null;
     this.currentEmojiIndex = null;
 
-    // Consolidated modal state management - cleaner than multiple boolean flags
     this.modalState = {
       isEmojiSaving: false,
       isEmojiLocked: false,
@@ -58,68 +48,60 @@ class TelegramUtilities {
       isSubmittingPassword: false
     };
 
-    // Promise-based submission locks to prevent double submissions
+    // Prevent double submissions during async operations
     this._submitCodePromise = null;
     this._submitPasswordPromise = null;
     this._saveEmojiPromise = null;
 
-    // CRITICAL FIX: Add workflow state tracking to prevent premature completion
+    // Track sticker creation workflow to prevent premature completion
     this.workflowState = {
       iconUploaded: false,
       urlNameSubmitted: false,
       packCompleted: false,
-      currentStep: "initial" // initial, icon_upload, url_name, completed
+      currentStep: "initial"
     };
     this.progressInterval = null;
     this.stickerProgressInterval = null;
-    this.currentOperation = null; // 'converting', 'hexediting', null
+    this.currentOperation = null;
     this.isPaused = false;
     this.startTime = new Date();
     this.systemInfoInterval = null;
-    this.selectedMediaType = null; // 'image' or 'video'
-    this.defaultEmoji = "❤️"; // Heart as default emoji
+    this.selectedMediaType = null;
+    this.defaultEmoji = "❤️";
     this.sessionStats = {
       totalConversions: 0,
       successfulConversions: 0,
       failedConversions: 0,
       totalStickers: 0
     };
-    this.autoScrollEnabled = true; // Initialize auto-scroll
-
-    // Prevent double submission - handled in modalState now
+    this.autoScrollEnabled = true;
     this.isConnecting = false;
 
-    // OPTIMIZED: Add properties to prevent race conditions and duplicate notifications
+    // Prevent race conditions in progress monitoring
     this.lastStageWasQueue = false;
     this.lastStatusMessage = null;
     this.lastStatusType = null;
-    // Removed autoSkipAttempted flag - auto-skip is handled entirely by backend
     this.lastStage = null;
 
     this.telegramConnectionData = null;
     this.mediaData = {};
-
-    // Track logged file statuses to prevent duplicate logging
     this.loggedFileStatuses = new Set();
 
-    // Toast debouncing to prevent duplicates
+    // Toast debouncing
     this._lastToast = { type: '', title: '', message: '', time: 0 };
-    this._toastDebounceTime = 500; // ms
+    this._toastDebounceTime = 500;
 
-    // Debouncing for UI updates
     this.debouncedUpdateVideoFileList = this.debounce(this.updateVideoFileList.bind(this), 100);
     this._lastMinorUpdate = 0;
 
-    // Pack mode management - NEW for add to existing pack feature
-    this.currentPackMode = "create"; // 'create' or 'add'
-    this.userStickerPacks = []; // Cache of user's sticker packs
+    // Pack mode: 'create' for new packs, 'add' for existing packs
+    this.currentPackMode = "create";
+    this.userStickerPacks = [];
 
     this.init();
-    this.initializeNavigation(); // Add this line to initialize navigation
-    this.initializeTelegramForm(); // Add this to load saved Telegram credentials
+    this.initializeNavigation();
+    this.initializeTelegramForm();
 
-    // Initialize Image Handler
-    /* global ImageHandler */
     if (typeof ImageHandler !== "undefined") {
       this.imageHandler = new ImageHandler(this);
     }
@@ -172,8 +154,7 @@ class TelegramUtilities {
     return false;
   }
 
-  // FIXED: Normalize and clamp a user-provided emoji to the first visible grapheme cluster
-  // Properly preserves variation selectors (e.g., U+FE0F) and ZWJ sequences so hearts stay red on Windows
+  // Normalize emoji to first grapheme cluster, preserving variation selectors (U+FE0F) and ZWJ sequences
   normalizeEmoji(input) {
     try {
       const str = String(input || "").trim();
@@ -228,7 +209,7 @@ class TelegramUtilities {
         }
       }
 
-      // CRITICAL FIX: Ensure red heart on Windows by adding VS16 if missing
+      // Ensure red heart on Windows by adding VS16 if missing
       // Check if the emoji is a heart or similar that needs VS16
       const needsVS16 = /^[\u2764\u2665\u2763\u2600-\u26FF\u2700-\u27BF]$/.test(result.charAt(0));
       if (needsVS16 && !result.includes("\uFE0F")) {
@@ -379,25 +360,23 @@ class TelegramUtilities {
     }
   }
 
-  // OPTIMIZED apiRequest with better error handling and timeout
+  // API request with error handling and timeout
   async apiRequest(method, path, body = null) {
-    // FIXED: Validate path to prevent [Errno 22] Invalid argument
+    // Validate path to prevent [Errno 22] Invalid argument
     if (!path || typeof path !== "string") {
       throw new Error("Invalid API path");
     }
 
-    // ENHANCED: Sanitize path to prevent [Errno 22] Invalid argument
-    // Remove all control characters which can cause OS errors
+    // Sanitize path: remove control characters that can cause OS errors
     const sanitizedPath = path.replace(/[\x00-\x1f\x7f-\x9f]/g, "").trim();
 
     if (!sanitizedPath || sanitizedPath.length === 0) {
       throw new Error("Invalid API path after sanitization");
     }
 
-    // FIXED: Direct path usage - backend handles sanitization
+    // Use direct path - backend handles additional sanitization
     const url = `http://127.0.0.1:5000${sanitizedPath}`;
 
-    // OPTIMIZED: Add timeout to prevent hanging requests
     // Use longer timeout for batch operations and status checks
     let timeoutDuration = 30000; // Default 30 seconds
     if (sanitizedPath.includes("/process-batch") || sanitizedPath.includes("/process-status")) {
@@ -408,7 +387,7 @@ class TelegramUtilities {
     const timeoutId = setTimeout(() => controller.abort(), timeoutDuration);
 
     try {
-      // ENHANCED: Validate and sanitize request body before sending
+      // Validate and sanitize request body before sending
       let sanitizedBody = null;
       if (body) {
         try {
@@ -449,7 +428,7 @@ class TelegramUtilities {
     } catch (error) {
       clearTimeout(timeoutId);
 
-      // FIXED: Better error handling for specific error types
+      // Handle specific error types
       if (error.name === "AbortError") {
         throw new Error("Request timeout - server may be overloaded. Please try again.");
       }
@@ -458,7 +437,7 @@ class TelegramUtilities {
         throw new Error("Request timeout - server may be overloaded. Please try again.");
       }
 
-      // ENHANCED: Handle [Errno 22] Invalid argument errors specifically
+      // Handle [Errno 22] Invalid argument errors specifically
       if (error.message && (error.message.includes("Invalid argument") || error.message.includes("Errno 22"))) {
         console.error("[API] Invalid argument error");
         throw new Error("Invalid request data - contains invalid characters. Please check your inputs and try again.");
@@ -1737,7 +1716,7 @@ class TelegramUtilities {
       });
     };
 
-    // ENHANCED: DOM check with detailed debugging
+    // DOM check with detailed debugging
     const findModalElements = () => {
       const modal = document.getElementById("success-modal");
       const overlay = document.getElementById("modal-overlay");
@@ -1890,7 +1869,7 @@ class TelegramUtilities {
     modal.style.visibility = "visible";
     modal.style.zIndex = "10000"; // Ensure highest z-index
 
-    // CRITICAL FIX: Ensure proper positioning using fixed positioning
+    // Ensure proper positioning using fixed positioning
     modal.style.position = "fixed";
     modal.style.top = "50%";
     modal.style.left = "50%";
@@ -1926,7 +1905,7 @@ class TelegramUtilities {
     // Add critical modal protection (prevent outside click dismissal)
     modal.setAttribute("data-critical", "true");
 
-    // CRITICAL FIX: Ensure modal stays in view by recalculating position
+    // Ensure modal stays in view by recalculating position
     setTimeout(() => {
       // Force reflow to ensure proper positioning
       modal.style.transform = "translate(-50%, -50%)";
@@ -1944,7 +1923,7 @@ class TelegramUtilities {
         modal.style.visibility = "visible";
       }
 
-      // CRITICAL FIX: Scroll to modal if it's not in view
+      // Scroll to modal if it's not in view
       const rect = modal.getBoundingClientRect();
       const isInViewport = (
         rect.top >= 0 &&
@@ -1957,7 +1936,7 @@ class TelegramUtilities {
         modal.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
       }
 
-      // CRITICAL FIX: Ensure modal is above all other elements
+      // Ensure modal is above all other elements
       modal.style.zIndex = "10000";
       overlay.style.zIndex = "9999";
     }, 200);
@@ -2152,7 +2131,7 @@ class TelegramUtilities {
     this.hideUrlNameModal();
     this.hideLoadingOverlay();
 
-    // CRITICAL FIX: Reset workflow state for new sticker pack
+    // Reset workflow state for new sticker pack
     this.workflowState = {
       iconUploaded: false,
       urlNameSubmitted: false,
@@ -2215,8 +2194,6 @@ class TelegramUtilities {
     const hasMedia = this.mediaFiles.length > 0;
     const isConnected = this.telegramConnected;
 
-    console.log("[UPDATE_PACK_ACTIONS] Mode:", this.currentPackMode, "| Connected:", isConnected, "| Media files:", this.mediaFiles.length);
-
     if (this.currentPackMode === "create") {
       // Existing validation for create mode
       const packName = document.getElementById("pack-name")?.value.trim() || "";
@@ -2225,7 +2202,7 @@ class TelegramUtilities {
       const isPackNameValid = packName.length > 0 && packName.length <= 64;
       const isUrlNameValid = /^[a-zA-Z][a-zA-Z0-9_]{4,31}$/.test(urlName);
 
-      // FIXED: Only disable if not connected, let validation handle the rest on click
+      // Only disable if not connected - validation happens on click
       createBtn.disabled = !isConnected;
     } else {
       // Validation for add mode
@@ -2233,9 +2210,7 @@ class TelegramUtilities {
       const packName = packInput?.value.trim() || "";
       const isPackNameValid = /^[a-zA-Z][a-zA-Z0-9_]{4,31}$/.test(packName);
 
-      console.log("[UPDATE_PACK_ACTIONS] Add mode - Pack name:", packName, "| Valid:", isPackNameValid, "| Button should be:", (!isConnected ? "DISABLED" : "ENABLED"));
-
-      // FIXED: Only disable if not connected, let validation handle the rest on click
+      // Only disable if not connected - validation happens on click
       createBtn.disabled = !isConnected;
     }
   }
@@ -3227,7 +3202,7 @@ class TelegramUtilities {
   }
 
   stopProgressMonitoring() {
-    // CRITICAL FIX: Clear all monitoring intervals to prevent memory leaks
+    // Clear all monitoring intervals to prevent memory leaks
     if (this.progressInterval) {
       clearInterval(this.progressInterval);
       this.progressInterval = null;
@@ -3481,7 +3456,7 @@ class TelegramUtilities {
     const RETRY_DELAY = 1200; // ms
     const LONG_OPERATION_TIMEOUT = 10 * 60 * 1000; // 10 minutes
 
-    // CRITICAL FIX: Always clear ALL intervals before starting new ones to prevent memory leaks
+    // Always clear ALL intervals before starting new ones to prevent memory leaks
     this.stopProgressMonitoring();
 
     let consecutiveErrors = 0;
@@ -5193,7 +5168,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
 
     try {
       // Sanitize process id for safe server-side handling
-      // ENHANCED: Better sanitization to prevent [Errno 22] Invalid argument
+      // Better sanitization to prevent [Errno 22] Invalid argument
       let processId = ("sticker_" + Date.now()).replace(/[^a-zA-Z0-9_-]/g, "_");
       // Ensure it's not too long and doesn't contain invalid characters
       processId = processId.substring(0, 50).replace(/[\x00-\x1f\x7f-\x9f]/g, "");
@@ -5215,7 +5190,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       this.showLoadingOverlay("Starting sticker pack creation...");
 
       // Build a minimal, backend-friendly payload
-      // ENHANCED: Better sanitization to prevent [Errno 22] Invalid argument
+      // Better sanitization to prevent [Errno 22] Invalid argument
       const filteredMedia = this.mediaFiles
         .filter((f) => (stickerType === "video" ? f.type === "video" : f.type === "image"))
         .map((f) => ({
@@ -5247,7 +5222,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         }
       }
 
-      // ENHANCED: Validate and sanitize all request data to prevent [Errno 22] Invalid argument
+      // Validate and sanitize all request data to prevent [Errno 22] Invalid argument
       // Remove any control characters that could cause issues
       const sanitizedPackName = String(packName || "").replace(/[\x00-\x1f\x7f-\x9f]/g, "").trim().substring(0, 64);
       const sanitizedPackUrlName = String(packUrlName || "").replace(/[\x00-\x1f\x7f-\x9f]/g, "").trim().substring(0, 32);
@@ -5326,7 +5301,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       this.currentProcessId = null;
       this.currentOperation = null;
 
-      // ENHANCED: Better error handling for [Errno 22] Invalid argument
+      // Better error handling for [Errno 22] Invalid argument
       let errorMessage = error.message;
       if (error.message && (error.message.includes("Invalid argument") || error.message.includes("Errno 22"))) {
         errorMessage = "Invalid request data - contains invalid characters. Please check your inputs and try again.";
@@ -5349,7 +5324,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     }
   }
   startStickerProgressMonitoring(processId) {
-    // CRITICAL FIX: Always clear previous interval to prevent memory leaks
+    // Always clear previous interval to prevent memory leaks
     // Pass false to NOT reset the button - we're starting a new monitoring session
     this.stopStickerProgressMonitoring(false);
 
@@ -5383,6 +5358,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           const progress = response.data;
           this.lastKnownProgress = progress; // Store for error handling
 
+
+
           // PRIORITY CHECK 1: Check for URL name retry attempts exhausted
           if (progress.url_name_attempts && progress.url_name_attempts > progress.max_url_attempts) {
             const currentAttempt = progress.url_name_attempts || 1;
@@ -5407,7 +5384,9 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           const isIconRequest = progress.waiting_for_user && !!(progress.icon_request_message || progress.icon_request);
           let isUrlConflict = (progress.waiting_for_user || progress.status === "waiting_for_url_name") && !!progress.url_name_taken;
 
-          // CRITICAL FIX: Handle backend bug where both icon_request and url_name_taken are set
+
+
+          // Handle backend bug where both icon_request and url_name_taken are set
           // Priority: Icon request comes FIRST, then URL conflict
           if (isIconRequest && isUrlConflict) {
             // Force isUrlConflict to false to handle icon first
@@ -5434,77 +5413,49 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
             return; // Exit early after handling URL name retry
           }
 
-          // PRIORITY CHECK 3: Check for icon selection
+          // Handle icon selection request
           if (progress.waiting_for_user && (progress.icon_request_message || progress.icon_request) && !this.iconHandledProcesses.has(processId)) {
-            // Check if auto-skip was enabled for this process (from backend)
-            const processAutoSkip = progress.auto_skip_icon !== undefined ? progress.auto_skip_icon : true; // Default to true
-            // Check if auto-skip has already been handled by the backend
+            const processAutoSkip = progress.auto_skip_icon !== undefined ? progress.auto_skip_icon : true;
             const autoSkipHandled = progress.auto_skip_handled !== undefined ? progress.auto_skip_handled : false;
 
-            // REMOVED: Don't check for completion here - it's a backend bug setting status=completed while waiting_for_user=true
-            // The completion check should happen AFTER user input, not during icon request
-
-            // If backend has already handled auto-skip, don't show icon modal
-            // BUT CRITICAL: Continue monitoring instead of returning - don't exit early!
-            // We MUST check for URL name conflicts and completion even when auto-skip is handled
+            // Backend handled auto-skip - continue monitoring for URL conflicts
             if (processAutoSkip && autoSkipHandled) {
-              // Backend is handling auto-skip, mark as handled but continue monitoring
               this.iconHandledProcesses.add(processId);
 
-              // CRITICAL: Now check if there's a URL conflict to handle
-              // Check the ORIGINAL url_name_taken flag, not isUrlConflict (which we may have modified)
+              // Check for URL name conflict after auto-skip
               const hasUrlConflict = !!progress.url_name_taken;
-
               if (hasUrlConflict && !this.urlPromptHandledProcesses.has(processId)) {
-
-                // Mark as handled to prevent duplicate processing
                 this.urlPromptHandledProcesses.add(processId);
-
-                // Stop monitoring while user provides new URL name
                 this.stopStickerProgressMonitoring();
 
-                // Show URL name modal with the original taken name
                 const takenName = progress.original_url_name || progress.pack_url_name || "retry";
                 const currentAttempt = progress.url_name_attempts || 1;
                 const maxAttempts = progress.max_url_attempts || 3;
 
                 this.addStatusItem(`URL name '${takenName}' is taken. Showing retry options (${currentAttempt}/${maxAttempts})`, "warning");
-
                 this.showUrlNameModal(takenName, currentAttempt, maxAttempts, processId);
-
-                return; // Exit after showing URL retry modal
+                return;
               }
-
               // No URL conflict - continue monitoring
-              // DON'T return here - fall through to remaining checks
             } else {
-              // Manual mode: show icon selection modal and STOP monitoring
-              // Process will wait indefinitely for user action - no timeout
-              this.stopStickerProgressMonitoring(); // Stop monitoring - user controls when to continue
-
-              // CRITICAL FIX: Store the process ID so we can restart monitoring after icon is sent
+              // Manual mode: show icon selection modal
+              this.stopStickerProgressMonitoring(false);
               this.currentIconProcessId = processId;
-
-              // CRITICAL FIX: Also store in urlPromptHandledProcesses to prevent duplicate handling
               this.urlPromptHandledProcesses.add(processId);
 
-              // If Telegram is already asking for short name, bypass icon modal and proceed to URL
+              // Check if Telegram is already asking for short name (bypass icon modal)
               const urlPrompt = (progress.icon_request_message && /short name|create a link|addstickers/i.test(progress.icon_request_message))
                 || progress.waiting_for_url_name
                 || false;
-              if (urlPrompt) {
-                try { this.hideIconModal(); } catch (_e) {
-                  // Ignore errors when hiding icon modal
-                }
 
-                // Check if auto-skip is enabled - if so, automatically submit the URL name
+              if (urlPrompt) {
+                try { this.hideIconModal(); } catch (_e) { }
+
+                // Auto-skip URL submission if enabled
                 const autoSkipIcon = document.getElementById("auto-skip-icon");
                 const shouldAutoSkip = autoSkipIcon && autoSkipIcon.checked;
 
-                // Even if auto-skip is enabled, the backend should handle it, not the frontend
-                // But if for some reason we're here, we can still submit the URL name
                 if (shouldAutoSkip) {
-                  // Auto-skip is enabled, automatically submit the URL name
                   this.addStatusItem("Auto-skip enabled, automatically submitting URL name...", "info");
                   try {
                     const urlInput = document.getElementById("pack-url-name");
@@ -5518,23 +5469,21 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
                       });
 
                       if (submitRes && submitRes.success) {
-                        // Only add to urlPromptHandledProcesses when URL name is actually submitted
                         this.urlPromptHandledProcesses.add(processId);
                         this.startStickerProgressMonitoring(processId);
                         return;
                       } else if (submitRes && submitRes.url_name_taken) {
-                        // Only add to urlPromptHandledProcesses when URL name taken is handled
                         this.urlPromptHandledProcesses.add(processId);
                         this.showUrlNameModal(urlName, (submitRes.attempt || 1), (submitRes.max_attempts || 3), processId);
                         return;
                       }
                     }
                   } catch (e) {
-                    // If auto-submit fails, fall back to manual process
                     this.addStatusItem(`Auto-submit failed: ${e.message}. Continuing with manual process.`, "warning");
                   }
                 }
 
+                // Manual URL submission fallback
                 const urlInput = document.getElementById("pack-url-name");
                 const urlName = (urlInput && typeof urlInput.value === "string") ? urlInput.value.trim() : "";
                 if (urlName) {
@@ -5546,32 +5495,29 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
                       max_attempts: 3
                     });
                     if (submitRes && submitRes.success) {
-                      // Only add to urlPromptHandledProcesses when URL name is actually submitted
                       this.urlPromptHandledProcesses.add(processId);
                       this.startStickerProgressMonitoring(processId);
                       return;
                     } else if (submitRes && submitRes.url_name_taken) {
-                      // Only add to urlPromptHandledProcesses when URL name taken is handled
                       this.urlPromptHandledProcesses.add(processId);
                       this.showUrlNameModal(urlName, (submitRes.attempt || 1), (submitRes.max_attempts || 3), processId);
                       return;
                     }
-                  } catch (_e) {
-                    // Ignore errors when submitting URL
-                  }
+                  } catch (_e) { }
                 }
-                // Fallback: show URL modal to collect the name
-                // Only add to urlPromptHandledProcesses when URL modal is shown
+
+                // Fallback: show URL modal
                 this.urlPromptHandledProcesses.add(processId);
                 this.showUrlNameModal(progress.pack_url_name || "retry", 1, 3, processId);
                 return;
               }
 
-              // If verification is pending, do not show icon modal
+              // Skip icon modal if verification is pending
               if (this.pendingCode || this.pendingPassword) {
                 return;
               }
-              // DOM-based guard as a fallback
+
+              // DOM guard: verify no auth modals are visible
               try {
                 const codeModal = document.getElementById("code-modal");
                 const passModal = document.getElementById("password-modal");
@@ -5580,33 +5526,25 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
                 if (codeVisible || passVisible) {
                   return;
                 }
-              } catch (_e) {
-                // Ignore DOM check errors
-              }
+              } catch (_e) { }
 
               this.showIconModal(processId, progress.icon_request_message);
               this.iconHandledProcesses.add(processId);
-
-              // CRITICAL FIX: Don't add to urlPromptHandledProcesses here - only when URL prompt is actually handled
-              // this.urlPromptHandledProcesses.add(processId);
-              return; // CRITICAL: Exit early after handling icon selection
+              return;
             }
           }
 
-          // PRIORITY CHECK 4: Check completion status
+          // Handle completion status
           if (progress.status === "completed") {
-            // CRITICAL FIX: Don't treat as completed if still waiting for user input
+            // Don't treat as completed if waiting for user input (backend state mismatch)
             if (progress.waiting_for_user) {
-              // Continue monitoring - this is a backend bug
+              // Continue monitoring
             } else {
-              // Check if we have a shareable_link, which means the process is ACTUALLY completed
               const hasShareableLink = !!(progress.shareable_link || progress.pack_link || progress.link);
-
-              // For "add to pack" mode, just check if status is completed and we have stickers_added
               const isAddMode = this.currentPackMode === "add" || this.currentOperation === "adding_stickers";
               const addModeCompleted = isAddMode && (progress.stickers_added > 0 || progress.completed_files > 0);
 
-              // Check for completion: shareable_link OR add mode completed OR normal workflow completion
+              // Verify actual completion via shareable_link or workflow state
               if (hasShareableLink || addModeCompleted || this.workflowState.packCompleted || (this.workflowState.iconUploaded && this.workflowState.urlNameSubmitted) || progress.auto_skip_handled) {
                 const successMsg = isAddMode
                   ? `✅ Successfully added ${progress.stickers_added || progress.completed_files || 1} sticker(s) to pack!`
@@ -5616,9 +5554,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
                 this.onStickerProcessCompleted(true, progress);
                 return;
               } else {
-                // CRITICAL FIX: Don't show completion if workflow is not actually finished
+                // Status says completed but workflow isn't finished - keep monitoring
                 this.addStatusItem("Process marked as completed but workflow not finished - continuing monitoring", "warning");
-                // Continue monitoring instead of stopping
               }
             }
           } else if (progress.status === "error" || progress.status === "failed") {
@@ -5635,7 +5572,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
 
           this.updateStickerProgressDisplay(progress);
 
-          // OPTIMIZED: Prevent duplicate stage notifications with better tracking
+          // Prevent duplicate stage notifications with better tracking
           if (progress.current_stage && progress.current_stage !== this.lastStage) {
             // Filter out excessive logging - only show essential messages
             const isEssentialMessage =
@@ -5712,7 +5649,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           // Show detailed error information
           this.addStatusItem(`⚠️ Monitoring error ${consecutiveErrors}/3: ${response.error || "Unknown error"}`, "warning");
 
-          // OPTIMIZED: Reduced from 5 to 3 for faster failure detection
+          // Reduced from 5 to 3 for faster failure detection
           if (consecutiveErrors >= 3) {
             this.stopStickerProgressMonitoring();
             this.addStatusItem("❌ Process monitoring failed - sticker creation may have stopped", "error");
@@ -5763,7 +5700,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   }
 
   stopStickerProgressMonitoring(resetButton = true) {
-    // CRITICAL FIX: Clear sticker progress interval to prevent memory leaks
+    // Clear sticker progress interval to prevent memory leaks
     if (this.stickerProgressInterval) {
       clearInterval(this.stickerProgressInterval);
       this.stickerProgressInterval = null;
@@ -5803,7 +5740,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   }
 
   updateStickerProgressDisplay(progress) {
-    // OPTIMIZED: Don't add redundant status updates - only for progress bar
+    // Don't add redundant status updates - only for progress bar
     const progressBar = document.getElementById("sticker-progress-bar");
     const progressText = document.getElementById("sticker-progress-text");
 
@@ -5862,7 +5799,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     // Add to the bottom of the list (chronological order)
     statusList.appendChild(statusItem);
 
-    // OPTIMIZED: Limit to 100 items to show more progress history
+    // Limit to 100 items to show more progress history
     const items = statusList.querySelectorAll(".status-item");
     if (items.length > 100) {
       statusList.removeChild(items[0]); // Remove the oldest item (first child)
@@ -6004,7 +5941,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     const createBtn = document.getElementById("create-sticker-pack");
     const isAddMode = this.currentPackMode === "add" || this.currentOperation === "adding_stickers";
 
-    // CRITICAL FIX: Only show completion if workflow is actually finished
+    // Only show completion if workflow is actually finished
     if (success && !this.workflowState.packCompleted) {
       // Update workflow state to mark as completed
       this.workflowState.packCompleted = true;
@@ -6029,7 +5966,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           this.addStatusItem("Sticker pack created successfully!", "completed");
         }
 
-        // ENHANCED: Check for multiple possible property names for shareable link
+        // Check for multiple possible property names for shareable link
         const shareableLink = progressData?.shareable_link || progressData?.pack_link || progressData?.link;
 
         if (shareableLink && !isAddMode) {
@@ -6049,7 +5986,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       const failMsg = isAddMode ? "Add stickers failed" : "Sticker pack creation failed";
       this.addStatusItem(`${failMsg}: ${errorMessage}`, "error");
     } else {
-      // CRITICAL FIX: Prevent duplicate completion messages
+      // Prevent duplicate completion messages
     }
     this.updateStats();
 
@@ -6081,7 +6018,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         );
       }
 
-      // FIXED: Update backend database stats for successful sticker creation
+      // Update backend database stats for successful sticker creation
       this.updateStickerCreationStats(this.mediaFiles.length);
 
     } else {
@@ -6239,7 +6176,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         overlay.style.display = "";
         overlay.style.visibility = "";
 
-        // CRITICAL FIX: Ensure proper modal positioning
+        // Ensure proper modal positioning
         // Use flex for emoji modal to enable column layout
         modal.style.display = (modalId === "emoji-modal") ? "flex" : "block";
         modal.style.opacity = "1"; // Reset opacity to 1 when showing modal
@@ -6326,12 +6263,17 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   }
 
   // Icon Selection Modal Functions
-  showIconModal(iconRequestMessage) {
-    // Guard: suppress icon modal if verification flow is active
+  showIconModal(processId, iconRequestMessage) {
+    if (processId) {
+      this.currentIconProcessId = processId;
+    }
+
+    // Skip if verification flow is active
     if (this.pendingCode || this.pendingPassword) {
       return;
     }
-    // DOM-based guard: if code/password modal is visible, skip
+
+    // DOM guard: check if auth modals are visible
     try {
       const codeModal = document.getElementById("code-modal");
       const passModal = document.getElementById("password-modal");
@@ -6342,7 +6284,6 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       }
     } catch { }
 
-    // Hide any existing loading overlay
     this.hideLoadingOverlay();
 
     // Reset file info display
@@ -6353,28 +6294,36 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     if (fileName) fileName.textContent = "No file selected";
     if (confirmBtn) confirmBtn.disabled = true;
 
-    // Optimized modal display without unnecessary GPU acceleration
     const modal = document.getElementById("icon-modal");
     const overlay = document.getElementById("modal-overlay");
 
     if (modal && overlay) {
-      // Use consistent approach with other modals
-      modal.style.display = "flex"; // Direct display style for immediate showing
-      modal.style.opacity = "1"; // Set opacity to 1 immediately
-      // Ensure proper z-index for icon modal
-      modal.style.zIndex = "9000";
+      // Hide other modals to prevent conflicts
+      const allModals = document.querySelectorAll(".modal");
+      allModals.forEach((m) => {
+        if (m.id !== "icon-modal") {
+          m.style.display = "none";
+        }
+      });
+
+      // Override hideModal's !important style to show overlay
+      overlay.style.removeProperty("display");
+      overlay.style.setProperty("display", "flex", "important");
+      overlay.style.removeProperty("visibility");
       overlay.classList.add("active");
 
-      // Update the modal content with the actual message from Telegram
+      modal.style.display = "flex";
+      modal.style.opacity = "1";
+      modal.style.zIndex = "9000";
+
+      // Set clean modal message
       const iconInfo = modal.querySelector(".info-details");
-      if (iconInfo && iconRequestMessage) {
-        iconInfo.textContent = iconRequestMessage;
+      if (iconInfo) {
+        iconInfo.textContent = "Upload a 100x100 pixel WebM video as your sticker pack icon, or skip to use the first sticker.";
       }
 
-      // Reset file selection
       this.resetIconFileSelection();
 
-      // Focus management for accessibility
       setTimeout(() => {
         const uploadBtn = document.getElementById("upload-icon-btn");
         if (uploadBtn) {
@@ -6418,7 +6367,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     // Clear any previous input
     if (newUrlInput) newUrlInput.value = "";
 
-    // CRITICAL FIX: Reset submit button state from previous submission
+    // Reset submit button state from previous submission
     const submitBtn = document.getElementById("submit-new-url");
     if (submitBtn) {
       submitBtn.disabled = false;
@@ -6591,7 +6540,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       });
 
       if (response.success) {
-        // CRITICAL FIX: Update workflow state when URL name is submitted
+        // Update workflow state when URL name is submitted
         this.workflowState.urlNameSubmitted = true;
         this.workflowState.currentStep = "url_name";
 
@@ -6680,7 +6629,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       overlay.classList.remove("active");
     }
 
-    // CRITICAL FIX: Remove timeout cleanup since we removed the timeout
+    // Remove timeout cleanup since we removed the timeout
     // User requested: "we dont need timeout here cause it is auto sending we want user to give order if they dont we wait no matter what"
     // if (this.iconModalTimeout) {
     //   clearTimeout(this.iconModalTimeout);
@@ -6862,7 +6811,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           this.addStatusItem("Icon file uploaded successfully", "completed");
           this.showToast("success", "Icon Uploaded", "Icon uploaded successfully. Waiting for URL name request...");
 
-          // CRITICAL FIX: Update workflow state to prevent premature completion
+          // Update workflow state to prevent premature completion
           this.workflowState.iconUploaded = true;
           this.workflowState.currentStep = "url_name";
         }
@@ -6874,10 +6823,10 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         // Mark icon handled for this process to avoid duplicate icon flow in polling
         this.iconHandledProcesses.add(this.currentIconProcessId);
 
-        // CRITICAL FIX: Close modal immediately after successful upload
+        // Close modal immediately after successful upload
         this.hideIconModal();
 
-        // CRITICAL FIX: Apply the same logic as skip button - check if pack creation is complete
+        // Apply the same logic as skip button - check if pack creation is complete
         if (response.completed) {
           // Pack creation completed after icon upload
           this.stopStickerProgressMonitoring();
@@ -6893,7 +6842,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           this.showUrlNameModal(response.original_url_name || response.pack_url_name || response.url_name || "retry", 1, 3, this.currentIconProcessId);
         } else {
           // Continue monitoring for remaining steps (URL name step)
-          // CRITICAL FIX: Ensure we follow the same flow as skip button
+          // Ensure we follow the same flow as skip button
           this.workflowState.iconUploaded = true;
           this.workflowState.currentStep = "url_name";
           this.startStickerProgressMonitoring(this.currentIconProcessId);
@@ -6904,7 +6853,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         if (errorText.includes("too big") || errorText.includes("maximum file size") ||
           errorText.includes("invalid file") || errorText.includes("file type") ||
           response.manual_completion_required) {
-          // CRITICAL FIX: Handle both size and format errors with appropriate messages
+          // Handle both size and format errors with appropriate messages
           const isSizeError = errorText.includes("too big") || errorText.includes("maximum file size");
           const errorMessage = isSizeError ?
             "Icon rejected: file too big (max 32 KB). You can continue manually in Telegram." :
@@ -6944,7 +6893,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
 
             // Close modal and continue monitoring
             setTimeout(() => this.hideIconModal(), 200);
-            // CRITICAL FIX: Ensure monitoring is restarted after icon is sent
+            // Ensure monitoring is restarted after icon is sent
             if (this.currentIconProcessId) {
               // Small delay to ensure the backend has updated the process status
               setTimeout(() => {
@@ -7004,7 +6953,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       } else {
         this.addStatusItem(`Error uploading icon: ${error.message}`, "error");
 
-        // CRITICAL FIX: Better error handling for network issues
+        // Better error handling for network issues
         if (error.message && (error.message.includes("timeout") || error.message.includes("network") || error.message.includes("fetch"))) {
           this.showToast("warning", "Network Issue", "Network connection issue during icon upload. Please check your connection and try again.");
           this.addStatusItem("Network issue detected. Please check your connection and try again.", "warning");
@@ -9364,6 +9313,3 @@ window.addEventListener("beforeunload", (event) => {
     // Ignore banner errors
   }
 })();
-// ===== Aggressive apiRequest patch (poll until app exists) =====
-// REMOVED: Debug tracing to improve performance
-// The tracing code was causing slowness and memory issues
