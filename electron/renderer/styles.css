@@ -370,14 +370,15 @@ html {
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
 
-/* Creation Status List Styles */
+/* Creation Status - match sibling heights, scroll internally */
 .creation-status-card {
   min-height: 360px;
-  max-height: 360px;
-  height: 360px;
+  height: 100%;
+  max-height: 600px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* Match sibling card heights */
 }
 
 .creation-status-card .card-body {
@@ -388,10 +389,21 @@ html {
   min-height: 0;
 }
 
+.creation-status-card .status-list-container {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* SCROLL when full */
+  overflow-x: hidden;
+}
+
+
 .status-controls {
   display: flex;
   gap: 0.5rem;
   align-items: center;
+  flex-shrink: 0;
+  /* Don't shrink controls */
 }
 
 .status-controls .btn {
@@ -407,9 +419,11 @@ html {
 
 .status-list-container {
   flex: 1;
-  min-height: 0;      /* Critical: allows flexbox to shrink below content size */
-  max-height: 100%;   /* Don't exceed parent */
+  min-height: 0;
+  /* Allow shrinking to fit */
   overflow-y: auto;
+  /* SCROLL when content overflows */
+  overflow-x: hidden;
   border: 1px solid var(--border-color);
   border-radius: 8px;
   background: var(--bg-secondary);
@@ -8109,6 +8123,7 @@ html {
   flex-direction: column;
   gap: 4px;
 }
+
 /* Locked preset controls when connected to Telegram */
 .preset-controls.locked {
   opacity: 0.6;
