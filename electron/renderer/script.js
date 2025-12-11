@@ -3975,10 +3975,6 @@ class TelegramUtilities {
 
       // Save credentials securely
       this.saveCredentials();
-
-      // Save phone number for future use
-      this.savePhoneNumber(phoneNumber);
-
       // Proceed with Telegram connection
       const connectBtn = document.getElementById("connect-telegram");
       if (connectBtn) {
