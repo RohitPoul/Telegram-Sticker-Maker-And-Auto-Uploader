@@ -295,11 +295,8 @@ class VideoConverterCore:
                         'bitrate': initial_bitrate
                     })
 
-                # CPU-only mode - use standard scaling filter
-                scale_filter = (
-                    f"scale={self.SCALE_WIDTH}:{self.SCALE_HEIGHT}:force_original_aspect_ratio=decrease,"
-                    f"pad={self.SCALE_WIDTH}:{self.SCALE_HEIGHT}:(ow-iw)/2:(oh-ih)/2"
-                )
+                # Telegram rule: one side must be 512px, other side equal or less
+                scale_filter = f"scale='if(gte(iw,ih),{self.SCALE_WIDTH},-2)':'if(gte(iw,ih),-2,{self.SCALE_HEIGHT})'"
                 
                 self.logger.debug(f"[CPU] Processing {filename} - Pass 1")
 
@@ -315,7 +312,7 @@ class VideoConverterCore:
                     "-y",  # Overwrite output file
                     "-threads", str(max(1, (os.cpu_count() or 4))),
                     "-i", input_file,
-                    "-vf", scale_filter,  # Scaling with padding
+                    "-vf", scale_filter,  # Scale to 512px (longest side)
                     "-c:v", "libvpx-vp9",
                     "-crf", str(crf),
                     "-b:v", f"{initial_bitrate}k",
@@ -350,7 +347,7 @@ class VideoConverterCore:
                     "-y",  # Overwrite output file
                     "-threads", str(max(1, (os.cpu_count() or 4))),
                     "-i", input_file,
-                    "-vf", scale_filter,  # Scaling with padding
+                    "-vf", scale_filter,  # Scale to 512px (longest side)
                     "-c:v", "libvpx-vp9",
                     "-crf", str(crf),
                     "-b:v", f"{initial_bitrate}k",
