@@ -20,7 +20,7 @@ class VideoConverterCore:
 
         # Configuration from your original try.py - EXACT VALUES
         self.SUPPORTED_INPUT_FORMATS = [
-            "*.mp4", "*.avi", "*.mov", "*.mkv", "*.flv", "*.webm"
+            "*.mp4", "*.avi", "*.mov", "*.mkv", "*.flv", "*.webm", "*.gif"
         ]
         self.OUTPUT_FORMAT = "webm"
         self.TARGET_FILE_SIZE_KB = 254  # Your exact target
@@ -110,7 +110,7 @@ class VideoConverterCore:
             self.logger.error(f"Error updating file status: {e}")
 
     def get_video_info(self, input_file):
-        """Retrieve video duration and metadata - YOUR EXACT METHOD"""
+        """Retrieve video duration and metadata"""
         try:
             self.logger.info(f"[INFO] Getting video info for: {input_file}")
             
@@ -124,25 +124,42 @@ class VideoConverterCore:
             duration_result = subprocess.check_output(duration_cmd, stderr=subprocess.DEVNULL)
             duration = float(duration_result.decode().strip())
 
-            # Get video resolution
+            # Get video resolution and pixel format
             res_cmd = [
                 'ffprobe', '-v', 'error',
                 '-select_streams', 'v:0',
-                '-show_entries', 'stream=width,height',
+                '-show_entries', 'stream=width,height,pix_fmt',
                 '-of', 'csv=s=x:p=0',
                 input_file
             ]
             resolution_result = subprocess.check_output(res_cmd, stderr=subprocess.DEVNULL)
-            resolution = resolution_result.decode().strip().split('x')
-            width, height = map(int, resolution)
+            parts = resolution_result.decode().strip().split('x')
+            width = int(parts[0]) if len(parts) >= 1 else 0
+            height = int(parts[1]) if len(parts) >= 2 else 0
+            pix_fmt = parts[2] if len(parts) >= 3 else "unknown"
 
-            self.logger.info(f"[INFO] Video info - Duration: {duration}s, Resolution: {width}x{height}")
-            return duration, width, height
+            self.logger.info(f"[INFO] Video info - Duration: {duration}s, Resolution: {width}x{height}, PixFmt: {pix_fmt}")
+            return duration, width, height, pix_fmt
             
         except Exception as e:
             self.logger.error(f"Error getting video info for {input_file}: {e}")
-            return None, None, None
+            return None, None, None, None
 
+    def has_transparency(self, pix_fmt, input_file):
+        """Check if input has alpha channel (transparency)"""
+        # Pixel formats with alpha channel
+        alpha_formats = ['rgba', 'bgra', 'argb', 'abgr', 'yuva420p', 'yuva444p', 'pal8']
+        
+        # GIFs often have transparency
+        is_gif = input_file.lower().endswith('.gif')
+        
+        has_alpha = pix_fmt and pix_fmt.lower() in alpha_formats
+        
+        if is_gif or has_alpha:
+            self.logger.info(f"[ALPHA] Input has transparency (pix_fmt: {pix_fmt}, is_gif: {is_gif})")
+            return True
+        return False
+    
     def get_file_size(self, filename):
         """Get file size in KB"""
         try:
@@ -190,11 +207,15 @@ class VideoConverterCore:
             self.logger.info(f"Input: {input_file}")
             self.logger.info(f"Output: {output_file}")
             
-            # Get initial video metadata
-            duration, width, height = self.get_video_info(input_file)
+            # Get initial video metadata (now includes pix_fmt)
+            duration, width, height, pix_fmt = self.get_video_info(input_file)
             initial_file_size = self.get_file_size(input_file)
-            
-            self.logger.info(f"Metadata: {duration:.2f}s, {width}x{height}, {initial_file_size:.2f} KB")
+
+            # Check for transparency (GIF or alpha channel)
+            use_alpha = self.has_transparency(pix_fmt, input_file)
+            output_pix_fmt = "yuva420p" if use_alpha else None  # Let FFmpeg choose if no alpha
+
+            self.logger.info(f"Metadata: {duration:.2f}s, {width}x{height}, {initial_file_size:.2f} KB, alpha: {use_alpha}")
             
             # CPU-only mode - no GPU detection or monitoring
             self.logger.info(f"[CPU] Using CPU-only processing mode")
@@ -314,6 +335,11 @@ class VideoConverterCore:
                     "-i", input_file,
                     "-vf", scale_filter,  # Scale to 512px (longest side)
                     "-c:v", "libvpx-vp9",
+                ]
+                # Add alpha channel support for GIFs/transparent videos
+                if output_pix_fmt:
+                    convert_cmd.extend(["-pix_fmt", output_pix_fmt])
+                convert_cmd.extend([
                     "-crf", str(crf),
                     "-b:v", f"{initial_bitrate}k",
                     "-maxrate", f"{int(initial_bitrate * 1.5)}k",
@@ -325,7 +351,7 @@ class VideoConverterCore:
                     "-passlogfile", pass_log_base,
                     "-f", "null",
                     null_device,
-                ]
+                ])
 
                 # Update progress for pass 1
                 if process_id and file_index is not None:
@@ -349,6 +375,11 @@ class VideoConverterCore:
                     "-i", input_file,
                     "-vf", scale_filter,  # Scale to 512px (longest side)
                     "-c:v", "libvpx-vp9",
+                ]
+                # Add alpha channel support for GIFs/transparent videos
+                if output_pix_fmt:
+                    convert_cmd.extend(["-pix_fmt", output_pix_fmt])
+                convert_cmd.extend([
                     "-crf", str(crf),
                     "-b:v", f"{initial_bitrate}k",
                     "-maxrate", f"{int(initial_bitrate * 1.5)}k",
@@ -361,7 +392,7 @@ class VideoConverterCore:
                     "-an",  # No audio
                     "-f", "webm",
                     output_file,
-                ]
+                ])
 
                 # Update progress for pass 2
                 if process_id and file_index is not None:
@@ -458,9 +489,24 @@ class VideoConverterCore:
                         crf = max(crf - (3 if attempt <= 4 else 2), min_crf)
                         self.logger.info(f"[ADJUST] {filename}: Decreasing CRF to {crf} to increase file size")
                     else:
-                        # CRF at minimum, switch to bitrate increase
-                        initial_bitrate = int(initial_bitrate * 1.08)
-                        self.logger.info(f"[ADJUST] {filename}: CRF minimized. Increasing bitrate to {initial_bitrate} kbps")
+                        # CRF at minimum, switch to bitrate increase (with cap to prevent ffmpeg crash)
+                        max_bitrate = 50000  # 50 Mbps cap - prevents ffmpeg from crashing on extreme values
+                        if initial_bitrate < max_bitrate:
+                            initial_bitrate = min(int(initial_bitrate * 1.08), max_bitrate)
+                            self.logger.info(f"[ADJUST] {filename}: CRF minimized. Increasing bitrate to {initial_bitrate} kbps")
+                        else:
+                            # Bitrate maxed out - accept current output as best possible result
+                            self.logger.warning(f"[ACCEPT] {filename}: Cannot reach target size. Accepting best output: {file_size_kb:.1f}KB (target was {target_size_kb}KB)")
+                            if process_id and file_index is not None:
+                                self.update_file_status(process_id, file_index, {
+                                    'status': 'completed',
+                                    'progress': 100,
+                                    'stage': f'Completed! {file_size_kb:.1f}KB (max quality)',
+                                    'filename': filename,
+                                    'file_size': file_size_kb,
+                                    'attempts': attempt
+                                })
+                            return True
 
                 # Detect plateau in CRF adjustments (faster trigger)
                 if size_diff < target_size_kb * 0.04:
@@ -471,10 +517,26 @@ class VideoConverterCore:
                 # If CRF adjustments are not effective, switch to bitrate fine-tuning
                 if crf_adjustment_count >= 2:
                     # When bitrate adjustments are needed
+                    max_bitrate = 50000  # 50 Mbps cap
+                    min_bitrate = 50     # 50 kbps floor
+                    
                     if file_size_kb > target_range_max:
-                        initial_bitrate = int(initial_bitrate * 0.9)  # Reduce bitrate more aggressively
+                        initial_bitrate = max(int(initial_bitrate * 0.9), min_bitrate)
                         self.logger.info(f"[PLATEAU] {filename}: Plateaued. Reducing bitrate to {initial_bitrate} kbps")
                     elif file_size_kb < target_range_min:
+                        # Check if we're already at max bitrate - if so, accept current output
+                        if initial_bitrate >= max_bitrate:
+                            self.logger.warning(f"[ACCEPT] {filename}: Plateaued at max bitrate. Accepting best output: {file_size_kb:.1f}KB")
+                            if process_id and file_index is not None:
+                                self.update_file_status(process_id, file_index, {
+                                    'status': 'completed',
+                                    'progress': 100,
+                                    'stage': f'Completed! {file_size_kb:.1f}KB (max quality)',
+                                    'filename': filename,
+                                    'file_size': file_size_kb,
+                                    'attempts': attempt
+                                })
+                            return True
                         initial_bitrate = int(initial_bitrate * 1.1)  # Increase bitrate more aggressively
                         self.logger.info(f"[PLATEAU] {filename}: Plateaued. Increasing bitrate to {initial_bitrate} kbps")
 
@@ -511,7 +573,7 @@ class VideoConverterCore:
             return False
 
     def hex_edit_file(self, input_file, output_file, process_id=None, file_index=None):
-        """Perform hex editing on a single file with simple 0% → 100% progress tracking"""
+        """Perform hex editing on a single file with simple 0% ? 100% progress tracking"""
         # Use hex_edit_logger for hex editing logs
         logger = hex_edit_logger
         filename = os.path.basename(input_file)
