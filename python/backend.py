@@ -196,7 +196,7 @@ def cleanup_telegram_and_sessions():
         # Clean up sticker bot
         try:
             from sticker_bot import sticker_bot
-            if sticker_bot:
+            if sticker_bot and hasattr(sticker_bot, '_connection_lock'):
                 sticker_bot.cleanup_connection()
                 logger.info("[CLEANUP] Sticker bot connection cleaned up")
         except Exception as e:

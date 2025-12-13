@@ -1,11 +1,4 @@
 import os
-import sys
-
-# CRITICAL: Add current directory to Python path (for bundled Python)
-current_dir = os.path.dirname(os.path.abspath(__file__))
-if current_dir not in sys.path:
-    sys.path.insert(0, current_dir)
-
 import subprocess
 import logging
 import time
@@ -17,8 +10,6 @@ import json
 # Import the new loggers
 from logging_config import video_conversion_logger, hex_edit_logger
 
-# Import centralized config paths for bundled tools
-from config_paths import config_paths
 
 class VideoConverterCore:
     def __init__(self):
@@ -27,15 +18,6 @@ class VideoConverterCore:
         # Default to INFO in this module, but respect global level
         if not self.logger.handlers:
             self.logger.propagate = True
-
-        # Get bundled FFmpeg/FFprobe paths
-        self.ffmpeg_path = config_paths.get_ffmpeg_path()
-        self.ffprobe_path = config_paths.get_ffprobe_path()
-        self.runtime_env = config_paths.get_runtime_env()
-        
-        self.logger.info(f"[FFMPEG] Using FFmpeg at: {self.ffmpeg_path}")
-        self.logger.info(f"[FFPROBE] Using FFprobe at: {self.ffprobe_path}")
-
         # Configuration from your original try.py - EXACT VALUES
         self.SUPPORTED_INPUT_FORMATS = [
             "*.mp4", "*.avi", "*.mov", "*.mkv", "*.flv", "*.webm", "*.gif"
@@ -128,29 +110,29 @@ class VideoConverterCore:
             self.logger.error(f"Error updating file status: {e}")
 
     def get_video_info(self, input_file):
-        """Retrieve video duration, resolution, and pixel format using bundled FFprobe"""
+        """Retrieve video duration and metadata"""
         try:
             self.logger.info(f"[INFO] Getting video info for: {input_file}")
             
-            # Get video duration using bundled ffprobe
+            # Get video duration
             duration_cmd = [
-                self.ffprobe_path, '-v', 'error',
+                'ffprobe', '-v', 'error',
                 '-show_entries', 'format=duration',
                 '-of', 'default=noprint_wrappers=1:nokey=1',
                 input_file
             ]
-            duration_result = subprocess.check_output(duration_cmd, stderr=subprocess.DEVNULL, env=self.runtime_env)
+            duration_result = subprocess.check_output(duration_cmd, stderr=subprocess.DEVNULL)
             duration = float(duration_result.decode().strip())
 
-            # Get video resolution and pixel format using bundled ffprobe
+            # Get video resolution and pixel format
             res_cmd = [
-                self.ffprobe_path, '-v', 'error',
+                'ffprobe', '-v', 'error',
                 '-select_streams', 'v:0',
                 '-show_entries', 'stream=width,height,pix_fmt',
                 '-of', 'csv=s=x:p=0',
                 input_file
             ]
-            resolution_result = subprocess.check_output(res_cmd, stderr=subprocess.DEVNULL, env=self.runtime_env)
+            resolution_result = subprocess.check_output(res_cmd, stderr=subprocess.DEVNULL)
             parts = resolution_result.decode().strip().split('x')
             width = int(parts[0]) if len(parts) >= 1 else 0
             height = int(parts[1]) if len(parts) >= 2 else 0
@@ -343,9 +325,9 @@ class VideoConverterCore:
                 pass_log_base = os.path.join(self.TEMP_DIR, f"ffmpeg_pass_{os.getpid()}_{int(time.time())}_{attempt}")
                 null_device = "NUL" if os.name == 'nt' else "/dev/null"
 
-                # CPU-only VP9 encoding with two-pass using bundled FFmpeg
+                # CPU-only VP9 encoding with two-pass
                 convert_cmd = [
-                    self.ffmpeg_path,
+                    "ffmpeg",
                     "-hide_banner",
                     "-loglevel", "error",
                     "-y",  # Overwrite output file
@@ -380,12 +362,12 @@ class VideoConverterCore:
                         'filename': filename
                     })
 
-                # First Pass with bundled FFmpeg
-                result = subprocess.run(convert_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=self.runtime_env)
+                # First Pass
+                result = subprocess.run(convert_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-                # Second Pass Command with bundled FFmpeg
+                # Second Pass Command
                 convert_cmd = [
-                    self.ffmpeg_path,
+                    "ffmpeg",
                     "-hide_banner",
                     "-loglevel", "error",
                     "-y",  # Overwrite output file
@@ -421,7 +403,8 @@ class VideoConverterCore:
                         'filename': filename
                     })
 
-                result = subprocess.run(convert_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=self.runtime_env)
+
+                result = subprocess.run(convert_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
                 # Verify output file
                 if not os.path.exists(output_file):
@@ -591,7 +574,7 @@ class VideoConverterCore:
             return False
 
     def hex_edit_file(self, input_file, output_file, process_id=None, file_index=None):
-        """Perform hex editing on a single file with simple 0% → 100% progress tracking"""
+        """Perform hex editing on a single file with simple 0% ? 100% progress tracking"""
         # Use hex_edit_logger for hex editing logs
         logger = hex_edit_logger
         filename = os.path.basename(input_file)

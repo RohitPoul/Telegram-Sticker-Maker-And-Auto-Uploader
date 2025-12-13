@@ -7547,10 +7547,10 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       a.download = `database-stats-${Date.now()}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      this.showToast("Database stats exported", "success");
+      this.showToast("success", "Export Complete", "Database stats exported");
     } catch (e) {
       console.error("Export stats failed:", e);
-      this.showToast("Failed to export stats", "error");
+      this.showToast("error", "Export Failed", "Failed to export stats");
     }
   }
 
