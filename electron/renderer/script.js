@@ -2,8 +2,8 @@ const RENDERER_DEBUG = false;
 
 // Prevent white screen crashes by catching unhandled errors
 window.addEventListener("error", (event) => {
-  console.error("?? [GLOBAL_ERROR] Unhandled error:", event.error);
-  console.error("?? [GLOBAL_ERROR] Error details:", {
+  console.error("🚫 [GLOBAL_ERROR] Unhandled error:", event.error);
+  console.error("🚫 [GLOBAL_ERROR] Error details:", {
     message: event.message,
     filename: event.filename,
     lineno: event.lineno,
@@ -17,7 +17,7 @@ window.addEventListener("error", (event) => {
 });
 
 window.addEventListener("unhandledrejection", (event) => {
-  console.error("?? [GLOBAL_ERROR] Unhandled promise rejection:", event.reason);
+  console.error("🚫 [GLOBAL_ERROR] Unhandled promise rejection:", event.reason);
   event.preventDefault();
   if (window.app && window.app.showToast) {
     window.app.showToast("error", "Promise Error", `Promise rejection: ${event.reason}`);
@@ -67,7 +67,7 @@ class TelegramUtilities {
     this.startTime = new Date();
     this.systemInfoInterval = null;
     this.selectedMediaType = null;
-    this.defaultEmoji = "??";
+    this.defaultEmoji = "❤️";
     this.sessionStats = {
       totalConversions: 0,
       successfulConversions: 0,
@@ -158,7 +158,7 @@ class TelegramUtilities {
   normalizeEmoji(input) {
     try {
       const str = String(input || "").trim();
-      if (!str) return this.defaultEmoji || "??";
+      if (!str) return this.defaultEmoji || "❤️";
 
       // Primary: Use Intl.Segmenter for proper grapheme cluster handling (Chrome 87+)
       if (typeof Intl !== "undefined" && Intl.Segmenter) {
@@ -176,7 +176,7 @@ class TelegramUtilities {
       // Fallback for older browsers: Manual VS16 preservation
       // This is critical for Windows to show colored emojis (red heart instead of white)
       const codePoints = Array.from(str);
-      if (codePoints.length === 0) return this.defaultEmoji || "??";
+      if (codePoints.length === 0) return this.defaultEmoji || "❤️";
 
       let result = codePoints[0];
       let i = 1;
@@ -219,7 +219,7 @@ class TelegramUtilities {
       return result;
     } catch (e) {
       console.error("[EMOJI] Normalization error:", e);
-      return this.defaultEmoji || "??";
+      return this.defaultEmoji || "❤️";
     }
   }
 
@@ -259,7 +259,7 @@ class TelegramUtilities {
       // Initialize button states
       this.updateButtonStates();
     } catch (error) {
-      console.error("?? [APP] Critical error during initialization:", error);
+      console.error("🚫 [APP] Critical error during initialization:", error);
       // Show error to user
       document.body.innerHTML = `
         <div style="padding: 20px; background: #f44336; color: white; text-align: center;">
@@ -1204,7 +1204,7 @@ class TelegramUtilities {
 
         if (!this.mediaFiles.some((f) => f.file_path === filePath)) {
           // Sanitize default emoji while preserving variation selectors (Windows color fix)
-          const cleanDefaultEmoji = this.normalizeEmoji(this.defaultEmoji || "??");
+          const cleanDefaultEmoji = this.normalizeEmoji(this.defaultEmoji || "❤️");
 
           this.mediaFiles.push({
             file_path: filePath,
@@ -1599,7 +1599,7 @@ class TelegramUtilities {
                 <div>
                   <div class="success-message" style="margin-bottom: 24px;">
                     <h4 style="color: #34d399; font-size: 1.1rem; margin-bottom: 8px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
-                      <span>??</span> Congratulations!
+                      <span>🎉</span> Congratulations!
                     </h4>
                     <p style="color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5; margin: 0;">Your sticker pack has been successfully created and uploaded to Telegram after retry attempts.</p>
                   </div>
@@ -1762,7 +1762,7 @@ class TelegramUtilities {
                 <div class="modal-body success-body">
                   <div class="success-content">
                     <div class="success-message">
-                      <h4>?? Congratulations!</h4>
+                      <h4>🎉 Congratulations!</h4>
                       <p>Your sticker pack has been successfully created and uploaded to Telegram.</p>
                     </div>
                     <div class="link-section">
@@ -1819,8 +1819,8 @@ class TelegramUtilities {
             }
 
             // Ultimate fallback: Show success via toast and status
-            this.showToast("success", "?? Pack Created!", `Sticker pack created successfully! Link: ${shareableLink}`, 15000);
-            this.addStatusItem(`?? Success! Shareable link: ${shareableLink}`, "completed");
+            this.showToast("success", "🎉 Pack Created!", `Sticker pack created successfully! Link: ${shareableLink}`, 15000);
+            this.addStatusItem(`🎉 Success! Shareable link: ${shareableLink}`, "completed");
 
             // Try to trigger Telegram opening directly
             if (shareableLink) {
@@ -1831,7 +1831,7 @@ class TelegramUtilities {
                   window.electronAPI.shell.openExternal(shareableLink);
                 }
               } catch (error) {
-                console.error("?? [SUCCESS_MODAL] Error opening URL:", error);
+                console.error("🎉 [SUCCESS_MODAL] Error opening URL:", error);
               }
             }
           }, 50 * retryCount); // Increasing delay: 50ms, 100ms, 150ms
@@ -1849,12 +1849,12 @@ class TelegramUtilities {
   displaySuccessModal(modal, overlay, linkInput, shareableLink) {
     // Validate required elements
     if (!modal) {
-      console.error("?? [SUCCESS_MODAL] Cannot display modal - modal element is null");
+      console.error("🎉 [SUCCESS_MODAL] Cannot display modal - modal element is null");
       return;
     }
 
     if (!overlay) {
-      console.error("?? [SUCCESS_MODAL] Cannot display modal - overlay element is null");
+      console.error("🎉 [SUCCESS_MODAL] Cannot display modal - overlay element is null");
       return;
     }
 
@@ -2152,7 +2152,7 @@ class TelegramUtilities {
     }, 100);
 
     this.showToast("success", "Ready for New Pack", "Form cleared - ready to create another sticker pack!");
-    this.addStatusItem("?? Ready to create new sticker pack", "ready");
+    this.addStatusItem("🔄 Ready to create new sticker pack", "ready");
   }
 
   resetStickerForm() {
@@ -2299,7 +2299,7 @@ class TelegramUtilities {
       // Prepare media files
       const mediaFiles = this.mediaFiles.map((file) => ({
         file_path: file.file_path,
-        emoji: file.emoji || "??",
+        emoji: file.emoji || "😀",
         type: file.type
       }));
 
@@ -2314,7 +2314,7 @@ class TelegramUtilities {
         this.currentProcessId = processId;
         this.currentOperation = "adding_stickers";
 
-        this.addStatusItem(`?? Adding ${mediaFiles.length} stickers to pack "${packShortName}"...`, "processing");
+        this.addStatusItem(`🚀 Adding ${mediaFiles.length} stickers to pack "${packShortName}"...`, "processing");
 
         // Start progress monitoring
         this.startStickerProgressMonitoring(processId);
@@ -2393,7 +2393,7 @@ class TelegramUtilities {
     if (validation.valid) {
       input.classList.add("valid");
       validationDiv.classList.add("valid");
-      validationDiv.textContent = "? Valid";
+      validationDiv.textContent = "✓ Valid";
     } else if (input.value.length > 0) {
       // Only show invalid state if user has typed something
       input.classList.add("invalid");
@@ -2702,7 +2702,8 @@ class TelegramUtilities {
         <div class="file-name" title="${file.path}">${this.truncateFileName(file.name, 30)}</div>
         <div class="file-meta-compact">
           <span class="file-status">${statusText}</span>
-          ${file.size ? `| Size: ${file.size}${file.outputSize ? `  ${file.outputSize}` : ""} | Duration: ${file.duration}` : ""}
+
+          ${file.size ? `| Size: ${file.size}${file.outputSize ? ` → ${file.outputSize}` : ""} | Duration: ${file.duration}` : ""}
         </div>
         <div class="file-progress-compact">
           <div class="file-progress-bar">
@@ -2807,31 +2808,31 @@ class TelegramUtilities {
     const info = `
       <div style="font-size: 0.9rem; line-height: 1.8; max-width: 400px;">
         <div style="margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.1);">
-          <strong style="color: #667eea; font-size: 1rem;">?? Video File Information</strong>
+          <strong style="color: #667eea; font-size: 1rem;">📹 Video File Information</strong>
         </div>
         
         <div style="margin-bottom: 0.5rem;">
-          <strong style="color: #667eea;">?? Name:</strong> 
+          <strong style="color: #667eea;">📄 Name:</strong> 
           <span style="color: #ccc; word-break: break-word;">${fileInfo.name}</span>
         </div>
         
         <div style="margin-bottom: 0.5rem;">
-          <strong style="color: #667eea;">?? Size:</strong> 
+          <strong style="color: #667eea;">📏 Size:</strong> 
           <span style="color: #ccc;">${fileInfo.size}</span>
         </div>
         
         <div style="margin-bottom: 0.5rem;">
-          <strong style="color: #667eea;">?? Duration:</strong> 
+          <strong style="color: #667eea;">⏱️ Duration:</strong> 
           <span style="color: #ccc;">${fileInfo.duration}</span>
         </div>
         
         <div style="margin-bottom: 0.5rem;">
-          <strong style="color: #667eea;">?? Dimensions:</strong> 
+          <strong style="color: #667eea;">📐 Dimensions:</strong> 
           <span style="color: #ccc;">${fileInfo.dimensions}</span>
         </div>
         
         <div style="margin-bottom: 0.5rem;">
-          <strong style="color: #667eea;">?? Format:</strong> 
+          <strong style="color: #667eea;">🎬 Format:</strong> 
           <span style="color: #ccc;">${fileInfo.format}</span>
         </div>
         
@@ -2839,23 +2840,23 @@ class TelegramUtilities {
         
         <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.1);">
           <div style="margin-bottom: 0.5rem;">
-            <strong style="color: #667eea;">?? Status:</strong> 
+            <strong style="color: #667eea;">🔄 Status:</strong> 
             <span style="color: ${this.getStatusColor(file.status)};">${file.status || "Ready"}</span>
           </div>
           
           <div style="margin-bottom: 0.5rem;">
-            <strong style="color: #667eea;">?? Progress:</strong> 
+            <strong style="color: #667eea;">📊 Progress:</strong> 
             <span style="color: #ccc;">${file.progress || 0}%</span>
           </div>
           
           ${file.stage ? `<div style="margin-bottom: 0.5rem;">
-            <strong style="color: #667eea;">?? Stage:</strong> 
+            <strong style="color: #667eea;">⚙️ Stage:</strong> 
             <span style="color: #ccc;">${file.stage}</span>
           </div>` : ""}
         </div>
         
         <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.1);">
-          <small style="color: #888;">File ${index + 1} of ${this.videoFiles.length} � Video Conversion</small>
+          <small style="color: #888;">File ${index + 1} of ${this.videoFiles.length} • Video Conversion</small>
         </div>
       </div>
     `;
@@ -3537,7 +3538,7 @@ class TelegramUtilities {
   }
 
   async getHexEditProgress(processId) {
-    // Single source of truth � backend progress endpoint
+    // Single source of truth – backend progress endpoint
     const resp = await this.apiRequest("GET", `/api/conversion-progress/${processId}`);
     if (!resp || !resp.success) throw new Error(resp?.error || "No progress response");
 
@@ -3815,9 +3816,9 @@ class TelegramUtilities {
           // Log if there were changes
           if (oldStatus !== file.status || oldProgress !== file.progress || oldStage !== file.stage) {
             console.log("File status changed:", {
-              status: `${oldStatus} ? ${file.status}`,
-              progress: `${oldProgress}% ? ${file.progress}%`,
-              stage: `${oldStage} ? ${file.stage}`
+              status: `${oldStatus} → ${file.status}`,
+              progress: `${oldProgress}% → ${file.progress}%`,
+              stage: `${oldStage} → ${file.stage}`
             });
           }
         });
@@ -3984,6 +3985,7 @@ class TelegramUtilities {
 
       // Save credentials securely
       this.saveCredentials();
+
       // Proceed with Telegram connection
       const connectBtn = document.getElementById("connect-telegram");
       if (connectBtn) {
@@ -4069,15 +4071,15 @@ class TelegramUtilities {
           if (result && result.reused_session) {
             successMessage += " (Reused existing session - no rate limits!)";
             this.showToast("success", "Session Reused", "Used existing session to avoid rate limiting", 6000);
-            this.addStatusItem("? Session reused successfully", "success");
+            this.addStatusItem("✅ Session reused successfully", "success");
           } else if (result && result.existing_session) {
             successMessage += " (Used existing authorized session)";
             this.showToast("success", "Session Found", "Found existing authorized session", 5000);
-            this.addStatusItem("? Existing session found and used", "success");
+            this.addStatusItem("✅ Existing session found and used", "success");
           } else {
             successMessage += " (Created new session)";
             this.showToast("success", "Connected", successMessage);
-            this.addStatusItem("? New session created", "success");
+            this.addStatusItem("✅ New session created", "success");
           }
 
           this.updateTelegramStatus("connected");
@@ -4098,8 +4100,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           );
 
           // Show detailed rate limit info
-          this.addStatusItem(`?? Telegram rate limit: Wait ${waitTime}`, "warning");
-          this.addStatusItem("?? Next connection will reuse session to avoid limits", "info");
+          this.addStatusItem(`⚠️ Telegram rate limit: Wait ${waitTime}`, "warning");
+          this.addStatusItem("💡 Next connection will reuse session to avoid limits", "info");
 
           // Reset UI state before returning
           this.hideLoadingOverlay();
@@ -4383,7 +4385,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
 
         if (!this.mediaFiles.some((f) => f.file_path === file)) {
           // Sanitize default emoji while preserving variation selectors (Windows color fix)
-          const cleanDefaultEmoji = this.normalizeEmoji(this.defaultEmoji || "??");
+          const cleanDefaultEmoji = this.normalizeEmoji(this.defaultEmoji || "❤️");
 
           this.mediaFiles.push({
             file_path: file,
@@ -4480,7 +4482,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
 
         if (!this.mediaFiles.some((f) => f.file_path === file)) {
           // Sanitize default emoji while preserving variation selectors (Windows color fix)
-          const cleanDefaultEmoji = this.normalizeEmoji(this.defaultEmoji || "??");
+          const cleanDefaultEmoji = this.normalizeEmoji(this.defaultEmoji || "❤️");
 
           this.mediaFiles.push({
             file_path: file,
@@ -4898,19 +4900,19 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     let technicalInfo = "";
     if (fileInfo.codec) {
       technicalInfo += `<div style="margin-bottom: 0.5rem;">
-        <strong style="color: #667eea;">?? Codec:</strong> 
+        <strong style="color: #667eea;">🎬 Codec:</strong> 
         <span style="color: #ccc;">${fileInfo.codec}</span>
       </div>`;
     }
     if (fileInfo.fps && fileInfo.fps > 0) {
       technicalInfo += `<div style="margin-bottom: 0.5rem;">
-        <strong style="color: #667eea;">? Frame Rate:</strong> 
+        <strong style="color: #667eea;">⚡ Frame Rate:</strong> 
         <span style="color: #ccc;">${fileInfo.fps.toFixed(1)} fps</span>
       </div>`;
     }
 
     // Get file type icon
-    const typeIcon = fileInfo.type === "video" ? "??" : fileInfo.type === "image" ? "???" : "??";
+    const typeIcon = fileInfo.type === "video" ? "🎥" : fileInfo.type === "image" ? "🖼️" : "📄";
     const typeLabel = fileInfo.type === "video" ? "Video" : fileInfo.type === "image" ? "Image" : "File";
 
     const info = `
@@ -4920,32 +4922,32 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         </div>
         
         <div style="margin-bottom: 0.5rem;">
-          <strong style="color: #667eea;">?? Name:</strong> 
+          <strong style="color: #667eea;">📄 Name:</strong> 
           <span style="color: #ccc; word-break: break-word;">${fileInfo.name}</span>
         </div>
         
         <div style="margin-bottom: 0.5rem;">
-          <strong style="color: #667eea;">?? Size:</strong> 
+          <strong style="color: #667eea;">📏 Size:</strong> 
           <span style="color: #ccc;">${fileInfo.size}</span>
         </div>
         
         <div style="margin-bottom: 0.5rem;">
-          <strong style="color: #667eea;">?? Dimensions:</strong> 
+          <strong style="color: #667eea;">📐 Dimensions:</strong> 
           <span style="color: #ccc;">${fileInfo.dimensions}</span>
         </div>
         
         ${file.type === "video" ? `<div style="margin-bottom: 0.5rem;">
-          <strong style="color: #667eea;">?? Duration:</strong> 
+          <strong style="color: #667eea;">⏱️ Duration:</strong> 
           <span style="color: #ccc;">${fileInfo.duration}</span>
         </div>` : ""}
         
         <div style="margin-bottom: 0.5rem;">
-          <strong style="color: #667eea;">?? Format:</strong> 
+          <strong style="color: #667eea;">🎬 Format:</strong> 
           <span style="color: #ccc;">${fileInfo.format}</span>
         </div>
         
         <div style="margin-bottom: 0.5rem;">
-          <strong style="color: #667eea;">?? Modified:</strong> 
+          <strong style="color: #667eea;">📅 Modified:</strong> 
           <span style="color: #ccc;">${fileInfo.dateModified}</span>
         </div>
         
@@ -4953,18 +4955,18 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         
         <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.1);">
           <div style="margin-bottom: 0.5rem;">
-            <strong style="color: #667eea;">?? Emoji:</strong> 
-            <span style="font-size: 1.5rem;">${file.emoji || "??"}</span>
+            <strong style="color: #667eea;">🎉 Emoji:</strong> 
+            <span style="font-size: 1.5rem;">${file.emoji || "😀"}</span>
           </div>
           
           <div style="margin-bottom: 0.5rem;">
-            <strong style="color: #667eea;">?? Status:</strong> 
+            <strong style="color: #667eea;">🔄 Status:</strong> 
             <span style="color: ${this.getStatusColor(file.status)};">${file.status || "Ready"}</span>
           </div>
         </div>
         
         <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.1);">
-          <small style="color: #888;">File ${index + 1} of ${this.mediaFiles.length} � Sticker Pack</small>
+          <small style="color: #888;">File ${index + 1} of ${this.mediaFiles.length} • Sticker Pack</small>
         </div>
       </div>
     `;
@@ -5080,11 +5082,11 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     const stickerTypeEl = document.querySelector('input[name="sticker-type"]:checked');
     const stickerType = stickerTypeEl ? stickerTypeEl.value : "image";
 
-    // ?? CRITICAL: Check Telegram connection first
+    // 🔒 CRITICAL: Check Telegram connection first
     // Primary check: Use frontend connection status first
     if (!this.telegramConnected) {
       this.showToast("error", "Telegram Not Connected", "Please connect to Telegram first before creating sticker packs");
-      this.addStatusItem("? Error: Telegram not connected - Please connect to Telegram first", "error");
+      this.addStatusItem("❌ Error: Telegram not connected - Please connect to Telegram first", "error");
 
       // Switch to Telegram tab to help user
       const telegramTab = document.querySelector('[data-tab="sticker-bot"]');
@@ -5116,7 +5118,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     // Validate media files
     if (!this.mediaFiles || this.mediaFiles.length === 0) {
       this.showToast("error", "No Media Files", "Please add media files first");
-      this.addStatusItem("? Error: No media files selected", "error");
+      this.addStatusItem("❌ Error: No media files selected", "error");
       return;
     }
 
@@ -5124,7 +5126,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     const packNameValidation = this.validatePackName(packName);
     if (!packNameValidation.valid) {
       this.showToast("error", "Invalid Pack Name", packNameValidation.error);
-      this.addStatusItem(`? Error: ${packNameValidation.error}`, "error");
+      this.addStatusItem(`❌ Error: ${packNameValidation.error}`, "error");
       this.updateValidationDisplay("pack-name", packNameValidation);
       return;
     }
@@ -5133,7 +5135,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     const urlValidation = this.validateUrlName(packUrlName);
     if (!urlValidation.valid) {
       this.showToast("error", "Invalid URL Name", urlValidation.error);
-      this.addStatusItem(`? Error: ${urlValidation.error}`, "error");
+      this.addStatusItem(`❌ Error: ${urlValidation.error}`, "error");
       this.updateValidationDisplay("pack-url-name", urlValidation);
       return;
     }
@@ -5141,7 +5143,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     // Check for duplicate/concurrent sticker creation
     if (this.stickerProgressInterval) {
       this.showToast("warning", "Creation In Progress", "Another sticker pack creation is already running");
-      this.addStatusItem("?? Warning: Sticker pack creation already in progress", "warning");
+      this.addStatusItem("⚠️ Warning: Sticker pack creation already in progress", "warning");
       return;
     }
 
@@ -5149,7 +5151,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     this.loggedFileStatuses.clear();
 
     // Add initial status
-    this.addStatusItem(`?? Starting sticker pack creation: "${packName}"`, "info");
+    this.addStatusItem(`🚀 Starting sticker pack creation: "${packName}"`, "info");
 
     const incompatibleFiles = this.mediaFiles.filter((f) => {
       if (stickerType === "video" && f.type !== "video") return true;
@@ -5158,18 +5160,18 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     });
 
     if (incompatibleFiles.length > 0) {
-      this.addStatusItem(`?? Warning: ${incompatibleFiles.length} files don't match sticker type`, "warning");
+      this.addStatusItem(`⚠️ Warning: ${incompatibleFiles.length} files don't match sticker type`, "warning");
       const proceed = await window.confirmModal.show(
         `${incompatibleFiles.length} files don't match the sticker type (${stickerType}). Continue with compatible files only?`,
         "Incompatible Files"
       );
       if (!proceed) {
-        this.addStatusItem("? Creation cancelled by user", "info");
+        this.addStatusItem("❌ Creation cancelled by user", "info");
         return;
       }
     }
 
-    this.addStatusItem(`?? Validating ${this.mediaFiles.length} media files...`, "info");
+    this.addStatusItem(`🔍 Validating ${this.mediaFiles.length} media files...`, "info");
 
     try {
       // Sanitize process id for safe server-side handling
@@ -5266,7 +5268,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           "Sticker pack creation started in background"
         );
 
-        this.addStatusItem("?? Starting sticker pack creation: \"" + packName + "\"", "processing");
+        this.addStatusItem("🚀 Starting sticker pack creation: \"" + packName + "\"", "processing");
 
         if (createBtn) {
           createBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating Pack...';
@@ -5281,7 +5283,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
 
         this.startStickerProgressMonitoring(finalProcessId);
       } else {
-        this.addStatusItem(`? Error: ${response.error || "Failed to start creation"}`, "error");
+        this.addStatusItem(`❌ Error: ${response.error || "Failed to start creation"}`, "error");
         this.showToast(
           "error",
           "Creation Failed",
@@ -5313,7 +5315,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       }
 
       const isAddMode = this.currentPackMode === "add";
-      this.addStatusItem(`? Error: Failed to ${isAddMode ? 'add stickers' : 'create sticker pack'} - ${errorMessage}`, "error");
+      this.addStatusItem(`❌ Error: Failed to ${isAddMode ? 'add stickers' : 'create sticker pack'} - ${errorMessage}`, "error");
       this.showToast(
         "error",
         isAddMode ? "Add Error" : "Creation Error",
@@ -5370,7 +5372,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
             const currentAttempt = progress.url_name_attempts || 1;
             const maxAttempts = progress.max_url_attempts || 3;
 
-            this.addStatusItem(`? All ${maxAttempts} URL name attempts exhausted. Please add sticker pack manually in Telegram bot.`, "error");
+            this.addStatusItem(`❌ All ${maxAttempts} URL name attempts exhausted. Please add sticker pack manually in Telegram bot.`, "error");
             this.showToast("warning", "Manual Setup Required", "Please complete the sticker pack creation manually in the Telegram bot (@Stickers)");
 
             this.stopStickerProgressMonitoring();
@@ -5552,8 +5554,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
               // Verify actual completion via shareable_link or workflow state
               if (hasShareableLink || addModeCompleted || this.workflowState.packCompleted || (this.workflowState.iconUploaded && this.workflowState.urlNameSubmitted) || progress.auto_skip_handled) {
                 const successMsg = isAddMode
-                  ? `? Successfully added ${progress.stickers_added || progress.completed_files || 1} sticker(s) to pack!`
-                  : "? Sticker pack creation completed successfully!";
+                  ? `✅ Successfully added ${progress.stickers_added || progress.completed_files || 1} sticker(s) to pack!`
+                  : "✅ Sticker pack creation completed successfully!";
                 this.addStatusItem(successMsg, "completed");
                 this.stopStickerProgressMonitoring();
                 this.onStickerProcessCompleted(true, progress);
@@ -5566,7 +5568,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           } else if (progress.status === "error" || progress.status === "failed") {
             const isAddMode = this.currentPackMode === "add" || this.currentOperation === "adding_stickers";
             const errorMsg = progress.current_stage || progress.error || "Unknown error";
-            this.addStatusItem(`? ${isAddMode ? 'Add stickers' : 'Sticker pack creation'} failed: ${errorMsg}`, "error");
+            this.addStatusItem(`❌ ${isAddMode ? 'Add stickers' : 'Sticker pack creation'} failed: ${errorMsg}`, "error");
             this.stopStickerProgressMonitoring();
             this.onStickerProcessCompleted(false, progress);
             return;
@@ -5620,12 +5622,12 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
             const completedFiles = Object.values(progress.file_statuses).filter(status => status.status === "completed").length;
 
             if (failedFiles > 0) {
-              this.addStatusItem(`?? ${failedFiles} files failed during processing. Check logs for details.`, "warning");
+              this.addStatusItem(`⚠️ ${failedFiles} files failed during processing. Check logs for details.`, "warning");
             }
 
             // Show completed files less frequently to avoid spam (every 25 files instead of 10)
             if (completedFiles > 0 && completedFiles % 25 === 0) {
-              this.addStatusItem(`? ${completedFiles} files completed successfully`, "info");
+              this.addStatusItem(`✅ ${completedFiles} files completed successfully`, "info");
             }
           }
         } else {
@@ -5634,7 +5636,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           // SMART ERROR HANDLING: Check if this is a "Process not found" after a recent skip
           // Note: autoSkipAttempted flag removed - auto-skip is handled entirely by backend
           if (response.error && response.error.includes("Process not found")) {
-            this.addStatusItem("? Sticker pack created successfully (process completed)", "completed");
+            this.addStatusItem("✅ Sticker pack created successfully (process completed)", "completed");
             this.stopStickerProgressMonitoring();
 
             // Try to construct a reasonable shareable link from stored data
@@ -5646,24 +5648,24 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
             this.onStickerProcessCompleted(true, {
               shareable_link: shareableLink,
               pack_url_name: packUrlName,
-              message: "? Sticker pack created successfully"
+              message: "✅ Sticker pack created successfully"
             });
             return;
           }
 
           // Show detailed error information
-          this.addStatusItem(`?? Monitoring error ${consecutiveErrors}/3: ${response.error || "Unknown error"}`, "warning");
+          this.addStatusItem(`⚠️ Monitoring error ${consecutiveErrors}/3: ${response.error || "Unknown error"}`, "warning");
 
           // Reduced from 5 to 3 for faster failure detection
           if (consecutiveErrors >= 3) {
             this.stopStickerProgressMonitoring();
-            this.addStatusItem("? Process monitoring failed - sticker creation may have stopped", "error");
+            this.addStatusItem("❌ Process monitoring failed - sticker creation may have stopped", "error");
             // Show last known progress for debugging
             if (this.lastKnownProgress) {
               const completed = this.lastKnownProgress.completed_files || 0;
               const total = this.lastKnownProgress.total_files || 0;
               const failed = this.lastKnownProgress.failed_files || 0;
-              this.addStatusItem(`?? Last known status: ${completed}/${total} completed, ${failed} failed`, "info");
+              this.addStatusItem(`📊 Last known status: ${completed}/${total} completed, ${failed} failed`, "info");
             }
           }
         }
@@ -5671,24 +5673,24 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         consecutiveErrors++;
 
         // Show detailed error information
-        this.addStatusItem(`?? Monitoring error ${consecutiveErrors}/3: ${error.message}`, "warning");
+        this.addStatusItem(`⚠️ Monitoring error ${consecutiveErrors}/3: ${error.message}`, "warning");
 
         if (consecutiveErrors >= 3) {
           this.stopStickerProgressMonitoring();
-          this.addStatusItem("? Process monitoring failed - sticker creation may have stopped", "error");
-          this.addStatusItem(`?? Technical details: ${error.message}`, "info");
-          this.addStatusItem("?? Please check the application logs for more detailed information about what caused the process to stop", "info");
+          this.addStatusItem("❌ Process monitoring failed - sticker creation may have stopped", "error");
+          this.addStatusItem(`🔧 Technical details: ${error.message}`, "info");
+          this.addStatusItem("📋 Please check the application logs for more detailed information about what caused the process to stop", "info");
 
           // Show last known progress for debugging
           if (this.lastKnownProgress) {
             const completed = this.lastKnownProgress.completed_files || 0;
             const total = this.lastKnownProgress.total_files || 0;
             const failed = this.lastKnownProgress.failed_files || 0;
-            this.addStatusItem(`?? Last known status: ${completed}/${total} completed, ${failed} failed`, "info");
+            this.addStatusItem(`📊 Last known status: ${completed}/${total} completed, ${failed} failed`, "info");
 
             // Show information about the last file being processed
             if (this.lastKnownProgress.current_file) {
-              this.addStatusItem(`?? Last file processed: ${this.lastKnownProgress.current_file}`, "info");
+              this.addStatusItem(`📂 Last file processed: ${this.lastKnownProgress.current_file}`, "info");
             }
           }
         }
@@ -5966,7 +5968,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         const stickersAdded = progressData?.stickers_added || progressData?.completed_files || this.mediaFiles.length;
 
         if (isAddMode) {
-          this.addStatusItem(`? Successfully added ${stickersAdded} sticker(s) to pack!`, "completed");
+          this.addStatusItem(`✅ Successfully added ${stickersAdded} sticker(s) to pack!`, "completed");
         } else {
           this.addStatusItem("Sticker pack created successfully!", "completed");
         }
@@ -6068,7 +6070,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       } else {
       }
     } catch (error) {
-      console.error("? [STATS] Error updating sticker creation stats:", error);
+      console.error("❌ [STATS] Error updating sticker creation stats:", error);
     }
   }
 
@@ -6355,7 +6357,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     const newUrlInput = document.getElementById("new-url-name");
 
     if (!modal || !overlay) {
-      console.error(`?? [URL_MODAL] Modal or overlay not found - modal: ${!!modal}, overlay: ${!!overlay}`);
+      console.error(`🔗 [URL_MODAL] Modal or overlay not found - modal: ${!!modal}, overlay: ${!!overlay}`);
       return;
     }
 
@@ -6554,7 +6556,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
 
         if (response.completed) {
           // Sticker pack creation completed successfully - now we can clear process info
-          this.addStatusItem(`? Sticker pack created successfully with URL name: ${newUrlName}`, "completed");
+          this.addStatusItem(`✅ Sticker pack created successfully with URL name: ${newUrlName}`, "completed");
           this.showToast("success", "Pack Created", `Sticker pack created: ${newUrlName}`);
 
           // Stop monitoring and show success
@@ -6569,7 +6571,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           this.maxUrlAttempts = null;
         } else {
           // URL name updated, continue monitoring
-          this.addStatusItem(`? New URL name submitted: ${newUrlName}`, "completed");
+          this.addStatusItem(`✅ New URL name submitted: ${newUrlName}`, "completed");
           this.showToast("success", "URL Name Updated", `Using new URL name: ${newUrlName}`);
 
           // Restart progress monitoring with the same process ID
@@ -6582,12 +6584,12 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
 
           if (nextAttempt <= (maxAttempts || 3)) {
             // Show retry modal with updated attempt count
-            this.addStatusItem(`? URL name '${newUrlName}' is taken. Retry ${nextAttempt}/${maxAttempts}`, "warning");
+            this.addStatusItem(`❌ URL name '${newUrlName}' is taken. Retry ${nextAttempt}/${maxAttempts}`, "warning");
             this.showUrlNameModal(newUrlName, nextAttempt, maxAttempts, processId);
             return; // Don't re-enable the button, show new modal
           } else {
             // Exhausted all retries - mark as completed with manual instruction
-            this.addStatusItem(`? All ${maxAttempts} retry attempts exhausted. Please add sticker pack manually in Telegram bot.`, "error");
+            this.addStatusItem(`❌ All ${maxAttempts} retry attempts exhausted. Please add sticker pack manually in Telegram bot.`, "error");
             this.showToast("warning", "Manual Setup Required", "Please complete the sticker pack creation manually in the Telegram bot (@Stickers)");
 
             // Mark process as completed (user needs to complete manually)
@@ -6600,7 +6602,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           }
         }
 
-        this.addStatusItem(`? Error submitting URL name: ${response.error}`, "error");
+        this.addStatusItem(`❌ Error submitting URL name: ${response.error}`, "error");
         this.showToast("error", "Submission Failed", response.error);
 
         if (submitBtn) {
@@ -6611,7 +6613,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       }
     } catch (error) {
       console.error("Error submitting new URL name:", error);
-      this.addStatusItem(`? Error submitting URL name: ${error.message}`, "error");
+      this.addStatusItem(`❌ Error submitting URL name: ${error.message}`, "error");
       this.showToast("error", "Submission Error", error.message);
 
       const submitBtn = document.getElementById("submit-new-url");
@@ -6710,7 +6712,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       });
 
       if (response.success) {
-        this.addStatusItem("? Icon step skipped successfully", "completed");
+        this.addStatusItem("✅ Icon step skipped successfully", "completed");
         this.showToast("success", "Icon Skipped", "Using first sticker as pack icon");
         this.hideIconModal();
 
@@ -6721,7 +6723,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           this.onStickerProcessCompleted(true, {
             shareable_link: response.shareable_link || `https://t.me/addstickers/${response.pack_url_name}`,
             pack_url_name: response.pack_url_name,
-            message: "? Sticker pack created successfully"
+            message: "✅ Sticker pack created successfully"
           });
         } else {
           // Continue monitoring for remaining steps
@@ -6736,13 +6738,13 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           this.showUrlNameModal(response.original_url_name || response.pack_url_name || response.url_name || "retry", 1, 3, this.currentIconProcessId);
         } else if (response.error && response.error.includes("monitoring error")) {
           // Handle the "Process not found" error by showing success instead
-          this.addStatusItem("? Sticker pack created successfully", "completed");
+          this.addStatusItem("✅ Sticker pack created successfully", "completed");
           this.showToast("success", "Pack Created", "Sticker pack has been created successfully");
           this.hideIconModal();
           this.stopStickerProgressMonitoring();
           this.onStickerProcessCompleted(true, {
             shareable_link: response.shareable_link || "https://t.me/addstickers/unknown",
-            message: "? Sticker pack created successfully"
+            message: "✅ Sticker pack created successfully"
           });
         } else {
           this.addStatusItem(`Error skipping icon: ${response.error}`, "error");
@@ -6765,7 +6767,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         this.hideIconModal();
         this.stopStickerProgressMonitoring();
         this.onStickerProcessCompleted(true, {
-          message: "? Sticker pack created successfully (after timeout)"
+          message: "✅ Sticker pack created successfully (after timeout)"
         });
       } else {
         this.addStatusItem(`Error skipping icon: ${error.message}`, "error");
@@ -6838,7 +6840,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           this.onStickerProcessCompleted(true, {
             shareable_link: response.shareable_link || `https://t.me/addstickers/${response.pack_url_name}`,
             pack_url_name: response.pack_url_name,
-            message: "? Sticker pack created successfully"
+            message: "✅ Sticker pack created successfully"
           });
         } else if (response.waiting_for_user && response.url_name_taken) {
           // Handle the case where Telegram immediately asks for URL name after icon upload
@@ -7035,7 +7037,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     if (!toastContainer) {
       // Only show error in development mode
       if (typeof RENDERER_DEBUG !== "undefined" && RENDERER_DEBUG) {
-        console.error("? Toast container not found!");
+        console.error("❌ Toast container not found!");
       }
       alert(`${type.toUpperCase()}: ${title} - ${message}`);
       return;
@@ -7278,7 +7280,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
           align-items: center;
           justify-content: center;
           transition: color 0.2s;
-        " onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#888'" onclick="this.closest('div').parentElement.parentElement.remove()">�</button>
+        " onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#888'" onclick="this.closest('div').parentElement.parentElement.remove()">×</button>
       </div>
       <div style="color: #ddd; line-height: 1.8; font-size: 14px;">
         ${htmlContent}
@@ -7496,7 +7498,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       const ses = document.getElementById("session-start") || document.getElementById("session-started");
       if (ses && s.session_started) ses.textContent = new Date(s.session_started * 1000).toLocaleString();
     } catch (e) {
-      console.error("? updateDatabaseStats (preload) failed:", e);
+      console.error("❌ updateDatabaseStats (preload) failed:", e);
     }
   }
 
@@ -7505,7 +7507,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     try {
       await this.updateDatabaseStats();
     } catch (e) {
-      console.error("? forceUpdateDatabaseStats failed:", e);
+      console.error("❌ forceUpdateDatabaseStats failed:", e);
     }
   }
 
@@ -8305,7 +8307,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   }
 
   applyEmojiToAll() {
-    const currentEmoji = document.getElementById("emoji-input")?.value || "??";
+    const currentEmoji = document.getElementById("emoji-input")?.value || "😀";
 
     this.mediaFiles.forEach(file => {
       file.emoji = currentEmoji;
@@ -8319,18 +8321,18 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   applyRandomEmojis() {
     const allEmojis = [
       // Smileys
-      "??", "??", "??", "??", "??", "??", "??", "??", "??", "??",
-      "??", "??", "??", "??", "??", "??", "??", "??", "??", "??",
-      "??", "??", "??", "??", "??", "??", "??", "??", "??", "??",
+      "😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "😇",
+      "🙂", "🙃", "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚",
+      "😋", "😛", "😜", "🤪", "😝", "🤑", "🤗", "🤭", "🤫", "🤔",
       // Hearts & Love
-      "??", "??", "??", "??", "??", "??", "??", "??", "??", "??",
-      "??", "??", "??", "??", "??", "??", "??", "??", "??", "??",
+      "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔",
+      "❣️", "💕", "💞", "💓", "💗", "💖", "💘", "💝", "💟", "♥️",
       // Animals
-      "??", "??", "??", "??", "??", "??", "??", "??", "??", "??",
-      "??", "??", "??", "??", "??", "??", "??", "??", "??", "??",
+      "🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯",
+      "🦁", "🐮", "🐷", "🐸", "🐵", "🙈", "🙉", "🙊", "🐒", "🦄",
       // Objects & Symbols
-      "?", "?", "??", "??", "?", "??", "??", "??", "??", "??",
-      "??", "??", "?", "??", "??", "??", "??", "??", "??", "??"
+      "✨", "⭐", "🌟", "💫", "⚡", "🔥", "💥", "☀️", "🌈", "❄️",
+      "💧", "💯", "✅", "🎯", "🎉", "🎊", "🎈", "🎁", "🎀", "💎"
     ];
 
     this.mediaFiles.forEach(file => {
@@ -8344,8 +8346,8 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
   }
 
   applySequentialEmojis() {
-    const numberEmojis = ["1??", "2??", "3??", "4??", "5??", "6??", "7??", "8??", "9??", "??"];
-    const alternativeEmojis = ["???", "???", "??", "???", "??", "??", "??", "??", "??", "??"];
+    const numberEmojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
+    const alternativeEmojis = ["🅰️", "🅱️", "🆎", "🅾️", "🆑", "🆒", "🆓", "🆔", "🆕", "🆖"];
 
     this.mediaFiles.forEach((file, index) => {
       if (index < numberEmojis.length) {
@@ -8354,7 +8356,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
         file.emoji = alternativeEmojis[index - numberEmojis.length];
       } else {
         // For files beyond our sequential emojis, use a pattern
-        file.emoji = "??";
+        file.emoji = "➡️";
       }
     });
 
@@ -8383,12 +8385,12 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
 
   applyThemeEmojis() {
     const themes = {
-      happy: ["??", "??", "??", "??", "??", "??", "??", "??", "??", "??"],
-      love: ["??", "??", "??", "??", "??", "??", "??", "??", "??", "??"],
-      cool: ["??", "??", "??", "??", "??", "??", "??", "??", "?", "??"],
-      nature: ["??", "??", "??", "??", "??", "??", "??", "??", "??", "??"],
-      food: ["??", "??", "??", "??", "??", "??", "??", "??", "??", "??"],
-      sports: ["?", "??", "??", "?", "??", "??", "??", "??", "??", "??"]
+      happy: ["😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "😇"],
+      love: ["❤️", "🧡", "💛", "💚", "💙", "💜", "💕", "💞", "💓", "💗"],
+      cool: ["😎", "🤩", "😏", "😈", "👿", "🤠", "🦾", "🔥", "⚡", "💯"],
+      nature: ["🌸", "🌺", "🌻", "🌷", "🌹", "🌲", "🌳", "🌴", "🌵", "🍀"],
+      food: ["🍕", "🍔", "🍟", "🌭", "🍿", "🥓", "🍳", "🧇", "🥞", "🧈"],
+      sports: ["⚽", "🏀", "🏈", "⚾", "🎾", "🏐", "🏉", "🎱", "🏓", "🏸"]
     };
 
     // Randomly select a theme
@@ -8449,7 +8451,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     if (coffeeBtn) {
       coffeeBtn.addEventListener("click", () => {
         this.showSupportModal("coffee", "Buy Me a Coffee",
-          "Support my open source work with a coffee! ?\n\n" +
+          "Support my open source work with a coffee! ☕\n\n" +
           "This will open your default browser to a coffee donation page.\n" +
           "You can replace this with your actual coffee.me or similar link later.");
       });
@@ -8460,7 +8462,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     if (paypalBtn) {
       paypalBtn.addEventListener("click", () => {
         this.showSupportModal("paypal", "PayPal Donation",
-          "Support my work via PayPal! ??\n\n" +
+          "Support my work via PayPal! 💰\n\n" +
           "This will open your default browser to PayPal.\n" +
           "You can replace this with your actual PayPal.me link later.");
       });
@@ -8471,7 +8473,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     if (githubBtn) {
       githubBtn.addEventListener("click", () => {
         this.showSupportModal("github", "GitHub Sponsors",
-          "Become a GitHub Sponsor! ??\n\n" +
+          "Become a GitHub Sponsor! 🌟\n\n" +
           "This will open your GitHub profile for sponsorship.\n" +
           "You can replace this with your actual GitHub Sponsors link later.");
       });
@@ -8482,7 +8484,7 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
     if (starBtn) {
       starBtn.addEventListener("click", () => {
         this.showSupportModal("star", "Star Projects",
-          "Show your appreciation by starring my projects! ?\n\n" +
+          "Show your appreciation by starring my projects! ⭐\n\n" +
           "This will open your GitHub repositories.\n" +
           "You can replace this with your actual project links later.");
       });
@@ -9090,9 +9092,9 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
 
           // For clean workflow, we expect clean_state: true and connected: false
           if (status.clean_state && !status.connected) {
-            this.addStatusItem("?? Clean startup completed - ready for fresh connection", "info");
+            this.addStatusItem("🔄 Clean startup completed - ready for fresh connection", "info");
           } else if (status.connected) {
-            this.addStatusItem("?? Unexpected connection state - will force cleanup on connect", "warning");
+            this.addStatusItem("⚠️ Unexpected connection state - will force cleanup on connect", "warning");
           }
         }
       } catch (error) {
@@ -9100,11 +9102,11 @@ Tip: Next time, the app will reuse your session automatically to avoid this!`,
       }
 
     } catch (error) {
-      console.error("? [CLEAN_INIT] Error during clean initialization:", error);
+      console.error("❌ [CLEAN_INIT] Error during clean initialization:", error);
       // Even on error, ensure we're in disconnected state
       this.updateTelegramStatus("disconnected");
       this.telegramConnected = false;
-      this.addStatusItem("?? Clean startup completed with warnings", "warning");
+      this.addStatusItem("⚠️ Clean startup completed with warnings", "warning");
     }
 
     // Continue with standard initialization...

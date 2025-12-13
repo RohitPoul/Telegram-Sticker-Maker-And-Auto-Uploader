@@ -1592,36 +1592,44 @@ def increment_sticker_stats():
 
 @app.route('/api/clear-logs', methods=['POST', 'OPTIONS'], strict_slashes=False)
 def clear_logs():
-    """Clear application logs"""
+    """Clear all application logs in the logs directory"""
     if request.method == 'OPTIONS':
         return '', 200
     try:
-        # Only clear important logs - backend.log and connection debug log
-        log_files = [
-            "backend.log",
-            "python/backend.log",
-            "Local Database/telegram_connection_debug.log"
-        ]
-        
         cleared_files = []
-        for log_file in log_files:
-            if os.path.exists(log_file):
-                try:
-                    with open(log_file, 'w') as f:
-                        f.write("")  # Clear the file
-                    cleared_files.append(log_file)
-                except Exception as e:
-                    logger.warning(f"Could not clear {log_file}: {e}")
+        errors = []
+        
+        # Get the logs directory path (same directory as this script + /logs)
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        logs_dir = os.path.join(script_dir, 'logs')
+        
+        # Clear all .log files in the logs directory
+        if os.path.exists(logs_dir) and os.path.isdir(logs_dir):
+            for filename in os.listdir(logs_dir):
+                if filename.endswith('.log'):
+                    log_path = os.path.join(logs_dir, filename)
+                    try:
+                        # Truncate the file instead of just opening for write
+                        with open(log_path, 'w', encoding='utf-8') as f:
+                            f.truncate(0)
+                        cleared_files.append(filename)
+                    except PermissionError:
+                        errors.append(f"{filename}: file in use")
+                    except Exception as e:
+                        errors.append(f"{filename}: {str(e)}")
+        else:
+            errors.append(f"Logs directory not found: {logs_dir}")
         
         return jsonify({
             "success": True, 
             "message": f"Cleared {len(cleared_files)} log files",
-            "cleared_files": cleared_files
+            "cleared_files": cleared_files,
+            "errors": errors,
+            "logs_dir": logs_dir
         })
     except Exception as e:
         logger.error(f"Error clearing logs: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
-
 @app.route('/api/clear-credentials', methods=['POST', 'OPTIONS'], strict_slashes=False)
 def clear_credentials():
     """Clear saved credentials"""
