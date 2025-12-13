@@ -719,7 +719,7 @@ def analyze_video():
             return jsonify({"success": False, "error": "Video converter not available"}), 500
 
         # Get video info
-        duration, width, height = video_converter.get_video_info(file_path)
+        duration, width, height, pix_fmt = video_converter.get_video_info(file_path)
         file_size = os.path.getsize(file_path)
 
         # Format the data
