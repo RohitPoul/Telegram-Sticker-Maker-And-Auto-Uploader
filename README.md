@@ -252,9 +252,7 @@ You can save your credentials as presets for quick switching between accounts:
 
 **Note:** You can only add stickers to packs you own.
 
-<div align="center">
-  <img src="screenshots/add-to-pack.png" alt="Add to Existing Pack" width="800"/>
-</div>
+
 
 ---
 
