@@ -271,6 +271,10 @@ class VideoConverterCore:
             max_attempts = self.MAX_ATTEMPTS
             crf_adjustment_count = 0
             last_file_size = 0
+            prev_crf = None
+            oscillation_count = 0
+            tried_mid_crf = False
+            self._bitrate_finetune_count = 0  # Reset per-file to prevent leaking between files
 
             # Tracking variables for performance metrics
             conversion_attempts = 0
@@ -473,6 +477,73 @@ class VideoConverterCore:
                 # Size difference for detecting plateaus - YOUR EXACT LOGIC
                 size_diff = abs(file_size_kb - last_file_size)
                 last_file_size = file_size_kb
+
+                # Detect CRF oscillation (bouncing between same two values)
+                if prev_crf is not None and prev_crf != crf and abs(crf - prev_crf) <= 2:
+                    oscillation_count += 1
+                else:
+                    oscillation_count = 0
+
+                if oscillation_count >= (1 if tried_mid_crf else 3):
+                    mid_crf = (crf + prev_crf + 1) // 2  # Round up to get the skipped value
+                    if not tried_mid_crf and mid_crf != crf and mid_crf != prev_crf:
+                        # Try the midpoint CRF that's being skipped
+                        self.logger.info(f"[OSCILLATION] {filename}: Detected CRF oscillation ({prev_crf}↔{crf}). Trying midpoint CRF {mid_crf}")
+                        crf = mid_crf
+                        tried_mid_crf = True
+                        oscillation_count = 0
+                        prev_crf = crf
+                        attempt += 1
+                        try:
+                            for temp_file in [f"{pass_log_base}-0.log", f"{pass_log_base}-0.log.mbtree"]:
+                                if os.path.exists(temp_file):
+                                    os.remove(temp_file)
+                        except Exception:
+                            pass
+                        continue
+                    else:
+                        # Midpoint tried or not possible — lock CRF and fine-tune bitrate
+                        if not hasattr(self, '_bitrate_finetune_count'):
+                            self._bitrate_finetune_count = 0
+                        self._bitrate_finetune_count += 1
+
+                        if self._bitrate_finetune_count <= 5:
+                            # Pick the CRF that got closest to target range
+                            best_crf = crf if file_size_kb <= target_range_max else prev_crf
+                            if file_size_kb > target_range_max:
+                                initial_bitrate = max(int(initial_bitrate * 0.97), 50)
+                                self.logger.info(f"[FINETUNE] {filename}: CRF locked at {best_crf}, reducing bitrate to {initial_bitrate}k (attempt {self._bitrate_finetune_count}/5)")
+                            else:
+                                initial_bitrate = min(int(initial_bitrate * 1.03), 50000)
+                                self.logger.info(f"[FINETUNE] {filename}: CRF locked at {best_crf}, increasing bitrate to {initial_bitrate}k (attempt {self._bitrate_finetune_count}/5)")
+                            crf = best_crf
+                            oscillation_count = 0
+                            prev_crf = crf
+                            attempt += 1
+                            try:
+                                for temp_file in [f"{pass_log_base}-0.log", f"{pass_log_base}-0.log.mbtree"]:
+                                    if os.path.exists(temp_file):
+                                        os.remove(temp_file)
+                            except Exception:
+                                pass
+                            continue
+                        else:
+                            # Bitrate fine-tuning exhausted — accept best result
+                            self._bitrate_finetune_count = 0
+                            self.logger.warning(f"[ACCEPT] {filename}: Fine-tuning exhausted. Accepting output: {file_size_kb:.1f}KB (target: {target_size_kb}KB)")
+                            if process_id and file_index is not None:
+                                self.update_file_status(process_id, file_index, {
+                                    'status': 'completed',
+                                    'progress': 100,
+                                    'stage': f'Completed! {file_size_kb:.1f}KB (best achievable)',
+                                    'filename': filename,
+                                    'file_size': file_size_kb,
+                                    'attempts': attempt
+                                })
+                            self._bitrate_finetune_count = 0
+                            return True
+
+                prev_crf = crf
 
                 # CRF Adjustment Phase (bigger steps early)
                 if file_size_kb > target_range_max:

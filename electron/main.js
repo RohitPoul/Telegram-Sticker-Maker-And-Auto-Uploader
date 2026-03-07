@@ -374,32 +374,47 @@ ipcMain.handle('read-stats', async () => {
 
 
 
-// APP LIFECYCLE
-app.whenReady().then(async () => {
-    try {
-        // Show splash screen immediately
-        createSplashWindow();
+// APP LIFECYCLE — Single instance lock to prevent duplicate processes
+const gotTheLock = app.requestSingleInstanceLock();
 
-        // Start backend and wait for it
-        await startPythonBackend();
-        await waitForBackend();
+if (!gotTheLock) {
+    // Another instance is already running — quit this one
+    app.quit();
+} else {
+    app.on('second-instance', () => {
+        // Someone tried to open a second instance — focus the existing window
+        if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.focus();
+        }
+    });
 
-        // Create main window (splash will close when main window is ready)
-        createWindow();
+    app.whenReady().then(async () => {
+        try {
+            // Show splash screen immediately
+            createSplashWindow();
 
-        app.on("activate", () => {
-            if (BrowserWindow.getAllWindows().length === 0) {
-                createWindow();
-            }
-        });
+            // Start backend and wait for it
+            await startPythonBackend();
+            await waitForBackend();
 
-    } catch (error) {
-        // Minimal error log for startup failure
-        console.error("Failed to start application:", error?.message || error);
-        cleanupPythonProcess();
-        app.quit();
-    }
-});
+            // Create main window (splash will close when main window is ready)
+            createWindow();
+
+            app.on("activate", () => {
+                if (BrowserWindow.getAllWindows().length === 0) {
+                    createWindow();
+                }
+            });
+
+        } catch (error) {
+            // Minimal error log for startup failure
+            console.error("Failed to start application:", error?.message || error);
+            cleanupPythonProcess();
+            app.quit();
+        }
+    });
+}
 
 app.on("window-all-closed", () => {
     // PRESERVE SESSIONS: Only clean temp files and processes

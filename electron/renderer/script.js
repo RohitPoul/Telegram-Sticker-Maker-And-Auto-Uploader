@@ -3097,7 +3097,11 @@ class TelegramUtilities {
   monitorProcess(processId) {
     const MAX_CONSECUTIVE_ERRORS = 3;
     const POLLING_INTERVAL = 2000; // Reduced from 1000ms to 2000ms
-    const MAX_OPERATION_TIME = 30 * 60 * 1000; // 30 minutes
+    const fileCount = this.videoFiles ? this.videoFiles.length : 1;
+    const MAX_OPERATION_TIME = Math.min(
+      Math.max(fileCount * 10 * 60 * 1000, 2 * 60 * 60 * 1000),  // min 2 hours
+      24 * 60 * 60 * 1000  // max 24 hours
+    );
     let consecutiveErrors = 0;
 
     // Clear any existing intervals

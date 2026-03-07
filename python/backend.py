@@ -1001,15 +1001,12 @@ def get_conversion_progress(process_id):
                 "status": 404
             }), 404
         
-        # Add detailed logging for debugging
+        # Single debug-level log line instead of per-file loop + JSON dump
         file_statuses = proc.get('file_statuses', {})
-        logger.info(f"[PROGRESS] Process {process_id} status: {proc.get('status', 'unknown')}")
-        logger.info(f"[PROGRESS] Process {process_id} progress: {proc.get('progress', 0)}")
-        logger.info(f"[PROGRESS] Process {process_id} file_statuses count: {len(file_statuses)}")
-        if file_statuses:
-            for idx, fs in file_statuses.items():
-                logger.info(f"[PROGRESS] File {idx}: status={fs.get('status')}, progress={fs.get('progress')}, stage={fs.get('stage')}")
+        logger.debug(f"[PROGRESS] Process {process_id}: status={proc.get('status')}, progress={proc.get('progress')}, files={len(file_statuses)}")
         
+        # Snapshot data under lock
+        import copy
         response_data = {
             "success": True,
             "data": {
@@ -1020,15 +1017,14 @@ def get_conversion_progress(process_id):
                 "total_files": proc.get("total_files", 0),
                 "completed_files": proc.get("completed_files", 0),
                 "failed_files": proc.get("failed_files", 0),
-                "file_statuses": proc.get("file_statuses", {}),
+                "file_statuses": copy.copy(proc.get("file_statuses", {})),
                 "paused": proc.get("paused", False),
                 "can_pause": proc.get("can_pause", False)
             }
         }
-        
-        logger.info(f"[PROGRESS] Returning response for {process_id}: {response_data}")
-        
-        return jsonify(response_data)
+    
+    # Serialize and return OUTSIDE the lock
+    return jsonify(response_data)
 
 @app.route('/api/process-status/<process_id>', methods=['GET', 'OPTIONS'])
 def get_process_status(process_id):
