@@ -263,15 +263,27 @@ class SupabaseSync:
             stats_to_sync.pop('last_updated', None)
             
             # Update stats using Supabase client (RLS enforces user_id = auth.uid())
-            self.supabase.table('user_stats') \
+            response = self.supabase.table('user_stats') \
                 .update(stats_to_sync) \
                 .eq('machine_id', str(machine_id)) \
                 .execute()
+            
+            if hasattr(response, 'data') and not response.data:
+                logger.warning("[SUPABASE_SYNC] Sync returned no data. RLS might be blocking the update due to lost auth token, but preserving machine_id as requested.")
             
             self.needs_sync = False
             logger.info(f"[SUPABASE_SYNC] Synced stats to user_stats table")
                 
         except Exception as e:
+            error_str = str(e).lower()
+            if 'auth' in error_str or 'jwt' in error_str or 'token' in error_str or '401' in error_str or '403' in error_str:
+                logger.warning(f"[SUPABASE_SYNC] Auth error detected ({e}). Attempting to re-authenticate...")
+                try:
+                    self._init_supabase_client()
+                    self._register_device()
+                except Exception as inner_e:
+                    logger.error(f"[SUPABASE_SYNC] Re-auth failed: {inner_e}")
+                    
             logger.debug(f"[SUPABASE_SYNC] Sync error (will retry): {e}")
     
     def _background_sync(self):
